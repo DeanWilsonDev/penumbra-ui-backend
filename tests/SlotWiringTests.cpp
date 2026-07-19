@@ -1,4 +1,4 @@
-#include "IrisPenumbraBackend/PenumbraWidgetAdapter.h"
+#include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
 #include "Iris/Signal.h"
 #include "Iris/SlotResolution.h"
@@ -26,9 +26,9 @@ using Iris::IrisComponent;
 using Iris::IrisElementTag;
 using Iris::IrisProps;
 using Iris::IrisPropValue;
-using IrisPenumbraBackend::BuildContext;
-using IrisPenumbraBackend::MakeMountFn;
-using IrisPenumbraBackend::PenumbraWidget;
+using PenumbraUiBackend::BuildContext;
+using PenumbraUiBackend::MakeMountFn;
+using PenumbraUiBackend::PenumbraWidget;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::Label;
 

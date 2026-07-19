@@ -1,4 +1,4 @@
-#include "IrisPenumbraBackend/Walker.h"
+#include "PenumbraUiBackend/Walker.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/ImageWidget.h"
@@ -9,7 +9,7 @@
 #include <string>
 #include <variant>
 
-namespace IrisPenumbraBackend {
+namespace PenumbraUiBackend {
 
 namespace {
 
@@ -180,4 +180,4 @@ std::unique_ptr<WidgetBase> BuildWidgetTree(const IrisComponent& Node, const Bui
     return nullptr; // unreachable — every IrisElementTag is handled above
 }
 
-} // namespace IrisPenumbraBackend
+} // namespace PenumbraUiBackend

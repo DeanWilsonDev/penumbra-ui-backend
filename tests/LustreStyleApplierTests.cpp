@@ -1,4 +1,4 @@
-#include "IrisPenumbraBackend/Lustre/StyleApplier.h"
+#include "PenumbraUiBackend/Lustre/StyleApplier.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Button.h"
@@ -21,7 +21,7 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-using IrisPenumbraBackend::Lustre::LustreStyleApplier;
+using PenumbraUiBackend::Lustre::LustreStyleApplier;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::Button;
 using Penumbra::Widgets::Checkbox;

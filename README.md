@@ -1,15 +1,13 @@
 # penumbra-ui-backend
 
-> **Renamed from `iris-penumbra-backend`.** The old name only mentioned Iris, but this repo now
-> also bridges [Lustre](https://github.com/DeanWilsonDev/lustre)'s resolved styles into Penumbra
-> (see "The Lustre style bridge" below) — the name is now target-first (what it builds *for*,
-> Penumbra) rather than source-first (what it builds *from*), so a future analogous repo for a
-> different rendering target (e.g. an Umbra Engine-backed one) doesn't need "and lustre and
-> whatever comes after it" bolted onto its name too. GitHub redirects the old URL automatically.
-> **Known follow-up, not yet done:** the C++ namespace (`IrisPenumbraBackend::`) and CMake target
-> names (`iris_penumbra_backend*`) throughout this repo still reflect the old name — renaming
-> those is a larger, separate change touching every source file and wasn't bundled into the repo
-> rename itself.
+> **Renamed from `iris-penumbra-backend`**, including the C++ namespace (`IrisPenumbraBackend::`
+> → `PenumbraUiBackend::`) and every CMake target (`iris_penumbra_backend*` →
+> `penumbra_ui_backend*`). The old name only mentioned Iris, but this repo now also bridges
+> [Lustre](https://github.com/DeanWilsonDev/lustre)'s resolved styles into Penumbra (see "The
+> Lustre style bridge" below) — the name is now target-first (what it builds *for*, Penumbra)
+> rather than source-first (what it builds *from*), so a future analogous repo for a different
+> rendering target (e.g. an Umbra Engine-backed one) doesn't need "and lustre and whatever comes
+> after it" bolted onto its name too. GitHub redirects the old repo URL automatically.
 
 The Penumbra backend for [Iris](https://github.com/DeanWilsonDev/iris) and
 [Lustre](https://github.com/DeanWilsonDev/lustre): the code that walks a parsed,
@@ -28,14 +26,14 @@ a general-purpose retained-mode widget library with no inherent reason to know e
 None of the three should have to pull in another's build just to compile on its own, so the code
 that bridges them all — this repo — is its own thing: it vendors `iris`, `lustre`, and
 `penumbra-proto` as git submodules and depends on all three, while none of them depend on it or
-on each other. See `docs/iris_penumbra_backend_lustre_bridge_decision.md` for the fuller
+on each other. See `docs/penumbra_ui_backend_lustre_bridge_decision.md` for the fuller
 reasoning behind keeping Iris and Lustre decoupled even here, and why this stayed one repo
 instead of splitting into a separate Lustre-specific bridge.
 
 ## Status
 
 This is Stage 2 of Iris's roadmap (see `iris`'s `docs/iris_handoff.md` §6). The walker is
-implemented: `IrisPenumbraBackend::BuildWidgetTree()` (`include/IrisPenumbraBackend/Walker.h`)
+implemented: `PenumbraUiBackend::BuildWidgetTree()` (`include/PenumbraUiBackend/Walker.h`)
 takes a single `IrisComponent` IR node and recursively builds the equivalent real Penumbra
 widget tree via each Core primitive's own fluent `Builder`. It's a one-shot tree build only —
 no diffing, no identity tracking (`key` never reaches `IrisComponent`; it's stripped by Iris's
@@ -68,12 +66,12 @@ suite (`IrisElementTag::None` skipping, event-prop wiring, the `<Grid>` stub, ne
 etc.).
 
 **Stage 3's `Umbra::IWidget` adapter is also implemented**: `PenumbraWidget`
-(`include/IrisPenumbraBackend/PenumbraWidgetAdapter.h`) wraps a real `Penumbra::Widgets::
+(`include/PenumbraUiBackend/PenumbraWidgetAdapter.h`) wraps a real `Penumbra::Widgets::
 WidgetBase` to satisfy Iris's backend-agnostic reconciler contract, so `iris::ReconcileWidget`/
 `ReconcileChildren` (in the `iris` repo) can update a real Penumbra widget tree in place —
 verified against real `Box`/`Label` objects, not a mock, including that a same-tag-same-key
 update reuses the literal same `Box*` object rather than rebuilding it. See
-`docs/iris_penumbra_backend_adapter_decision.md` for the ownership design (a dual owning/
+`docs/penumbra_ui_backend_adapter_decision.md` for the ownership design (a dual owning/
 attached mode was needed to reconcile "the reconciler needs a stable identity" against "real
 Penumbra ownership has to live in exactly one `Box::Children` vector at a time") and
 `tests/PenumbraWidgetAdapterTests.cpp`.
@@ -106,17 +104,17 @@ Full design: `iris`'s `docs/iris_slot_stage2_wiring_decision.md` and
 `docs/iris_slot_list_wiring_decision.md`.
 
 **The Lustre style bridge is now implemented**: `IStyleApplier`/`LustreStyleApplier`
-(`include/IrisPenumbraBackend/Lustre/StyleApplier.h`, its own independent CMake target,
-`iris_penumbra_backend_lustre`) apply a `Lustre::ResolvedStyle` (from the `lustre` repo — the
+(`include/PenumbraUiBackend/Lustre/StyleApplier.h`, its own independent CMake target,
+`penumbra_ui_backend_lustre`) apply a `Lustre::ResolvedStyle` (from the `lustre` repo — the
 output of Lustre's parser/cascade/variable resolver, `lustre/docs/lustre_core_spec.md` §3) onto
 a real Penumbra widget's style fields: the universal box-model slots for any `Box`-derived
 widget, `:hover`/`:active`/`:disabled` overlays onto `Button`'s real interaction-state fields
 (the one widget type with them today), and `color`/`font-family`/`font-size` onto `Label`, with
 font-handle resolution cached by `(path, size)`. Deliberately its own target and its own vendored
-submodule (`vendor/lustre`) rather than folded into `iris_penumbra_backend` — it needs nothing
+submodule (`vendor/lustre`) rather than folded into `penumbra_ui_backend` — it needs nothing
 from `iris` (it operates on plain `Penumbra::Widgets::WidgetBase&`, never `IrisComponent`), so a
 consumer that doesn't use Lustre doesn't pull it in. See
-`docs/iris_penumbra_backend_lustre_bridge_decision.md` for why this lives here rather than in a
+`docs/penumbra_ui_backend_lustre_bridge_decision.md` for why this lives here rather than in a
 fourth repo, and what the `IStyleApplier` interface does and doesn't buy in terms of swapping in
 a future, non-Lustre styling language. Not yet wired into `Walker.cpp`'s mount path or
 `PenumbraWidgetAdapter::ApplyPropDiff`'s class-change path — the applier is implemented and
@@ -128,5 +126,5 @@ tested in isolation (`tests/LustreStyleApplierTests.cpp`), but nothing calls it 
 git submodule update --init --recursive
 cmake -S . -B build
 cmake --build build
-./build/tests/iris_penumbra_backend_tests
+./build/tests/penumbra_ui_backend_tests
 ```

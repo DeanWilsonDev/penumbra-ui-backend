@@ -1,4 +1,4 @@
-#include "IrisPenumbraBackend/Walker.h"
+#include "PenumbraUiBackend/Walker.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/ImageWidget.h"
@@ -25,8 +25,8 @@ using Iris::IrisComponent;
 using Iris::IrisElementTag;
 using Iris::IrisProps;
 using Iris::IrisPropValue;
-using IrisPenumbraBackend::BuildContext;
-using IrisPenumbraBackend::BuildWidgetTree;
+using PenumbraUiBackend::BuildContext;
+using PenumbraUiBackend::BuildWidgetTree;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::ImageWidget;
 using Penumbra::Widgets::InlineContainer;

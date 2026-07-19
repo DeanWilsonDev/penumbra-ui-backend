@@ -8,7 +8,7 @@
 
 ## What this is
 
-`PenumbraWidget` (`include/IrisPenumbraBackend/PenumbraWidgetAdapter.h`) implements
+`PenumbraWidget` (`include/PenumbraUiBackend/PenumbraWidgetAdapter.h`) implements
 `Umbra::IWidget` by wrapping a real `Penumbra::Widgets::WidgetBase` — the bridge Iris's
 Stage 3 reconciler (`iris::ReconcileWidget`/`ReconcileChildren`, in the `iris` repo)
 needs to update a real Penumbra widget tree without ever naming a Penumbra type itself.

@@ -9,7 +9,7 @@
 
 #include <memory>
 
-namespace IrisPenumbraBackend {
+namespace PenumbraUiBackend {
 
 // Resources BuildWidgetTree needs beyond what an IrisComponent tree itself carries.
 // Penumbra's own primitives don't take these through their fluent Builder: `Label`'s
@@ -54,4 +54,4 @@ struct BuildContext {
 std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Iris::IrisComponent& Node,
                                                                  const BuildContext&        Context);
 
-} // namespace IrisPenumbraBackend
+} // namespace PenumbraUiBackend

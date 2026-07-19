@@ -1,11 +1,11 @@
-#include "IrisPenumbraBackend/Lustre/StyleApplier.h"
+#include "PenumbraUiBackend/Lustre/StyleApplier.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Button.h"
 #include "Penumbra/Widgets/Checkbox.h"
 #include "Penumbra/Widgets/Label.h"
 
-namespace IrisPenumbraBackend::Lustre {
+namespace PenumbraUiBackend::Lustre {
 
 namespace {
 
@@ -107,4 +107,4 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
     // slice already handled above.
 }
 
-} // namespace IrisPenumbraBackend::Lustre
+} // namespace PenumbraUiBackend::Lustre

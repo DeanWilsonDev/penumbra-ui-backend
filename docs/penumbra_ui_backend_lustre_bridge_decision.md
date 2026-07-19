@@ -7,7 +7,7 @@
 
 ## What this is
 
-`IStyleApplier`/`LustreStyleApplier` (`include/IrisPenumbraBackend/Lustre/StyleApplier.h`)
+`IStyleApplier`/`LustreStyleApplier` (`include/PenumbraUiBackend/Lustre/StyleApplier.h`)
 apply a `Lustre::ResolvedStyle` (`lustre/docs/lustre_core_spec.md` §3 — the output of
 Lustre's parser/cascade/variable resolver) onto a real `Penumbra::Widgets::WidgetBase`,
 mutating its `BoxStyle`/`ButtonStyle`-shaped fields in place. This is the piece
@@ -33,8 +33,8 @@ duplicated plumbing or a dependency back onto this repo, i.e. not actually a cle
 Repo count was the other explicit concern: a new repo per styling language doesn't scale,
 where a new *target* inside this one repo does.
 
-Kept as an independent CMake target (`iris_penumbra_backend_lustre`) rather than merged
-into `iris_penumbra_backend` itself, because it genuinely doesn't need anything from
+Kept as an independent CMake target (`penumbra_ui_backend_lustre`) rather than merged
+into `penumbra_ui_backend` itself, because it genuinely doesn't need anything from
 `iris` — it operates on plain `Penumbra::Widgets::WidgetBase&`, never `IrisComponent`.
 A consumer that only needs the Walker (no styling yet, or a different styling approach)
 doesn't have to pull in `lustre` at all.

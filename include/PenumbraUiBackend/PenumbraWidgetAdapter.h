@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IrisPenumbraBackend/Walker.h"
+#include "PenumbraUiBackend/Walker.h"
 
 #include "Iris/SlotRuntime.h"
 #include "Umbra/IWidget.h"
@@ -13,7 +13,7 @@
 #include <memory>
 #include <vector>
 
-namespace IrisPenumbraBackend {
+namespace PenumbraUiBackend {
 
 // Wraps a `Penumbra::Widgets::WidgetBase` to satisfy `Umbra::IWidget` — the bridge
 // Iris's Stage 3 reconciler (`iris::ReconcileWidget`/`ReconcileChildren`, in the `iris`
@@ -104,4 +104,4 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widge
 // against" mounting path, docs/iris_stage3_implementation_decision.md).
 iris::MountFn MakeMountFn(BuildContext Context);
 
-} // namespace IrisPenumbraBackend
+} // namespace PenumbraUiBackend

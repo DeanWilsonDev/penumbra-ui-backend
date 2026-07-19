@@ -1,4 +1,4 @@
-#include "IrisPenumbraBackend/PenumbraWidgetAdapter.h"
+#include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/ImageWidget.h"
@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-namespace IrisPenumbraBackend {
+namespace PenumbraUiBackend {
 
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::ImageWidget;
@@ -79,7 +79,7 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
     // Diff.Handle and Diff.Checked are deliberately no-ops here: no Core primitive
     // reaches either path today (Umbra::TextureHandle is currently a data-less stub —
     // nothing to swap; <Checkbox> isn't a Core primitive, docs/iris_core_spec.md §3.1)
-    // — see docs/iris_penumbra_backend_adapter_decision.md.
+    // — see docs/penumbra_ui_backend_adapter_decision.md.
 }
 
 std::size_t PenumbraWidget::GetChildCount() const { return Children_.size(); }
@@ -151,4 +151,4 @@ iris::MountFn MakeMountFn(BuildContext Context) {
     };
 }
 
-} // namespace IrisPenumbraBackend
+} // namespace PenumbraUiBackend

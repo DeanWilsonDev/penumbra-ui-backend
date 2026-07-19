@@ -9,12 +9,12 @@
 #include <unordered_map>
 #include <utility>
 
-namespace IrisPenumbraBackend::Lustre {
+namespace PenumbraUiBackend::Lustre {
 
 // The seam a future, non-Lustre styling language would implement instead of
 // LustreStyleApplier below, without touching anything else in this repo
 // (Walker.cpp, PenumbraWidgetAdapter.cpp) — see
-// docs/iris_penumbra_backend_lustre_bridge_decision.md. The real contract a
+// docs/penumbra_ui_backend_lustre_bridge_decision.md. The real contract a
 // replacement commits to is producing a `::Lustre::ResolvedStyle`-shaped
 // value; this interface exists so the *application* logic (which widget
 // type gets which struct, how pseudo-states map to Penumbra's fields) is
@@ -65,4 +65,4 @@ private:
     mutable std::unordered_map<std::string, Penumbra::Render::FontHandle> FontCache_;
 };
 
-} // namespace IrisPenumbraBackend::Lustre
+} // namespace PenumbraUiBackend::Lustre

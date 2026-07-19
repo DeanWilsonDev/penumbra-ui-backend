@@ -1,4 +1,4 @@
-#include "IrisPenumbraBackend/PenumbraWidgetAdapter.h"
+#include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
 #include "Iris/Reconciler.h"
 #include "Iris/Signal.h"
@@ -26,10 +26,10 @@ using Iris::IrisComponent;
 using Iris::IrisElementTag;
 using Iris::IrisProps;
 using Iris::IrisPropValue;
-using IrisPenumbraBackend::BuildContext;
-using IrisPenumbraBackend::MakeMountFn;
-using IrisPenumbraBackend::PenumbraWidget;
-using IrisPenumbraBackend::WrapExistingTree;
+using PenumbraUiBackend::BuildContext;
+using PenumbraUiBackend::MakeMountFn;
+using PenumbraUiBackend::PenumbraWidget;
+using PenumbraUiBackend::WrapExistingTree;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::Label;
 
