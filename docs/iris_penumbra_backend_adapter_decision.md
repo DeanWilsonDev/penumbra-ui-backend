@@ -89,13 +89,16 @@ A further attempt to verify this against a genuine `.iris` → `iris_cc` →
 generated-header → real-`Signal`-driven pipeline (not just hand-constructed
 `IrisComponent` values) surfaced a separate, serious defect **unrelated to this
 adapter**: a `<Slot>` callable that captures an `iris::Signal<T>` local by reference
-(exactly the pattern every example in `docs/iris_core_spec.md` uses) is reading freed
-stack memory the instant the declaring component function returns — confirmed with
-AddressSanitizer, not a fluke. This is a Stage 3 foundational-design gap (`iris::Signal`/
-component-lifetime model, `iris` repo), not something in this adapter or this repo; the
-adapter's own tests (which construct `IrisComponent` trees directly, bypassing the
-dangling-capture pattern) all pass and remain valid. See the `iris` repo's docs for the
-follow-up on that separate issue.
+(exactly the pattern every example in `docs/iris_core_spec.md` uses) was reading freed
+stack memory the instant the declaring component function returned — confirmed with
+AddressSanitizer, not a fluke. This was a Stage 3 foundational-design gap
+(`iris::Signal`/component-lifetime model), not this adapter or this repo — and it's now
+**resolved** in the `iris` repo (`docs/iris_signal_lifetime_decision.md`): state
+declarations use `IRIS_SIGNAL(Type, Name, InitExpr)`, binding to heap-allocated storage
+tied to the component's own mounted lifetime instead of a stack local. Re-running the
+same real `.iris` → `iris_cc` → `IRIS_SIGNAL` → `iris::Mount` pipeline against this
+adapter's real `PenumbraWidget`/Penumbra `Label` after the fix landed, under
+AddressSanitizer, completes with zero errors.
 
 ## What remains deliberately deferred
 

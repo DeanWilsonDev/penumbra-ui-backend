@@ -61,12 +61,14 @@ attached mode was needed to reconcile "the reconciler needs a stable identity" a
 Penumbra ownership has to live in exactly one `Box::Children` vector at a time") and
 `tests/PenumbraWidgetAdapterTests.cpp`.
 
-**A separate, serious defect surfaced while verifying this against real generated `.iris`
-output — not part of this repo, flagged here for visibility:** a `<Slot>` callable capturing an
-`iris::Signal<T>` local by reference (the exact pattern every `docs/iris_core_spec.md` example
-uses) reads freed stack memory the instant the declaring component function returns —
-confirmed with AddressSanitizer. This is a Stage 3 foundational-design gap in the `iris` repo
-itself (`iris::Signal`/component-lifetime model), not something this adapter caused or can fix.
+**Resolved (in the `iris` repo, not here):** a separate, serious defect surfaced while
+verifying the adapter against real generated `.iris` output — a `<Slot>` callable capturing an
+`iris::Signal<T>` local by reference (every `docs/iris_core_spec.md` example's own pattern)
+read freed stack memory the instant the declaring component function returned, confirmed with
+AddressSanitizer. Fixed there via `IRIS_SIGNAL(Type, Name, InitExpr)`
+(`iris`'s `docs/iris_signal_lifetime_decision.md`) — state declarations now bind to
+heap-allocated storage instead of a stack local. Re-verified end to end against this repo's own
+real Penumbra widgets under AddressSanitizer with zero errors after the bump.
 
 ## Build
 
