@@ -8,9 +8,9 @@
 #include <cstdio>
 #include <string>
 
-namespace {
+int Failures = 0; // shared across all test files in this executable
 
-int Failures = 0;
+namespace {
 
 void Expect(bool Condition, const std::string& Description) {
     if (Condition) {
@@ -159,7 +159,7 @@ void TestNestedTreeBuildsRecursively() {
 
 } // namespace
 
-int main() {
+void RunWalkerTests() {
     TestNoneProducesNoWidget();
     TestFrameBuildsABoxWithClassName();
     TestFrameChildrenAreAttachedAndNoneChildrenAreSkipped();
@@ -170,6 +170,13 @@ int main() {
     TestTextPicksUpFontFromBuildContext();
     TestImageBuildsWithoutLoadingWhenNoBackendProvided();
     TestNestedTreeBuildsRecursively();
+}
+
+void RunPenumbraWidgetAdapterTests(); // tests/PenumbraWidgetAdapterTests.cpp
+
+int main() {
+    RunWalkerTests();
+    RunPenumbraWidgetAdapterTests();
 
     std::printf("\n%d failure(s)\n", Failures);
     return Failures == 0 ? 0 : 1;

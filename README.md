@@ -50,6 +50,24 @@ count, and interpolated text all correct. See `tests/WalkerTests.cpp` for the st
 suite (`IrisElementTag::None` skipping, event-prop wiring, the `<Grid>` stub, nested recursion,
 etc.).
 
+**Stage 3's `Umbra::IWidget` adapter is also implemented**: `PenumbraWidget`
+(`include/IrisPenumbraBackend/PenumbraWidgetAdapter.h`) wraps a real `Penumbra::Widgets::
+WidgetBase` to satisfy Iris's backend-agnostic reconciler contract, so `iris::ReconcileWidget`/
+`ReconcileChildren` (in the `iris` repo) can update a real Penumbra widget tree in place —
+verified against real `Box`/`Label` objects, not a mock, including that a same-tag-same-key
+update reuses the literal same `Box*` object rather than rebuilding it. See
+`docs/iris_penumbra_backend_adapter_decision.md` for the ownership design (a dual owning/
+attached mode was needed to reconcile "the reconciler needs a stable identity" against "real
+Penumbra ownership has to live in exactly one `Box::Children` vector at a time") and
+`tests/PenumbraWidgetAdapterTests.cpp`.
+
+**A separate, serious defect surfaced while verifying this against real generated `.iris`
+output — not part of this repo, flagged here for visibility:** a `<Slot>` callable capturing an
+`iris::Signal<T>` local by reference (the exact pattern every `docs/iris_core_spec.md` example
+uses) reads freed stack memory the instant the declaring component function returns —
+confirmed with AddressSanitizer. This is a Stage 3 foundational-design gap in the `iris` repo
+itself (`iris::Signal`/component-lifetime model), not something this adapter caused or can fix.
+
 ## Build
 
 ```sh

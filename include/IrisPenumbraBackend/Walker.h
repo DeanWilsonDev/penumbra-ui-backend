@@ -31,10 +31,10 @@ struct BuildContext {
 // Walks a single `IrisComponent` IR node (docs/iris_core_spec.md §2.5, from the `iris`
 // preprocessor — never a Penumbra type) and builds the equivalent real Penumbra widget
 // via that primitive's own fluent `Builder`, recursing into `Node.Children`. This is
-// Stage 2 only: a one-shot tree build, no diffing, no identity tracking — `key` never
-// even reaches `IrisComponent` (stripped before codegen, docs/iris_core_spec.md §2.3),
-// so there's nothing here for a `key`-based live-widget map to key off of; that's a
-// Stage 3 reconciler concern built on top of this, not part of it.
+// Stage 2 only: a one-shot tree build, no diffing, no identity tracking — `IrisComponent`
+// does carry a `Key` now (docs/iris_stage3_implementation_decision.md, in the `iris`
+// repo), but this function never reads it; matching by key across two trees is Stage 3's
+// reconciler's job (`PenumbraWidgetAdapter.h`), built on top of this, not part of it.
 //
 // Two IrisElementTag values get special handling rather than a Builder call:
 //   - `None` (the `<Slot>`-callable-returned-`nullptr` sentinel, docs/iris_core_spec.md

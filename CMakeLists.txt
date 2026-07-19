@@ -27,7 +27,8 @@ add_subdirectory(vendor/penumbra)
 # planning decisions this implements.
 # ---------------------------------------------------------------------------
 add_library(iris_penumbra_backend STATIC
-    src/IrisPenumbraBackend/Walker.cpp)
+    src/IrisPenumbraBackend/Walker.cpp
+    src/IrisPenumbraBackend/PenumbraWidgetAdapter.cpp)
 
 target_include_directories(iris_penumbra_backend PUBLIC include)
 target_compile_features(iris_penumbra_backend PUBLIC cxx_std_23)
@@ -39,7 +40,8 @@ target_link_libraries(iris_penumbra_backend PUBLIC iris penumbra)
 # framework, isn't wired into either repo yet).
 # ---------------------------------------------------------------------------
 add_executable(iris_penumbra_backend_tests
-    tests/WalkerTests.cpp)
+    tests/WalkerTests.cpp
+    tests/PenumbraWidgetAdapterTests.cpp)
 
 target_link_libraries(iris_penumbra_backend_tests PRIVATE iris_penumbra_backend)
 set_target_properties(iris_penumbra_backend_tests PROPERTIES
