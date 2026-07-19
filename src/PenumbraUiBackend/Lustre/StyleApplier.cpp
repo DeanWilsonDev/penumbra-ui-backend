@@ -15,6 +15,43 @@ Penumbra::Widgets::EdgeInsets ToPenumbraEdgeInsets(const ::Lustre::EdgeInsets& E
     return {E.Left, E.Top, E.Right, E.Bottom};
 }
 
+Penumbra::Widgets::CrossAlign ToPenumbraCrossAlign(::Lustre::Align A) {
+    switch (A) {
+        case ::Lustre::Align::Start: return Penumbra::Widgets::CrossAlign::Start;
+        case ::Lustre::Align::Center: return Penumbra::Widgets::CrossAlign::Center;
+        case ::Lustre::Align::End: return Penumbra::Widgets::CrossAlign::End;
+        case ::Lustre::Align::Stretch: return Penumbra::Widgets::CrossAlign::Stretch;
+    }
+    return Penumbra::Widgets::CrossAlign::Start;
+}
+
+// §2: display/flex-direction/gap/align-items map onto Box's own layout
+// fields directly -- siblings of Style (BoxStyle), not part of it, and
+// Box::Builder has no method for any of them either, the same "public
+// field, not a Builder chain method" pattern Walker.cpp's own BuildGrid
+// stub already uses for LayoutMode::HorizontalStack. Box::Arrange skips
+// laying out children entirely when Layout == LayoutMode::None ("footgun
+// accepted", per Penumbra's own Box.cpp) -- any container that should
+// actually size around its children needs `display: stack` for that reason,
+// not just for visual flex-direction control.
+void ApplyLayout(Penumbra::Widgets::Box& Target, const ::Lustre::ResolvedStyle& Style) {
+    if (Style.DisplayMode) {
+        if (*Style.DisplayMode == ::Lustre::Display::Inline) {
+            Target.Layout = Penumbra::Widgets::LayoutMode::None;
+        } else {
+            const bool Row = !Style.FlexDirectionMode || *Style.FlexDirectionMode == ::Lustre::FlexDirection::Row;
+            Target.Layout = Row ? Penumbra::Widgets::LayoutMode::HorizontalStack
+                                 : Penumbra::Widgets::LayoutMode::VerticalStack;
+        }
+    }
+    if (Style.Gap) {
+        Target.ChildGap = *Style.Gap;
+    }
+    if (Style.AlignItems) {
+        Target.CrossAlignment = ToPenumbraCrossAlign(*Style.AlignItems);
+    }
+}
+
 // Fills in the universal box-model slots every widget type shares (§2:
 // background-color, border-color/width/radius, padding, margin). Existing
 // field values are left untouched wherever Style doesn't set the
@@ -73,6 +110,7 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         return;
     }
     ApplyBoxStyle(AsBox->Style, Style);
+    ApplyLayout(*AsBox, Style);
 
     // §2's "Pseudo-class-scoped variants": only background-color has a real
     // field to receive a pseudo-scoped value today, and only on Button.

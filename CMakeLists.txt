@@ -80,3 +80,19 @@ add_executable(penumbra_ui_backend_tests
 target_link_libraries(penumbra_ui_backend_tests PRIVATE penumbra_ui_backend penumbra_ui_backend_lustre)
 set_target_properties(penumbra_ui_backend_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+
+# ---------------------------------------------------------------------------
+# demo/main.cpp — a small, real running app (real window, real Renderer, real
+# click handling) exercising both wiring points from
+# docs/penumbra_ui_backend_lustre_bridge_decision.md: BuildWidgetTree/
+# Walker.cpp resolving Lustre style at mount, and PenumbraWidgetAdapter::
+# ApplyPropDiff re-resolving it on a live class change. Not part of the
+# library itself — purely for visually confirming the wiring against a real
+# window/renderer rather than test assertions alone.
+# ---------------------------------------------------------------------------
+add_executable(penumbra_ui_backend_demo demo/main.cpp)
+target_link_libraries(penumbra_ui_backend_demo PRIVATE penumbra_ui_backend)
+target_compile_definitions(penumbra_ui_backend_demo PRIVATE
+    DEMO_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/vendor/penumbra/demo/assets")
+set_target_properties(penumbra_ui_backend_demo PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/demo")

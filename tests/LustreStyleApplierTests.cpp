@@ -107,6 +107,70 @@ void TestTextColorReachesALabel() {
            "color reaches Label::ColorText");
 }
 
+void TestDisplayStackWithRowFlexDirectionMapsToHorizontalStack() {
+    Box                     WidgetBox;
+    ::Lustre::ResolvedStyle Style;
+    Style.DisplayMode = ::Lustre::Display::Stack;
+    Style.FlexDirectionMode = ::Lustre::FlexDirection::Row;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.Layout == Penumbra::Widgets::LayoutMode::HorizontalStack,
+           "display: stack + flex-direction: row reaches Box::Layout as HorizontalStack");
+}
+
+void TestDisplayStackWithColumnFlexDirectionMapsToVerticalStack() {
+    Box                     WidgetBox;
+    ::Lustre::ResolvedStyle Style;
+    Style.DisplayMode = ::Lustre::Display::Stack;
+    Style.FlexDirectionMode = ::Lustre::FlexDirection::Column;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.Layout == Penumbra::Widgets::LayoutMode::VerticalStack,
+           "display: stack + flex-direction: column reaches Box::Layout as VerticalStack");
+}
+
+void TestDisplayInlineMapsToLayoutNone() {
+    Box                     WidgetBox;
+    WidgetBox.Layout = Penumbra::Widgets::LayoutMode::HorizontalStack; // pre-existing, should be overwritten
+    ::Lustre::ResolvedStyle Style;
+    Style.DisplayMode = ::Lustre::Display::Inline;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.Layout == Penumbra::Widgets::LayoutMode::None, "display: inline reaches Box::Layout as None");
+}
+
+void TestNoDisplaySetLeavesLayoutUntouched() {
+    Box WidgetBox;
+    WidgetBox.Layout = Penumbra::Widgets::LayoutMode::HorizontalStack;
+    const auto Style = MakeStyle(); // never sets DisplayMode
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.Layout == Penumbra::Widgets::LayoutMode::HorizontalStack,
+           "a style that never sets display leaves Box::Layout exactly as it was");
+}
+
+void TestGapAndAlignItemsReachBox() {
+    Box                     WidgetBox;
+    ::Lustre::ResolvedStyle Style;
+    Style.Gap = 12.0F;
+    Style.AlignItems = ::Lustre::Align::Center;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.ChildGap == 12.0F, "gap reaches Box::ChildGap");
+    Expect(WidgetBox.CrossAlignment == Penumbra::Widgets::CrossAlign::Center,
+           "align-items reaches Box::CrossAlignment");
+}
+
 void TestCheckboxStillReceivesItsBoxStyleSlice() {
     Checkbox                 WidgetCheckbox;
     const auto                Style = MakeStyle();
@@ -126,5 +190,10 @@ void RunLustreStyleApplierTests() {
     TestHoverOverlayReachesButtonOnlyOnButtonWidgets();
     TestHoverOverlayIsStubbedOnAPlainBox();
     TestTextColorReachesALabel();
+    TestDisplayStackWithRowFlexDirectionMapsToHorizontalStack();
+    TestDisplayStackWithColumnFlexDirectionMapsToVerticalStack();
+    TestDisplayInlineMapsToLayoutNone();
+    TestNoDisplaySetLeavesLayoutUntouched();
+    TestGapAndAlignItemsReachBox();
     TestCheckboxStillReceivesItsBoxStyleSlice();
 }

@@ -138,6 +138,14 @@ and reconcile paths" section. `tests/StyleWiringTests.cpp` covers mount-time res
 descendant selectors across real `IrisComponent` ancestry, the global/component merge, and
 reconcile-time re-resolution including the stale-property-clearing behavior.
 
+**`display`/`flex-direction`/`gap`/`align-items` are also now wired** (they weren't when
+the applier was first written) — found by actually running `demo/` below against a real
+window, not by the test suite: without them, every classed container defaulted to
+`LayoutMode::None`, and Penumbra's `Box::Arrange` skips laying out children entirely in
+that mode, so a real nested tree silently rendered broken (children at the window origin,
+containers collapsed to padding-only squares) despite every existing test passing. See the
+decision doc's "What's implemented" section for the fix and why the tests didn't catch it.
+
 ## Build
 
 ```sh
@@ -145,4 +153,17 @@ git submodule update --init --recursive
 cmake -S . -B build
 cmake --build build
 ./build/tests/penumbra_ui_backend_tests
+```
+
+## Demo
+
+`demo/main.cpp` is a small, real running app (real window, real click handling) that
+recreates `lustre_core_spec.md` §4's HealthBar worked example end to end — not part of the
+library, purely for visually confirming the Lustre style wiring against a real
+window/renderer. Click anywhere to toggle the bar's class between `.bar-normal` (green) and
+`.bar-critical` (red), driving the exact `PenumbraWidgetAdapter::ApplyPropDiff` re-resolution
+path described above.
+
+```sh
+./build/demo/penumbra_ui_backend_demo
 ```

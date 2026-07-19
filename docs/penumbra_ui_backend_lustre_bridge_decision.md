@@ -62,6 +62,18 @@ styling language yet and speculating about its IR shape now would be guessing.
   fields today.
 - The universal box-model properties (`background-color`, `border-*`, `padding`,
   `margin`) apply to any `Box`-derived widget by mutating `Box::Style` directly.
+- `display`/`flex-direction`/`gap`/`align-items` apply to `Box::Layout`/`ChildGap`/
+  `CrossAlignment` directly (siblings of `Style`, not part of it). **Found missing
+  during the demo's own first real run, not caught by the original applier tests**
+  (`tests/LustreStyleApplierTests.cpp`, which only asserted `BoxStyle` fields): without
+  this, every classed container defaulted to `LayoutMode::None`, and Penumbra's own
+  `Box::Arrange` skips laying out children entirely in that mode ("footgun accepted",
+  per its own source comment) — a demo `Frame` wrapping a `Text` child rendered the text
+  at the window origin and the container as a near-invisible padding-only square, not
+  visibly broken in any unit test since none of them ever measured/arranged a real
+  multi-level tree end to end the way the demo does. `display: stack` (or `inline`, or
+  omitting it to leave `Layout` untouched) now reaches `Box::Layout` correctly; row is
+  the default direction when `flex-direction` is unset, matching real CSS.
 - `:hover`/`:active`/`:disabled` overlays apply only to `Button::ColorBackground{Hovered,
   Pressed,Disabled}` — the one place Penumbra has real fields for them
   (`penumbra-proto/docs/lustre_style_gaps_requirements.md` §1). Targeting anything else is
