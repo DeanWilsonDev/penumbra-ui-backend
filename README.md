@@ -88,6 +88,23 @@ cover the list-sibling cases directly). Still deliberately deferred: nested `<Sl
 Full design: `iris`'s `docs/iris_slot_stage2_wiring_decision.md` and
 `docs/iris_slot_list_wiring_decision.md`.
 
+**The Lustre style bridge is now implemented**: `IStyleApplier`/`LustreStyleApplier`
+(`include/IrisPenumbraBackend/Lustre/StyleApplier.h`, its own independent CMake target,
+`iris_penumbra_backend_lustre`) apply a `Lustre::ResolvedStyle` (from the `lustre` repo — the
+output of Lustre's parser/cascade/variable resolver, `lustre/docs/lustre_core_spec.md` §3) onto
+a real Penumbra widget's style fields: the universal box-model slots for any `Box`-derived
+widget, `:hover`/`:active`/`:disabled` overlays onto `Button`'s real interaction-state fields
+(the one widget type with them today), and `color`/`font-family`/`font-size` onto `Label`, with
+font-handle resolution cached by `(path, size)`. Deliberately its own target and its own vendored
+submodule (`vendor/lustre`) rather than folded into `iris_penumbra_backend` — it needs nothing
+from `iris` (it operates on plain `Penumbra::Widgets::WidgetBase&`, never `IrisComponent`), so a
+consumer that doesn't use Lustre doesn't pull it in. See
+`docs/iris_penumbra_backend_lustre_bridge_decision.md` for why this lives here rather than in a
+fourth repo, and what the `IStyleApplier` interface does and doesn't buy in terms of swapping in
+a future, non-Lustre styling language. Not yet wired into `Walker.cpp`'s mount path or
+`PenumbraWidgetAdapter::ApplyPropDiff`'s class-change path — the applier is implemented and
+tested in isolation (`tests/LustreStyleApplierTests.cpp`), but nothing calls it automatically yet.
+
 ## Build
 
 ```sh
