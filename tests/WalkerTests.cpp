@@ -175,12 +175,14 @@ void RunWalkerTests() {
 void RunPenumbraWidgetAdapterTests(); // tests/PenumbraWidgetAdapterTests.cpp
 void RunSlotWiringTests();            // tests/SlotWiringTests.cpp
 void RunLustreStyleApplierTests();    // tests/LustreStyleApplierTests.cpp
+void RunStyleWiringTests();           // tests/StyleWiringTests.cpp
 
 int main() {
     RunWalkerTests();
     RunPenumbraWidgetAdapterTests();
     RunSlotWiringTests();
     RunLustreStyleApplierTests();
+    RunStyleWiringTests();
 
     std::printf("\n%d failure(s)\n", Failures);
     return Failures == 0 ? 0 : 1;

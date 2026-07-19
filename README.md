@@ -116,9 +116,27 @@ from `iris` (it operates on plain `Penumbra::Widgets::WidgetBase&`, never `IrisC
 consumer that doesn't use Lustre doesn't pull it in. See
 `docs/penumbra_ui_backend_lustre_bridge_decision.md` for why this lives here rather than in a
 fourth repo, and what the `IStyleApplier` interface does and doesn't buy in terms of swapping in
-a future, non-Lustre styling language. Not yet wired into `Walker.cpp`'s mount path or
-`PenumbraWidgetAdapter::ApplyPropDiff`'s class-change path — the applier is implemented and
-tested in isolation (`tests/LustreStyleApplierTests.cpp`), but nothing calls it automatically yet.
+a future, non-Lustre styling language.
+
+**Now wired into both the mount path and the reconcile-time class-change path.**
+`BuildContext` (`Walker.h`) gained nullable `Style`/`StyleApplier` fields; when both are set,
+`BuildWidgetTree` resolves and applies every built widget's style during its existing recursive
+descent (no separate tree walk — an internal `Lustre::IStyleTarget` per node, alive on the call
+stack for exactly as long as its descendants are being built, gives real descendant-selector
+ancestry for free), and `PenumbraWidgetAdapter::ApplyPropDiff` re-resolves and re-applies style
+on every subsequent class change, first resetting the widget's own style fields so a property
+the old class set and the new one doesn't actually reverts rather than lingering. The two-layer
+cascade's asymmetric boundary rule (global.lustre unbounded, a component's own file bounded to
+its own root, §1.2) is handled by a new `PenumbraUiBackend::Lustre::ResolveStyle()` helper that
+composes two `Lustre::Resolver::Resolve()` calls, since `Resolve()` itself only takes one
+`Unbounded` flag for both layers at once. Both context fields default to null, so a consumer
+that never sets them gets exactly the pre-wiring behavior. Full reasoning, including the
+reconcile path's one known limitation (primitive-element selectors like `grid { }` only
+re-match correctly at mount time, not on a later class change — class selectors are
+unaffected), in `docs/penumbra_ui_backend_lustre_bridge_decision.md`'s "Wiring into the mount
+and reconcile paths" section. `tests/StyleWiringTests.cpp` covers mount-time resolution,
+descendant selectors across real `IrisComponent` ancestry, the global/component merge, and
+reconcile-time re-resolution including the stale-property-clearing behavior.
 
 ## Build
 

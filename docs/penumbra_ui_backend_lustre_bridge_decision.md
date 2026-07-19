@@ -1,7 +1,9 @@
-# iris-penumbra-backend — the Lustre style bridge
+# penumbra-ui-backend — the Lustre style bridge
 
-> **Status:** Implemented and tested against real Penumbra widgets (`Box`, `Button`,
-> `Checkbox`, `Label`), not just structural assertions.
+> **Status:** Implemented, wired into both the mount path (`Walker.cpp`) and the
+> reconcile-time class-change path (`PenumbraWidgetAdapter.cpp`), and tested end to end
+> against real Penumbra widgets (`Box`, `Button`, `Checkbox`, `Label`) built from real
+> `IrisComponent` trees — not just structural assertions on the applier in isolation.
 
 ---
 
@@ -66,8 +68,65 @@ styling language yet and speculating about its IR shape now would be guessing.
   silently a no-op, matching Lustre's own "stubbed, not an error" treatment.
 - `color`/`font-family`/`font-size` apply to `Label`, with `(path, size)` → `FontHandle`
   cached across `Apply()` calls (§2's font-request note).
-- Properties left unset by a given `ResolvedStyle` are never written — repeated `Apply()`
-  calls (e.g. on a class change) don't reset fields the new style doesn't mention.
+- Properties left unset by a given `ResolvedStyle` are never written by `Apply()` itself —
+  correct for merging multiple matched rules *within* one resolve (a base rule plus a
+  more-specific nested one), but wrong for re-styling on a later class change, where a
+  property the old class set and the new one doesn't should revert, not linger. That reset
+  is the caller's job, not `Apply()`'s — see "Wiring into the mount and reconcile paths"
+  below for where it actually happens.
+
+## Wiring into the mount and reconcile paths
+
+Both call sites resolve style through `PenumbraUiBackend::Lustre::ResolveStyle()`
+(`include/PenumbraUiBackend/Lustre/StyleResolution.h`), not `Lustre::Resolver::Resolve()`
+directly — `Resolve()` takes one `Unbounded` flag applied to both cascade layers in a
+single call, which can't express §1.2's asymmetric rule (global.lustre unbounded, a
+component's own file bounded to its own root) when both layers are supplied together.
+`ResolveStyle()` composes two `Resolve()` calls (global alone, unbounded; component alone,
+bounded) and merges them, component fields winning, without needing any change to `lustre`
+itself.
+
+**Mount (`Walker.cpp`):** `BuildWidgetTreeInternal` builds a `Lustre::IStyleTarget`
+(`WalkerStyleElement`) for every node as part of its existing recursive descent — no
+separate tree walk. Each node's `WalkerStyleElement` is a real local variable on the call
+stack, alive for exactly as long as its descendants are being built, with a `Parent`
+pointer to its own caller's `WalkerStyleElement` — descendant-selector ancestry falls out
+of the recursion for free. `Node` (the argument to whichever `BuildWidgetTree()` call
+started this recursion) is always treated as the component-root boundary; correct for
+every real caller today (only ever invoked at a whole mount's root, directly or via
+`iris::ResolveSlots`), but not detectable from `IrisComponent` alone if a future caller
+ever composed more than one component's worth of content into a single `BuildWidgetTree`
+call without going through `<Slot>`.
+
+**Reconcile (`PenumbraWidgetAdapter.cpp`):** `ApplyPropDiff` re-resolves and re-applies
+style whenever `Diff.ClassName` is set. Two problems specific to reconcile time, both
+solved here rather than left as gaps:
+
+- *Stale properties.* Before re-applying, `ResetStyleableFields` resets the widget's own
+  `BoxStyle` (and `Button`/`Label`'s extra fields) to their defaults, so a property the
+  new class doesn't set actually reverts instead of keeping the old class's value.
+- *Ancestry without a recursive call stack.* Unlike mount, there's no natural place to
+  keep a `WalkerStyleElement`-style chain alive — `ApplyPropDiff` fires standalone,
+  potentially long after the widget was built. `PenumbraWidget` gained a `Parent_` pointer
+  (set in `InsertChildAt`/`AdoptChildrenFromRawTree`, cleared in `RemoveChildAt`) so the
+  *wrapper* tree itself can be walked on demand; `BuildReconcileStyleChain` builds a small
+  parallel chain of `ReconcileStyleElement` objects with stable addresses (a
+  `std::vector<std::unique_ptr<...>>`, since `Lustre::IStyleTarget::Parent()` must return
+  a pointer valid for the whole `Resolve()` call, ruling out a plain recursive helper that
+  would return a pointer to its own stack frame).
+
+**Known limitation of the reconcile path specifically:** `PrimitiveTag()` there
+(`InferPrimitiveTag`) is inferred from the live widget's C++ type via `dynamic_cast`, not
+carried over from the original `IrisElementTag` (which isn't preserved anywhere once a
+widget is built). `Frame` and `Grid` both build to a plain `Box`
+(`Walker.cpp`'s own `BuildGrid` comment), so a primitive-element selector like `grid { }`
+only re-matches correctly at mount time; on a later class change, every plain `Box` reads
+as `"Frame"`. Class-selector rules — the overwhelmingly common case, and every worked
+example in `lustre_core_spec.md` — are unaffected.
+
+Both `Context.Style`/`Context.StyleApplier` (`Walker.h`'s `BuildContext`) are nullable; a
+caller that never sets them gets exactly the pre-wiring behavior, unchanged, with zero
+`lustre` calls made anywhere in the built binary's actual execution path.
 
 ## What's explicitly out of scope here
 
@@ -76,7 +135,9 @@ styling language yet and speculating about its IR shape now would be guessing.
   execute them yet, so there's nothing for this applier to do with them.
 - `ImageWidget` — the one Penumbra widget type that isn't a `Box` subclass, so it has no
   `BoxStyle` at all; a pre-existing Penumbra gap, not something this file can paper over.
-- Calling `Apply()` at the right moments (mount, class change, a future `.lustre`
-  hot-reload) — that's `Walker.cpp`/`PenumbraWidgetAdapter.cpp`'s job to wire up, not yet
-  done. This doc covers the applier existing and being correct in isolation, not its
-  integration into the build/reconcile paths.
+- A future `.lustre` hot-reload path (re-resolving and re-applying style for an entire
+  already-mounted tree when a file on disk changes, not just on a class change) — needs a
+  whole-tree walk entry point (`iris::RegisterRoot`/`GetRoot`, tracked in
+  `iris/docs/lustre_hotreload_iris_requirements.md`) that doesn't exist yet. Everything in
+  this doc covers per-widget resolution (mount, and a single widget's own class changing),
+  not a bulk re-style pass.

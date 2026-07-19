@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Lustre/Resolver.h"
+#include "PenumbraUiBackend/Lustre/StyleApplier.h"
+
 #include "Iris/IrisComponent.h"
 #include "Penumbra/Backends/IImageBackend.h"
 #include "Penumbra/Render/IFontBackend.h"
@@ -21,11 +24,20 @@ namespace PenumbraUiBackend {
 // just means that resource-dependent step is skipped — a `<Text>` widget still builds
 // successfully with `FontBackend == nullptr`, it just can't measure/draw real text
 // content yet; useful for structural tests that don't need a real font/SDL context.
+//
+// `Style`/`StyleApplier` are the same kind of optional resource: if either is null, no
+// Lustre resolution happens at all and every widget builds exactly as it did before this
+// wiring existed. Both pointers must outlive every widget built with this Context, since
+// PenumbraWidgetAdapter.cpp threads them onto live `PenumbraWidget` wrappers for later
+// re-resolution on a class change, not just the initial mount here.
 struct BuildContext {
     Penumbra::Render::IFontBackend*    FontBackend{nullptr};
     Penumbra::Render::FontHandle       Font{0};
     Penumbra::Backends::IImageBackend* ImageBackend{nullptr};
     SDL_Renderer*                      SdlRenderer{nullptr};
+
+    const ::Lustre::StylesheetSet* Style{nullptr};
+    const Lustre::IStyleApplier*    StyleApplier{nullptr};
 };
 
 // Walks a single `IrisComponent` IR node (docs/iris_core_spec.md §2.5, from the `iris`
@@ -51,6 +63,16 @@ struct BuildContext {
 //     there. A `<Slot>` at the very root of what's being built (no static wrapper at
 //     all, e.g. `render { <Slot>...</Slot> }`) is a different case `ResolveSlots`
 //     doesn't handle either — see its own doc comment for what to do instead.
+//
+// When `Context.Style`/`Context.StyleApplier` are both set, every built widget also gets
+// its Lustre style resolved and applied before this function returns it — see
+// docs/penumbra_ui_backend_lustre_bridge_decision.md's "Wiring into the mount and
+// reconcile paths" section for the ancestor-chain/component-boundary bookkeeping this
+// does internally. `Node` itself is always treated as a component-root boundary (§1.2):
+// correct for every real caller today (this function is only ever invoked at a whole
+// mount's root — see `MakeMountFn`/`iris::ResolveSlots`), but not detectable from
+// `IrisComponent` alone if a future caller ever builds a *sub*tree containing more than
+// one component's worth of composed content in a single call.
 std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Iris::IrisComponent& Node,
                                                                  const BuildContext&        Context);
 

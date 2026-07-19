@@ -66,6 +66,23 @@ public:
     // through every call site by hand.
     void SetImageContext(Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer);
 
+    // Same propagation pattern as SetImageContext above, for the Lustre style context
+    // ApplyPropDiff needs to re-resolve and re-apply style on a class change (see that
+    // method's own comment). Either pointer may be null -- a wrapper with no style
+    // context configured simply skips re-styling on every class change, unchanged
+    // behavior from before this wiring existed.
+    void SetStyleContext(const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier);
+
+    // This wrapper's parent in the *wrapper* tree (not the real Penumbra `Box::Children`
+    // ownership graph, which InsertChildAt/RemoveChildAt already juggle separately) --
+    // nullptr for the root of whatever subtree this wrapper's own `WrapExistingTree`
+    // call started at. That root-ness is exactly docs/lustre_core_spec.md §1.2's
+    // component-boundary signal for style resolution, the same way Walker.cpp's own
+    // `IsComponentRoot` parameter marks a fresh `BuildWidgetTree()` call's root -- only
+    // as precise as Iris's current component model allows (see Walker.h's own
+    // `BuildWidgetTree` comment for the same caveat).
+    PenumbraWidget* GetParent() const { return Parent_; }
+
 private:
     // Non-owning (attached) construction — used for every non-root node when wrapping
     // an already-built subtree (`WrapExistingTree`).
@@ -75,17 +92,24 @@ private:
     // Penumbra children `BuildWidgetTree` already built) into attached `PenumbraWidget`
     // wrappers, appended to Children_. Called once, by `WrapExistingTree`, on the root
     // wrapper it just constructed.
-    void AdoptChildrenFromRawTree(Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer);
+    void AdoptChildrenFromRawTree(Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer,
+                                   const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier);
 
     std::unique_ptr<Penumbra::Widgets::WidgetBase> OwnedWidget_;
     Penumbra::Widgets::WidgetBase*                  AttachedWidget_{nullptr};
     std::vector<std::unique_ptr<PenumbraWidget>>   Children_;
+    PenumbraWidget*                                 Parent_{nullptr};
 
     Penumbra::Backends::IImageBackend* ImageBackend_{nullptr};
     SDL_Renderer*                       SdlRenderer_{nullptr};
 
+    const ::Lustre::StylesheetSet* Sheets_{nullptr};
+    const Lustre::IStyleApplier*    StyleApplier_{nullptr};
+
     friend std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widgets::WidgetBase>,
-                                                              Penumbra::Backends::IImageBackend*, SDL_Renderer*);
+                                                              Penumbra::Backends::IImageBackend*, SDL_Renderer*,
+                                                              const ::Lustre::StylesheetSet*,
+                                                              const Lustre::IStyleApplier*);
 };
 
 // Wraps an already-built Penumbra widget subtree (e.g. `BuildWidgetTree`'s output) into
@@ -93,10 +117,14 @@ private:
 // every nested wrapper is a non-owning (attached) view onto its position inside the
 // real tree's own `Box::Children` — see `PenumbraWidget`'s own doc comment for why that
 // split matters. `ImageBackend`/`SdlRenderer` are propagated to every wrapper so a
-// nested `<Image>`'s later `src` prop changes can re-decode correctly.
+// nested `<Image>`'s later `src` prop changes can re-decode correctly; `Sheets`/
+// `StyleApplier` (either may be null) the same way, so a later class change anywhere in
+// the subtree can re-resolve and re-apply its Lustre style (`ApplyPropDiff` below).
 std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widgets::WidgetBase> Root,
                                                   Penumbra::Backends::IImageBackend*             ImageBackend,
-                                                  SDL_Renderer*                                   SdlRenderer);
+                                                  SDL_Renderer*                                   SdlRenderer,
+                                                  const ::Lustre::StylesheetSet* Sheets = nullptr,
+                                                  const Lustre::IStyleApplier*    StyleApplier = nullptr);
 
 // Builds an `iris::MountFn` (`Iris/SlotRuntime.h`, in the `iris` repo) combining Stage
 // 2's `BuildWidgetTree` with `WrapExistingTree` above — what Stage 3's reconciler calls

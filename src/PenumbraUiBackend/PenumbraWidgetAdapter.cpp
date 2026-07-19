@@ -1,7 +1,11 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
+#include "PenumbraUiBackend/Lustre/StyleResolution.h"
+
 #include "Penumbra/Widgets/Box.h"
+#include "Penumbra/Widgets/Button.h"
 #include "Penumbra/Widgets/ImageWidget.h"
+#include "Penumbra/Widgets/InlineContainer.h"
 #include "Penumbra/Widgets/Label.h"
 
 #include <algorithm>
@@ -9,9 +13,98 @@
 namespace PenumbraUiBackend {
 
 using Penumbra::Widgets::Box;
+using Penumbra::Widgets::Button;
 using Penumbra::Widgets::ImageWidget;
+using Penumbra::Widgets::InlineContainer;
 using Penumbra::Widgets::Label;
 using Penumbra::Widgets::WidgetBase;
+
+namespace {
+
+// Lustre::IStyleTarget over a live PenumbraWidget's ancestor chain, for
+// ApplyPropDiff's class-change re-resolution below. Kept as its own small
+// value type (not PenumbraWidget implementing IStyleTarget directly) because
+// IStyleTarget::Parent() must return a pointer valid for the whole
+// Resolve() call, and PenumbraWidget's own tree only has PenumbraWidget*
+// parent pointers, not IStyleTarget* ones -- BuildReconcileStyleChain below
+// builds a small parallel chain with stable addresses instead.
+class ReconcileStyleElement : public ::Lustre::IStyleTarget {
+public:
+    ReconcileStyleElement(std::string ClassName, std::string PrimitiveTag, bool IsRoot)
+        : ClassName_(std::move(ClassName)), PrimitiveTag_(std::move(PrimitiveTag)), IsRoot_(IsRoot) {}
+
+    void SetParent(const ReconcileStyleElement* Parent) { Parent_ = Parent; }
+
+    std::string ClassName() const override { return ClassName_; }
+    std::string PrimitiveTag() const override { return PrimitiveTag_; }
+    bool         IsComponentRoot() const override { return IsRoot_; }
+    const ::Lustre::IStyleTarget* Parent() const override { return Parent_; }
+
+private:
+    std::string ClassName_;
+    std::string PrimitiveTag_;
+    bool        IsRoot_;
+    const ReconcileStyleElement* Parent_{nullptr};
+};
+
+// Best-effort: identifies what real Penumbra widget type Widget IS, not what
+// Iris tag originally built it. `Frame` and `Grid` both build to a plain
+// `Box` (Walker.cpp's own BuildGrid comment), and that distinction is lost
+// once a widget is just a live, already-mounted tree -- a primitive-element
+// selector (`grid { ... }`) therefore only re-matches correctly at mount
+// time (Walker.cpp, which still has the real IrisElementTag); re-resolution
+// here, on a later class change, treats every plain Box as "Frame". Class
+// selectors (the overwhelmingly common case, and every worked example in
+// docs/lustre_core_spec.md) are unaffected by this.
+std::string InferPrimitiveTag(const WidgetBase& Widget) {
+    if (dynamic_cast<const Label*>(&Widget)) {
+        return "Text";
+    }
+    if (dynamic_cast<const InlineContainer*>(&Widget)) {
+        return "Inline";
+    }
+    if (dynamic_cast<const ImageWidget*>(&Widget)) {
+        return "Image";
+    }
+    return "Frame";
+}
+
+std::vector<std::unique_ptr<ReconcileStyleElement>> BuildReconcileStyleChain(const PenumbraWidget& Widget) {
+    std::vector<std::unique_ptr<ReconcileStyleElement>> Chain;
+    const PenumbraWidget* Node = &Widget;
+    while (Node != nullptr) {
+        const WidgetBase* Raw = Node->RawWidget();
+        Chain.push_back(std::make_unique<ReconcileStyleElement>(Raw ? Raw->ClassName : std::string{},
+                                                                  Raw ? InferPrimitiveTag(*Raw) : std::string{},
+                                                                  Node->GetParent() == nullptr));
+        Node = Node->GetParent();
+    }
+    for (std::size_t Index = 0; Index + 1 < Chain.size(); ++Index) {
+        Chain[Index]->SetParent(Chain[Index + 1].get());
+    }
+    return Chain;
+}
+
+// A class change fully replaces which rules apply, so the widget's own style
+// fields need a clean slate before re-applying -- unlike LustreStyleApplier's
+// own "leave what a style didn't set untouched" behavior (correct for
+// merging cascade layers *within* one resolve), a property the *new* class's
+// style doesn't set must not keep whatever the *old* class left behind.
+void ResetStyleableFields(WidgetBase& Widget) {
+    if (auto* AsBox = dynamic_cast<Box*>(&Widget)) {
+        AsBox->Style = Penumbra::Widgets::BoxStyle{};
+    }
+    if (auto* AsButton = dynamic_cast<Button*>(&Widget)) {
+        AsButton->ColorBackgroundHovered = {};
+        AsButton->ColorBackgroundPressed = {};
+        AsButton->ColorBackgroundDisabled = {};
+    }
+    if (auto* AsLabel = dynamic_cast<Label*>(&Widget)) {
+        AsLabel->ColorText = {};
+    }
+}
+
+} // namespace
 
 PenumbraWidget::PenumbraWidget(std::unique_ptr<WidgetBase> Widget) : OwnedWidget_(std::move(Widget)) {}
 
@@ -29,6 +122,11 @@ void PenumbraWidget::SetImageContext(Penumbra::Backends::IImageBackend* ImageBac
     SdlRenderer_ = SdlRenderer;
 }
 
+void PenumbraWidget::SetStyleContext(const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier) {
+    Sheets_ = Sheets;
+    StyleApplier_ = StyleApplier;
+}
+
 void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
     WidgetBase* Widget = RawWidget();
     if (Widget == nullptr) {
@@ -39,6 +137,18 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
     // (docs/iris_core_spec.md §3.1) maps straight onto WidgetBase's own public fields.
     if (Diff.ClassName) {
         Widget->ClassName = *Diff.ClassName;
+
+        // A class change means Lustre's own resolved style for this element may have
+        // changed entirely -- re-resolve and re-apply it now, the same way a browser
+        // recomputes an element's style the instant its `class` attribute changes.
+        // Skipped whenever no style context is configured (SetStyleContext never
+        // called, or explicitly given nullptrs) -- exactly the pre-wiring behavior.
+        if (Sheets_ != nullptr && StyleApplier_ != nullptr) {
+            ResetStyleableFields(*Widget);
+            const std::vector<std::unique_ptr<ReconcileStyleElement>> Chain = BuildReconcileStyleChain(*this);
+            const ::Lustre::ResolvedStyle Resolved = Lustre::ResolveStyle(*Chain.front(), *Sheets_);
+            StyleApplier_->Apply(*Widget, Resolved);
+        }
     }
     if (Diff.OnPress) {
         Widget->OnPressed = *Diff.OnPress;
@@ -92,6 +202,9 @@ void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWi
     auto* ChildImpl = static_cast<PenumbraWidget*>(Child.get());
     ChildImpl->ImageBackend_ = ImageBackend_;
     ChildImpl->SdlRenderer_ = SdlRenderer_;
+    ChildImpl->Sheets_ = Sheets_;
+    ChildImpl->StyleApplier_ = StyleApplier_;
+    ChildImpl->Parent_ = this;
 
     if (auto* AsBox = dynamic_cast<Box*>(RawWidget())) {
         AsBox->InsertChildAt(Index, ChildImpl->DetachOwnership());
@@ -107,6 +220,7 @@ void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWi
 std::unique_ptr<Umbra::IWidget> PenumbraWidget::RemoveChildAt(std::size_t Index) {
     std::unique_ptr<PenumbraWidget> Removed = std::move(Children_[static_cast<std::size_t>(Index)]);
     Children_.erase(Children_.begin() + static_cast<long>(Index));
+    Removed->Parent_ = nullptr; // detached -- no longer anyone's child until re-inserted
 
     if (auto* AsBox = dynamic_cast<Box*>(RawWidget())) {
         WidgetBase* RemovedRaw = Removed->RawWidget();
@@ -122,22 +236,31 @@ std::unique_ptr<Umbra::IWidget> PenumbraWidget::RemoveChildAt(std::size_t Index)
 }
 
 void PenumbraWidget::AdoptChildrenFromRawTree(Penumbra::Backends::IImageBackend* ImageBackend,
-                                               SDL_Renderer*                       SdlRenderer) {
+                                               SDL_Renderer*                       SdlRenderer,
+                                               const ::Lustre::StylesheetSet*      Sheets,
+                                               const Lustre::IStyleApplier*        StyleApplier) {
     WidgetBase* Raw = RawWidget();
     for (std::size_t Index = 0; Index < Raw->GetChildCount(); ++Index) {
         std::unique_ptr<PenumbraWidget> ChildWrapper(new PenumbraWidget(Raw->GetChildAt(Index)));
         ChildWrapper->SetImageContext(ImageBackend, SdlRenderer);
-        ChildWrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer);
+        ChildWrapper->SetStyleContext(Sheets, StyleApplier);
+        ChildWrapper->Parent_ = this;
+        ChildWrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier);
         Children_.push_back(std::move(ChildWrapper));
     }
 }
 
 std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>         Root,
                                                   Penumbra::Backends::IImageBackend* ImageBackend,
-                                                  SDL_Renderer*                       SdlRenderer) {
+                                                  SDL_Renderer*                       SdlRenderer,
+                                                  const ::Lustre::StylesheetSet*      Sheets,
+                                                  const Lustre::IStyleApplier*        StyleApplier) {
     auto Wrapper = std::make_unique<PenumbraWidget>(std::move(Root));
     Wrapper->SetImageContext(ImageBackend, SdlRenderer);
-    Wrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer);
+    Wrapper->SetStyleContext(Sheets, StyleApplier);
+    // Wrapper's own Parent_ stays nullptr -- it's the root of this mount, i.e. exactly
+    // the component-root boundary BuildReconcileStyleChain's IsComponentRoot() reads.
+    Wrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier);
     return Wrapper;
 }
 
@@ -147,7 +270,8 @@ iris::MountFn MakeMountFn(BuildContext Context) {
         if (!Built) {
             return nullptr;
         }
-        return WrapExistingTree(std::move(Built), Context.ImageBackend, Context.SdlRenderer);
+        return WrapExistingTree(std::move(Built), Context.ImageBackend, Context.SdlRenderer, Context.Style,
+                                 Context.StyleApplier);
     };
 }
 

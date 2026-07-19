@@ -1,5 +1,7 @@
 #include "PenumbraUiBackend/Walker.h"
 
+#include "PenumbraUiBackend/Lustre/StyleResolution.h"
+
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/ImageWidget.h"
 #include "Penumbra/Widgets/InlineContainer.h"
@@ -44,6 +46,50 @@ std::optional<std::function<void()>> GetEventProp(const IrisProps& Props, const 
     return std::nullopt;
 }
 
+// docs/lustre_core_spec.md §1.1's mapping table, keyed the other direction (a Core tag
+// to the PascalCase string Lustre::IStyleTarget::PrimitiveTag() reports -- these already
+// match one-for-one, this just names the IrisElementTag values Lustre's own selector
+// resolution doesn't know about).
+std::string IrisTagToLustreTag(IrisElementTag Tag) {
+    switch (Tag) {
+        case IrisElementTag::Frame: return "Frame";
+        case IrisElementTag::Inline: return "Inline";
+        case IrisElementTag::Grid: return "Grid";
+        case IrisElementTag::Image: return "Image";
+        case IrisElementTag::Text: return "Text";
+        default: return ""; // None/Slot never reach here -- see BuildWidgetTreeInternal
+    }
+}
+
+// Lustre::IStyleTarget over the ancestor chain BuildWidgetTree's own recursion already
+// walks -- no separate tree walk needed, since resolving a node's style happens exactly
+// once, right when that node is built, with every ancestor's WalkerStyleElement still
+// alive on the call stack above it. `IsComponentRoot_` is true exactly for the node a
+// given `BuildWidgetTree()` call started at (see that function's own doc comment for why
+// that's the correct boundary signal today).
+class WalkerStyleElement : public ::Lustre::IStyleTarget {
+public:
+    WalkerStyleElement(std::string ClassName, std::string PrimitiveTag, bool IsComponentRoot,
+                        const WalkerStyleElement* Parent)
+        : ClassName_(std::move(ClassName)), PrimitiveTag_(std::move(PrimitiveTag)), IsComponentRoot_(IsComponentRoot),
+          Parent_(Parent) {}
+
+    std::string ClassName() const override { return ClassName_; }
+    std::string PrimitiveTag() const override { return PrimitiveTag_; }
+    bool         IsComponentRoot() const override { return IsComponentRoot_; }
+    const ::Lustre::IStyleTarget* Parent() const override { return Parent_; }
+
+private:
+    std::string ClassName_;
+    std::string PrimitiveTag_;
+    bool        IsComponentRoot_;
+    const WalkerStyleElement* Parent_;
+};
+
+std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const IrisComponent& Node, const BuildContext& Context,
+                                                     const WalkerStyleElement* ParentStyleElement,
+                                                     bool                       IsComponentRoot);
+
 // The five event props plus `class` are the exact shared method set every Box-derived
 // primitive's Builder exposes identically (Box::Builder, Label::Builder,
 // InlineContainer::Builder — docs/iris_core_spec.md §3.1's "most share the same
@@ -73,20 +119,25 @@ void ApplySharedProps(BuilderT& Builder, const IrisProps& Props) {
 
 // Builds every child, skipping any that resolve to `nullptr` (an `IrisElementTag::None`
 // child — "no widget here", never added to the parent's Children at all, not even as a
-// hole).
+// hole). `ThisStyleElement` is Node's own style-target wrapper, already constructed by
+// the caller -- passed down so every child's WalkerStyleElement can point back to it as
+// their ancestor.
 template <typename BoxLikeBuilder>
-void BuildAndAttachChildren(BoxLikeBuilder& Builder, const IrisComponent& Node, const BuildContext& Context) {
+void BuildAndAttachChildren(BoxLikeBuilder& Builder, const IrisComponent& Node, const BuildContext& Context,
+                             const WalkerStyleElement& ThisStyleElement) {
     for (const IrisComponent& Child : Node.Children) {
-        if (std::unique_ptr<WidgetBase> ChildWidget = BuildWidgetTree(Child, Context)) {
+        if (std::unique_ptr<WidgetBase> ChildWidget =
+                BuildWidgetTreeInternal(Child, Context, &ThisStyleElement, /*IsComponentRoot=*/false)) {
             Builder.child(std::move(ChildWidget));
         }
     }
 }
 
-std::unique_ptr<WidgetBase> BuildFrame(const IrisComponent& Node, const BuildContext& Context) {
+std::unique_ptr<WidgetBase> BuildFrame(const IrisComponent& Node, const BuildContext& Context,
+                                        const WalkerStyleElement& ThisStyleElement) {
     Box::Builder Builder;
     ApplySharedProps(Builder, Node.Props);
-    BuildAndAttachChildren(Builder, Node, Context);
+    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement);
     return Builder.build();
 }
 
@@ -95,19 +146,21 @@ std::unique_ptr<WidgetBase> BuildFrame(const IrisComponent& Node, const BuildCon
 // as a stub, which explicitly does not meet the Core-primitive requirement yet. `Layout`
 // is a public field on `Box`, not something `Box::Builder` exposes — there's no
 // `layout()` Builder method to chain, so it's set directly on the built widget.
-std::unique_ptr<WidgetBase> BuildGrid(const IrisComponent& Node, const BuildContext& Context) {
+std::unique_ptr<WidgetBase> BuildGrid(const IrisComponent& Node, const BuildContext& Context,
+                                       const WalkerStyleElement& ThisStyleElement) {
     Box::Builder Builder;
     ApplySharedProps(Builder, Node.Props);
-    BuildAndAttachChildren(Builder, Node, Context);
+    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement);
     std::unique_ptr<Box> Built = Builder.build();
     Built->Layout = Penumbra::Widgets::LayoutMode::HorizontalStack;
     return Built;
 }
 
-std::unique_ptr<WidgetBase> BuildInline(const IrisComponent& Node, const BuildContext& Context) {
+std::unique_ptr<WidgetBase> BuildInline(const IrisComponent& Node, const BuildContext& Context,
+                                         const WalkerStyleElement& ThisStyleElement) {
     InlineContainer::Builder Builder;
     ApplySharedProps(Builder, Node.Props);
-    BuildAndAttachChildren(Builder, Node, Context);
+    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement);
     return Builder.build();
 }
 
@@ -150,34 +203,52 @@ std::unique_ptr<WidgetBase> BuildImage(const IrisComponent& Node, const BuildCon
     return Built;
 }
 
+std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const IrisComponent& Node, const BuildContext& Context,
+                                                     const WalkerStyleElement* ParentStyleElement,
+                                                     bool                       IsComponentRoot) {
+    // None/Slot build to nullptr with no widget at all -- nothing to construct a style
+    // target for, same "no widget here" treatment BuildWidgetTree's own doc comment
+    // describes.
+    if (Node.Tag == IrisElementTag::None || Node.Tag == IrisElementTag::Slot) {
+        return nullptr;
+    }
+
+    const WalkerStyleElement ThisStyleElement(GetStringProp(Node.Props, "class").value_or(std::string{}),
+                                               IrisTagToLustreTag(Node.Tag), IsComponentRoot, ParentStyleElement);
+
+    std::unique_ptr<WidgetBase> Built;
+    switch (Node.Tag) {
+        case IrisElementTag::Frame:
+            Built = BuildFrame(Node, Context, ThisStyleElement);
+            break;
+        case IrisElementTag::Grid:
+            Built = BuildGrid(Node, Context, ThisStyleElement);
+            break;
+        case IrisElementTag::Inline:
+            Built = BuildInline(Node, Context, ThisStyleElement);
+            break;
+        case IrisElementTag::Image:
+            Built = BuildImage(Node, Context);
+            break;
+        case IrisElementTag::Text:
+            Built = BuildText(Node, Context);
+            break;
+        default:
+            break; // unreachable -- None/Slot returned above, every other tag handled
+    }
+
+    if (Built && Context.Style != nullptr && Context.StyleApplier != nullptr) {
+        const auto Resolved = Lustre::ResolveStyle(ThisStyleElement, *Context.Style);
+        Context.StyleApplier->Apply(*Built, Resolved);
+    }
+
+    return Built;
+}
+
 } // namespace
 
 std::unique_ptr<WidgetBase> BuildWidgetTree(const IrisComponent& Node, const BuildContext& Context) {
-    switch (Node.Tag) {
-        case IrisElementTag::None:
-            return nullptr;
-        case IrisElementTag::Slot:
-            // Contributes nothing during this static build, same as None — a <Slot>
-            // child is spliced in afterward by iris::ResolveSlots (Iris/SlotResolution.h,
-            // docs/iris_slot_stage2_wiring_decision.md), which needs the surrounding
-            // static tree to already exist (with the Slot's own position simply absent)
-            // before it can attach real content there. A <Slot> that's the very ROOT of
-            // what's being built (no static wrapper at all) is a different case, handled
-            // by the caller via a plain, unattached iris::SlotState instead — see that
-            // decision doc.
-            return nullptr;
-        case IrisElementTag::Frame:
-            return BuildFrame(Node, Context);
-        case IrisElementTag::Grid:
-            return BuildGrid(Node, Context);
-        case IrisElementTag::Inline:
-            return BuildInline(Node, Context);
-        case IrisElementTag::Image:
-            return BuildImage(Node, Context);
-        case IrisElementTag::Text:
-            return BuildText(Node, Context);
-    }
-    return nullptr; // unreachable — every IrisElementTag is handled above
+    return BuildWidgetTreeInternal(Node, Context, /*ParentStyleElement=*/nullptr, /*IsComponentRoot=*/true);
 }
 
 } // namespace PenumbraUiBackend
