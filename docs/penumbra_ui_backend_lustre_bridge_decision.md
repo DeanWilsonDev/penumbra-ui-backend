@@ -127,14 +127,28 @@ solved here rather than left as gaps:
   a pointer valid for the whole `Resolve()` call, ruling out a plain recursive helper that
   would return a pointer to its own stack frame).
 
-**Known limitation of the reconcile path specifically:** `PrimitiveTag()` there
-(`InferPrimitiveTag`) is inferred from the live widget's C++ type via `dynamic_cast`, not
-carried over from the original `IrisElementTag` (which isn't preserved anywhere once a
-widget is built). `Frame` and `Grid` both build to a plain `Box`
-(`Walker.cpp`'s own `BuildGrid` comment), so a primitive-element selector like `grid { }`
-only re-matches correctly at mount time; on a later class change, every plain `Box` reads
-as `"Frame"`. Class-selector rules — the overwhelmingly common case, and every worked
-example in `lustre_core_spec.md` — are unaffected.
+**Fixed: the reconcile path's primitive-tag limitation.** Originally, `PrimitiveTag()` on
+the reconcile path (`InferPrimitiveTag`) was inferred from the live widget's C++ type via
+`dynamic_cast`, not carried over from the original `IrisElementTag` (which wasn't
+preserved anywhere once a widget was built). `Frame` and `Grid` both build to a plain
+`Box` (`Walker.cpp`'s own `BuildGrid` comment), so a primitive-element selector like
+`grid { }` only re-matched correctly at mount time; on a later class change, every plain
+`Box` read as `"Frame"`.
+
+Fixed by threading the real tag through explicitly rather than trying to re-derive it:
+`BuildWidgetTree` gained an optional `PrimitiveTagMap* OutTags` parameter (`Walker.h`) —
+when supplied, every built widget's raw pointer is recorded against its real Lustre tag,
+right at the one point in `Walker.cpp` that still knows it (`BuildWidgetTreeInternal`,
+after `Built` is constructed, regardless of which primitive it was). `WrapExistingTree`/
+`AdoptChildrenFromRawTree` gained a matching `const PrimitiveTagMap* Tags` parameter,
+looking up each widget's tag by pointer identity and storing it permanently on the
+resulting `PenumbraWidget` (`SetPrimitiveTag`/`GetPrimitiveTag`). `MakeMountFn` builds and
+threads this map automatically, so every widget mounted through the normal path now
+carries its real tag from then on — `BuildReconcileStyleChain` prefers it, falling back
+to the old `dynamic_cast`-based guess only for a widget wrapped some other way (no map
+supplied at all, e.g. `WrapExistingTree` called directly with the trailing `Tags`
+parameter omitted). Class-selector rules were never affected by the original gap, since
+they don't depend on `PrimitiveTag()` at all.
 
 Both `Context.Style`/`Context.StyleApplier` (`Walker.h`'s `BuildContext`) are nullable; a
 caller that never sets them gets exactly the pre-wiring behavior, unchanged, with zero

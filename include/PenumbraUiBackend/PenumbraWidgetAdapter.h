@@ -83,6 +83,15 @@ public:
     // `BuildWidgetTree` comment for the same caveat).
     PenumbraWidget* GetParent() const { return Parent_; }
 
+    // The real Lustre primitive tag ("Frame"/"Inline"/"Grid"/"Image"/"Text") this widget
+    // was originally built from, if `WrapExistingTree`/`AdoptChildrenFromRawTree` were
+    // given a `PrimitiveTagMap` to look it up in -- empty string otherwise (a widget not
+    // built via `BuildWidgetTree`, or wrapped without a map). See `PrimitiveTagMap`'s own
+    // comment in Walker.h for why this can't be recovered from the widget's C++ type
+    // alone (`Frame` and `Grid` both build to a plain `Box`).
+    const std::string& GetPrimitiveTag() const { return PrimitiveTag_; }
+    void                SetPrimitiveTag(std::string Tag) { PrimitiveTag_ = std::move(Tag); }
+
 private:
     // Non-owning (attached) construction — used for every non-root node when wrapping
     // an already-built subtree (`WrapExistingTree`).
@@ -93,12 +102,14 @@ private:
     // wrappers, appended to Children_. Called once, by `WrapExistingTree`, on the root
     // wrapper it just constructed.
     void AdoptChildrenFromRawTree(Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer,
-                                   const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier);
+                                   const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier,
+                                   const PrimitiveTagMap* Tags);
 
     std::unique_ptr<Penumbra::Widgets::WidgetBase> OwnedWidget_;
     Penumbra::Widgets::WidgetBase*                  AttachedWidget_{nullptr};
     std::vector<std::unique_ptr<PenumbraWidget>>   Children_;
     PenumbraWidget*                                 Parent_{nullptr};
+    std::string                                     PrimitiveTag_;
 
     Penumbra::Backends::IImageBackend* ImageBackend_{nullptr};
     SDL_Renderer*                       SdlRenderer_{nullptr};
@@ -109,7 +120,7 @@ private:
     friend std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widgets::WidgetBase>,
                                                               Penumbra::Backends::IImageBackend*, SDL_Renderer*,
                                                               const ::Lustre::StylesheetSet*,
-                                                              const Lustre::IStyleApplier*);
+                                                              const Lustre::IStyleApplier*, const PrimitiveTagMap*);
 };
 
 // Wraps an already-built Penumbra widget subtree (e.g. `BuildWidgetTree`'s output) into
@@ -119,12 +130,15 @@ private:
 // split matters. `ImageBackend`/`SdlRenderer` are propagated to every wrapper so a
 // nested `<Image>`'s later `src` prop changes can re-decode correctly; `Sheets`/
 // `StyleApplier` (either may be null) the same way, so a later class change anywhere in
-// the subtree can re-resolve and re-apply its Lustre style (`ApplyPropDiff` below).
+// the subtree can re-resolve and re-apply its Lustre style (`ApplyPropDiff` below). `Tags`
+// (also optional), if the caller built one via `BuildWidgetTree`'s own `OutTags`
+// parameter, seeds each wrapper's `GetPrimitiveTag()` with the real originating tag.
 std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widgets::WidgetBase> Root,
                                                   Penumbra::Backends::IImageBackend*             ImageBackend,
                                                   SDL_Renderer*                                   SdlRenderer,
                                                   const ::Lustre::StylesheetSet* Sheets = nullptr,
-                                                  const Lustre::IStyleApplier*    StyleApplier = nullptr);
+                                                  const Lustre::IStyleApplier*    StyleApplier = nullptr,
+                                                  const PrimitiveTagMap*          Tags = nullptr);
 
 // Builds an `iris::MountFn` (`Iris/SlotRuntime.h`, in the `iris` repo) combining Stage
 // 2's `BuildWidgetTree` with `WrapExistingTree` above — what Stage 3's reconciler calls

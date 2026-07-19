@@ -31,6 +31,7 @@ using Iris::IrisPropValue;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::BuildWidgetTree;
 using PenumbraUiBackend::PenumbraWidget;
+using PenumbraUiBackend::PrimitiveTagMap;
 using PenumbraUiBackend::WrapExistingTree;
 using PenumbraUiBackend::Lustre::LustreStyleApplier;
 using Penumbra::Widgets::Box;
@@ -235,6 +236,77 @@ void TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree() {
            "a class change on a wrapped child still resolves `.card .card-title` via the wrapper tree's real Parent_ chain");
 }
 
+// Regression test for the Frame/Grid primitive-tag gap: both build to a plain Box, so
+// re-resolving style on a class change used to guess "Frame" for both (InferPrimitiveTag's
+// dynamic_cast fallback), silently breaking a `grid { }` primitive-element selector on
+// anything past the initial mount. BuildWidgetTree's PrimitiveTagMap out-param plus
+// WrapExistingTree threading it onto each PenumbraWidget fixes this -- verified here by
+// giving `grid { }` and `frame { }` deliberately different colors and confirming the
+// *grid* one still applies after a class change forces re-resolution.
+void TestClassChangeStillResolvesAGridPrimitiveSelectorCorrectly() {
+    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+grid {
+    background-color: #00FF00;
+}
+
+frame {
+    background-color: #FF0000;
+}
+)",
+                                                            "Grid.lustre");
+
+    const LustreStyleApplier Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext Context;
+    Context.Style = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    const auto    Node = MakeNode(IrisElementTag::Grid);
+    PrimitiveTagMap Tags;
+    auto Built = BuildWidgetTree(Node, Context, &Tags);
+    auto Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr, Context.Style, Context.StyleApplier, &Tags);
+
+    auto* AsBoxBefore = dynamic_cast<Box*>(Wrapper->RawWidget());
+    Expect(AsBoxBefore != nullptr && AsBoxBefore->Style.ColorBackground.G == 0xFF,
+           "mount resolves the grid { } primitive selector (green, not frame's red)");
+    Expect(Wrapper->GetPrimitiveTag() == "Grid", "the wrapper's own GetPrimitiveTag() reports the real tag");
+
+    Umbra::IrisPropDiff Diff;
+    Diff.ClassName = ""; // trigger re-resolution -- a primitive selector doesn't care what it is
+    Wrapper->ApplyPropDiff(Diff);
+
+    auto* AsBoxAfter = dynamic_cast<Box*>(Wrapper->RawWidget());
+    Expect(AsBoxAfter != nullptr && AsBoxAfter->Style.ColorBackground.G == 0xFF && AsBoxAfter->Style.ColorBackground.R == 0,
+           "a class change still resolves grid { } correctly, not frame { }'s color -- the primitive-tag gap is fixed");
+}
+
+// The fallback (no PrimitiveTagMap given -- e.g. a widget wrapped some other way) still
+// degrades to the old dynamic_cast-based guess rather than crashing or leaving the tag
+// empty; documented as "Frame" for a plain Box, matching InferPrimitiveTag's own comment.
+void TestClassChangeFallsBackToFrameGuessWithoutAPrimitiveTagMap() {
+    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie("frame { background-color: #4CAF50; }", "test.lustre");
+
+    const LustreStyleApplier Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext Context;
+    Context.Style = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    const auto Node = MakeNode(IrisElementTag::Grid); // really a Grid, but no map to say so
+    auto       Built = BuildWidgetTree(Node, Context); // no OutTags
+    auto       Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr, Context.Style, Context.StyleApplier); // no Tags
+
+    Expect(Wrapper->GetPrimitiveTag().empty(), "with no PrimitiveTagMap, GetPrimitiveTag() is empty, not guessed eagerly");
+
+    Umbra::IrisPropDiff Diff;
+    Diff.ClassName = "";
+    Wrapper->ApplyPropDiff(Diff);
+
+    auto* AsBox = dynamic_cast<Box*>(Wrapper->RawWidget());
+    Expect(AsBox != nullptr && AsBox->Style.ColorBackground.G == 0xAF,
+           "re-resolution still falls back to treating an untagged plain Box as \"Frame\", matching frame { }");
+}
+
 } // namespace
 
 void RunStyleWiringTests() {
@@ -245,4 +317,6 @@ void RunStyleWiringTests() {
     TestClassChangeReResolvesAndAppliesTheNewStyle();
     TestClassChangeIsANoOpWithoutStyleContext();
     TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree();
+    TestClassChangeStillResolvesAGridPrimitiveSelectorCorrectly();
+    TestClassChangeFallsBackToFrameGuessWithoutAPrimitiveTagMap();
 }

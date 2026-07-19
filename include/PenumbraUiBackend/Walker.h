@@ -11,8 +11,23 @@
 #include <SDL3/SDL.h>
 
 #include <memory>
+#include <unordered_map>
 
 namespace PenumbraUiBackend {
+
+// Maps a built widget's raw pointer to its real Lustre primitive tag
+// ("Frame"/"Inline"/"Grid"/"Image"/"Text") -- the piece of information that
+// BuildWidgetTree's own IrisElementTag switch knows but a plain
+// `Penumbra::Widgets::WidgetBase` tree can't represent on its own (`Frame`
+// and `Grid` both build to a plain `Box`, per BuildGrid's own comment).
+// Optional: only populated when a caller passes a non-null map to
+// BuildWidgetTree, so PenumbraWidgetAdapter.cpp can later thread the exact
+// original tag onto each `PenumbraWidget` wrapper at wrap time, rather than
+// re-inferring it from C++ type on a class change (see
+// docs/penumbra_ui_backend_lustre_bridge_decision.md's "Fixing the
+// primitive-tag limitation" section for why that re-inference was
+// unreliable for Frame/Grid specifically).
+using PrimitiveTagMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::string>;
 
 // Resources BuildWidgetTree needs beyond what an IrisComponent tree itself carries.
 // Penumbra's own primitives don't take these through their fluent Builder: `Label`'s
@@ -73,7 +88,12 @@ struct BuildContext {
 // mount's root — see `MakeMountFn`/`iris::ResolveSlots`), but not detectable from
 // `IrisComponent` alone if a future caller ever builds a *sub*tree containing more than
 // one component's worth of composed content in a single call.
+//
+// When OutTags is non-null, every built widget's raw pointer is recorded there against
+// its real Lustre primitive tag -- see PrimitiveTagMap's own comment above. Left null
+// (the default), behaves exactly as before this parameter existed.
 std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Iris::IrisComponent& Node,
-                                                                 const BuildContext&        Context);
+                                                                 const BuildContext&        Context,
+                                                                 PrimitiveTagMap*           OutTags = nullptr);
 
 } // namespace PenumbraUiBackend

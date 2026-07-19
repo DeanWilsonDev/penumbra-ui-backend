@@ -47,15 +47,13 @@ private:
     const ReconcileStyleElement* Parent_{nullptr};
 };
 
-// Best-effort: identifies what real Penumbra widget type Widget IS, not what
-// Iris tag originally built it. `Frame` and `Grid` both build to a plain
-// `Box` (Walker.cpp's own BuildGrid comment), and that distinction is lost
-// once a widget is just a live, already-mounted tree -- a primitive-element
-// selector (`grid { ... }`) therefore only re-matches correctly at mount
-// time (Walker.cpp, which still has the real IrisElementTag); re-resolution
-// here, on a later class change, treats every plain Box as "Frame". Class
-// selectors (the overwhelmingly common case, and every worked example in
-// docs/lustre_core_spec.md) are unaffected by this.
+// Fallback only, for a wrapper whose GetPrimitiveTag() came back empty (built without a
+// PrimitiveTagMap -- see Walker.h's own comment on that type). Identifies what real
+// Penumbra widget type Widget IS, not what Iris tag originally built it: `Frame` and
+// `Grid` both build to a plain `Box` (Walker.cpp's own BuildGrid comment), a distinction
+// this can't recover, so it guesses "Frame" for both. When a PrimitiveTagMap *was*
+// threaded through (MakeMountFn always does this now), BuildReconcileStyleChain below
+// never reaches this function at all -- GetPrimitiveTag() already has the real answer.
 std::string InferPrimitiveTag(const WidgetBase& Widget) {
     if (dynamic_cast<const Label*>(&Widget)) {
         return "Text";
@@ -74,8 +72,9 @@ std::vector<std::unique_ptr<ReconcileStyleElement>> BuildReconcileStyleChain(con
     const PenumbraWidget* Node = &Widget;
     while (Node != nullptr) {
         const WidgetBase* Raw = Node->RawWidget();
-        Chain.push_back(std::make_unique<ReconcileStyleElement>(Raw ? Raw->ClassName : std::string{},
-                                                                  Raw ? InferPrimitiveTag(*Raw) : std::string{},
+        const std::string& StoredTag = Node->GetPrimitiveTag();
+        const std::string  Tag = !StoredTag.empty() ? StoredTag : (Raw ? InferPrimitiveTag(*Raw) : std::string{});
+        Chain.push_back(std::make_unique<ReconcileStyleElement>(Raw ? Raw->ClassName : std::string{}, Tag,
                                                                   Node->GetParent() == nullptr));
         Node = Node->GetParent();
     }
@@ -238,14 +237,21 @@ std::unique_ptr<Umbra::IWidget> PenumbraWidget::RemoveChildAt(std::size_t Index)
 void PenumbraWidget::AdoptChildrenFromRawTree(Penumbra::Backends::IImageBackend* ImageBackend,
                                                SDL_Renderer*                       SdlRenderer,
                                                const ::Lustre::StylesheetSet*      Sheets,
-                                               const Lustre::IStyleApplier*        StyleApplier) {
+                                               const Lustre::IStyleApplier*        StyleApplier,
+                                               const PrimitiveTagMap*              Tags) {
     WidgetBase* Raw = RawWidget();
     for (std::size_t Index = 0; Index < Raw->GetChildCount(); ++Index) {
-        std::unique_ptr<PenumbraWidget> ChildWrapper(new PenumbraWidget(Raw->GetChildAt(Index)));
+        WidgetBase*                     ChildRaw = Raw->GetChildAt(Index);
+        std::unique_ptr<PenumbraWidget> ChildWrapper(new PenumbraWidget(ChildRaw));
         ChildWrapper->SetImageContext(ImageBackend, SdlRenderer);
         ChildWrapper->SetStyleContext(Sheets, StyleApplier);
         ChildWrapper->Parent_ = this;
-        ChildWrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier);
+        if (Tags != nullptr) {
+            if (auto It = Tags->find(ChildRaw); It != Tags->end()) {
+                ChildWrapper->SetPrimitiveTag(It->second);
+            }
+        }
+        ChildWrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier, Tags);
         Children_.push_back(std::move(ChildWrapper));
     }
 }
@@ -254,24 +260,32 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>    
                                                   Penumbra::Backends::IImageBackend* ImageBackend,
                                                   SDL_Renderer*                       SdlRenderer,
                                                   const ::Lustre::StylesheetSet*      Sheets,
-                                                  const Lustre::IStyleApplier*        StyleApplier) {
-    auto Wrapper = std::make_unique<PenumbraWidget>(std::move(Root));
+                                                  const Lustre::IStyleApplier*        StyleApplier,
+                                                  const PrimitiveTagMap*              Tags) {
+    WidgetBase* RawRoot = Root.get();
+    auto        Wrapper = std::make_unique<PenumbraWidget>(std::move(Root));
     Wrapper->SetImageContext(ImageBackend, SdlRenderer);
     Wrapper->SetStyleContext(Sheets, StyleApplier);
+    if (Tags != nullptr) {
+        if (auto It = Tags->find(RawRoot); It != Tags->end()) {
+            Wrapper->SetPrimitiveTag(It->second);
+        }
+    }
     // Wrapper's own Parent_ stays nullptr -- it's the root of this mount, i.e. exactly
     // the component-root boundary BuildReconcileStyleChain's IsComponentRoot() reads.
-    Wrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier);
+    Wrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier, Tags);
     return Wrapper;
 }
 
 iris::MountFn MakeMountFn(BuildContext Context) {
     return [Context](const Iris::IrisComponent& Node) -> std::unique_ptr<Umbra::IWidget> {
-        std::unique_ptr<WidgetBase> Built = BuildWidgetTree(Node, Context);
+        PrimitiveTagMap             Tags;
+        std::unique_ptr<WidgetBase> Built = BuildWidgetTree(Node, Context, &Tags);
         if (!Built) {
             return nullptr;
         }
         return WrapExistingTree(std::move(Built), Context.ImageBackend, Context.SdlRenderer, Context.Style,
-                                 Context.StyleApplier);
+                                 Context.StyleApplier, &Tags);
     };
 }
 

@@ -130,13 +130,20 @@ cascade's asymmetric boundary rule (global.lustre unbounded, a component's own f
 its own root, §1.2) is handled by a new `PenumbraUiBackend::Lustre::ResolveStyle()` helper that
 composes two `Lustre::Resolver::Resolve()` calls, since `Resolve()` itself only takes one
 `Unbounded` flag for both layers at once. Both context fields default to null, so a consumer
-that never sets them gets exactly the pre-wiring behavior. Full reasoning, including the
-reconcile path's one known limitation (primitive-element selectors like `grid { }` only
-re-match correctly at mount time, not on a later class change — class selectors are
-unaffected), in `docs/penumbra_ui_backend_lustre_bridge_decision.md`'s "Wiring into the mount
-and reconcile paths" section. `tests/StyleWiringTests.cpp` covers mount-time resolution,
-descendant selectors across real `IrisComponent` ancestry, the global/component merge, and
+that never sets them gets exactly the pre-wiring behavior. Full reasoning in
+`docs/penumbra_ui_backend_lustre_bridge_decision.md`'s "Wiring into the mount and reconcile
+paths" section. `tests/StyleWiringTests.cpp` covers mount-time resolution, descendant
+selectors across real `IrisComponent` ancestry, the global/component merge, and
 reconcile-time re-resolution including the stale-property-clearing behavior.
+
+**The reconcile path's primitive-tag limitation is now fixed.** Primitive-element selectors
+(`grid { }`) used to only re-match correctly at mount time — `Frame` and `Grid` both build to
+a plain `Box`, and re-resolving on a class change had no way to tell them apart afterward, so
+it guessed `"Frame"` for both. `BuildWidgetTree` now takes an optional `PrimitiveTagMap*
+OutTags` parameter (`Walker.h`) that `MakeMountFn` threads through to `WrapExistingTree`
+automatically, so every widget mounted the normal way carries its real originating tag from
+then on. See the decision doc's "Fixed: the reconcile path's primitive-tag limitation"
+section.
 
 **`display`/`flex-direction`/`gap`/`align-items` are also now wired** (they weren't when
 the applier was first written) — found by actually running `demo/` below against a real
