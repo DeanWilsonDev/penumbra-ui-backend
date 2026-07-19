@@ -24,7 +24,10 @@
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Label.h"
 
+#include <SDL3/SDL.h>
+
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
@@ -36,6 +39,43 @@ namespace {
 
 constexpr int WindowLogicalWidth = 480;
 constexpr int WindowLogicalHeight = 240;
+
+// Self-contained automation hooks for driving this demo from a script with no
+// external tooling (no xdotool/import/scrot needed, none of which were
+// available when this was written) -- SDL3 already has everything needed to
+// screenshot and to drive input via the exact same code path a real click
+// takes. All three env vars are optional; unset, the demo behaves exactly as
+// it always did (interactive only). See
+// .claude/skills/run-penumbra-ui-backend/SKILL.md for the driver this powers.
+//   DEMO_SCREENSHOT_BEFORE=<path>  -- BMP written a few frames after launch,
+//                                     before any click (mount-time render).
+//   DEMO_SCREENSHOT_AFTER=<path>   -- BMP written a few frames after an
+//                                     auto-triggered click (reconcile-time
+//                                     re-render). Implies the auto-click.
+//   DEMO_AUTO_EXIT=1               -- quit automatically once every
+//                                     requested screenshot has been written,
+//                                     instead of waiting for window close.
+bool EnvFlagSet(const char* Name) {
+    const char* Value = std::getenv(Name);
+    return Value != nullptr && Value[0] != '\0';
+}
+
+// Grabs the current frame straight from the renderer (whatever was last
+// presented) and writes it out as a BMP -- no PNG/image library needed,
+// SDL3 has both pixel readback and BMP encoding built in.
+void SaveScreenshot(SDL_Renderer* SdlRenderer, const std::string& Path) {
+    SDL_Surface* Frame = SDL_RenderReadPixels(SdlRenderer, nullptr);
+    if (Frame == nullptr) {
+        std::fprintf(stderr, "Screenshot failed: %s\n", SDL_GetError());
+        return;
+    }
+    if (!SDL_SaveBMP(Frame, Path.c_str())) {
+        std::fprintf(stderr, "Failed to write screenshot to %s: %s\n", Path.c_str(), SDL_GetError());
+    } else {
+        std::printf("Wrote screenshot: %s\n", Path.c_str());
+    }
+    SDL_DestroySurface(Frame);
+}
 
 Iris::IrisComponent MakeNode(Iris::IrisElementTag Tag, Iris::IrisProps Props = {},
                               std::vector<Iris::IrisComponent> Children = {}) {
@@ -170,19 +210,42 @@ int main() {
     std::printf("Click anywhere to toggle the health bar between .bar-normal and .bar-critical.\n");
     std::fflush(stdout);
 
+    auto ToggleClass = [&]() {
+        Critical = !Critical;
+        Umbra::IrisPropDiff Diff;
+        Diff.ClassName = Critical ? "bar-critical" : "bar-normal";
+        BarWrapper->ApplyPropDiff(Diff); // the exact reconcile-time re-styling path, real click or automated
+    };
+
+    const std::string ScreenshotBeforePath = std::getenv("DEMO_SCREENSHOT_BEFORE") ? std::getenv("DEMO_SCREENSHOT_BEFORE") : "";
+    const std::string ScreenshotAfterPath = std::getenv("DEMO_SCREENSHOT_AFTER") ? std::getenv("DEMO_SCREENSHOT_AFTER") : "";
+    const bool         AutoExit = EnvFlagSet("DEMO_AUTO_EXIT");
+    bool               TookBeforeShot = ScreenshotBeforePath.empty();
+    bool               TookAfterShot = ScreenshotAfterPath.empty();
+    bool               DidAutoClick = ScreenshotAfterPath.empty();
+
+    // Wall-clock, not frame-count: the window can take an arbitrary, WM-
+    // dependent number of frames before it's actually mapped and presenting
+    // real content (confirmed empirically -- a 5-frame threshold captured a
+    // solid black backbuffer). 500ms is generous for a window this trivial
+    // while still keeping the automated run well under a second.
+    const Uint64 StartTicks = SDL_GetTicks();
+
     Penumbra::Platform::InputState Input;
     bool                            KeepRunning = true;
     while (KeepRunning) {
         KeepRunning = Window.PumpEventsAndBuildInput(Input);
+        const Uint64 ElapsedMs = SDL_GetTicks() - StartTicks;
 
         const float CurrentDpiScaleFactor = Window.GetDpiScaleFactor();
         Renderer.SetDpiScaleFactor(CurrentDpiScaleFactor);
 
         if (Input.MouseButtonPressedThisFrame[0]) {
-            Critical = !Critical;
-            Umbra::IrisPropDiff Diff;
-            Diff.ClassName = Critical ? "bar-critical" : "bar-normal";
-            BarWrapper->ApplyPropDiff(Diff);
+            ToggleClass();
+        }
+        if (!DidAutoClick && ElapsedMs >= 1000) {
+            ToggleClass();
+            DidAutoClick = true;
         }
 
         StatusLabelPtr->Text =
@@ -195,7 +258,29 @@ int main() {
 
         Renderer.BeginFrame({20, 20, 24, 255});
         Root->Draw(Renderer);
+
+        // Captured between Draw and Present, not after -- SDL_RenderReadPixels
+        // reads the current render target, which at this point definitely
+        // holds what Draw just wrote. Capturing *after* EndFrameAndPresent
+        // (which calls SDL_RenderPresent) raced the backbuffer swap on an
+        // accelerated/double-buffered renderer: confirmed empirically across
+        // several runs to intermittently read the *other*, not-yet-drawn-to
+        // buffer, producing a solid-black screenshot roughly half the time
+        // even with a generous wall-clock delay already elapsed.
+        if (!TookBeforeShot && ElapsedMs >= 500) {
+            SaveScreenshot(Window.GetSdlRenderer(), ScreenshotBeforePath);
+            TookBeforeShot = true;
+        }
+        if (!TookAfterShot && ElapsedMs >= 1500) {
+            SaveScreenshot(Window.GetSdlRenderer(), ScreenshotAfterPath);
+            TookAfterShot = true;
+        }
+
         Renderer.EndFrameAndPresent();
+
+        if (AutoExit && TookBeforeShot && TookAfterShot) {
+            KeepRunning = false;
+        }
     }
 
     Window.Shutdown();
