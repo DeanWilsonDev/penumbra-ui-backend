@@ -300,10 +300,11 @@ void RunWalkerTests() {
     TestNestedTreeBuildsRecursively();
 }
 
-void RunPenumbraWidgetAdapterTests(); // tests/PenumbraWidgetAdapterTests.cpp
-void RunSlotWiringTests();            // tests/SlotWiringTests.cpp
-void RunLustreStyleApplierTests();    // tests/LustreStyleApplierTests.cpp
-void RunStyleWiringTests();           // tests/StyleWiringTests.cpp
+void RunPenumbraWidgetAdapterTests();      // tests/PenumbraWidgetAdapterTests.cpp
+void RunSlotWiringTests();                 // tests/SlotWiringTests.cpp
+void RunLustreStyleApplierTests();         // tests/LustreStyleApplierTests.cpp
+void RunStyleWiringTests();                // tests/StyleWiringTests.cpp
+void RunStyleMismatchDiagnosticTests();    // tests/StyleMismatchDiagnosticTests.cpp
 
 int main() {
     RunWalkerTests();
@@ -311,6 +312,7 @@ int main() {
     RunSlotWiringTests();
     RunLustreStyleApplierTests();
     RunStyleWiringTests();
+    RunStyleMismatchDiagnosticTests();
 
     std::printf("\n%d failure(s)\n", Failures);
     return Failures == 0 ? 0 : 1;

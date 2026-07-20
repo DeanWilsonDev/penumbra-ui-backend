@@ -75,7 +75,8 @@ add_executable(penumbra_ui_backend_tests
     tests/PenumbraWidgetAdapterTests.cpp
     tests/SlotWiringTests.cpp
     tests/LustreStyleApplierTests.cpp
-    tests/StyleWiringTests.cpp)
+    tests/StyleWiringTests.cpp
+    tests/StyleMismatchDiagnosticTests.cpp)
 
 target_link_libraries(penumbra_ui_backend_tests PRIVATE penumbra_ui_backend penumbra_ui_backend_lustre)
 set_target_properties(penumbra_ui_backend_tests PROPERTIES

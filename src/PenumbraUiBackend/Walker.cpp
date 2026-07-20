@@ -10,6 +10,7 @@
 #include "Penumbra/Widgets/ScrollablePanel.h"
 #include "Penumbra/Widgets/TextInput.h"
 
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <variant>
@@ -29,6 +30,37 @@ using Penumbra::Widgets::Label;
 using Penumbra::Widgets::ScrollablePanel;
 using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
+
+// docs/build_context_style_mismatch_gap.md: debug-mode tracking for "did any
+// node in this BuildWidgetTree() call actually resolve a property from the
+// given Context.Style" -- a component built through a BuildContext whose
+// Style points at the wrong StylesheetSet resolves nothing at all, silently
+// (Lustre::ResolveStyle's own contract: no rule matched is not an error).
+// Threaded through the recursion as a nullable pointer (nullptr in the
+// common non-debug-tooling path) rather than added to BuildContext itself --
+// this is call-scoped bookkeeping for one BuildWidgetTree() invocation, not
+// caller configuration.
+struct StyleMatchStats {
+    std::size_t ClassedNodes = 0;
+    std::size_t ResolvedNodes = 0;
+};
+
+// Whether Style carries literally nothing -- every field still at its
+// default-constructed std::nullopt/empty-shared_ptr. Enumerates every
+// ResolvedStyle field by hand, same as StyleResolution.cpp's own
+// MergeInto() already does for the same struct (no built-in "is this
+// empty" predicate exists on ResolvedStyle itself -- lustre/include/Lustre/
+// ResolvedStyle.h). Pseudo-class overlays count too: a rule that only ever
+// sets e.g. `:hover { background-color: ... }` with no base declaration
+// still means *something* real matched.
+bool ResolvedStyleIsEmpty(const ::Lustre::ResolvedStyle& Style) {
+    return !Style.BackgroundColor && !Style.BackgroundGradientStart && !Style.BackgroundGradientEnd &&
+           !Style.BorderColor && !Style.BorderWidth && !Style.BorderRadius && !Style.Padding && !Style.Margin &&
+           !Style.TextColor && !Style.Font && !Style.DisplayMode && !Style.FlexDirectionMode && !Style.Gap &&
+           !Style.AlignItems && !Style.Transition && !Style.Hover && !Style.Active && !Style.Disabled &&
+           !Style.WidthLogical && !Style.HeightLogical && !Style.TransformScale && !Style.MaxWidthLogical &&
+           !Style.TextOverflowMode;
+}
 
 std::optional<std::string> GetStringProp(const IrisProps& Props, const std::string& Name) {
     const auto It = Props.find(Name);
@@ -136,7 +168,8 @@ private:
 
 std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const BuildContext& Context,
                                                      const WalkerStyleElement* ParentStyleElement,
-                                                     bool IsComponentRoot, PrimitiveTagMap* OutTags);
+                                                     bool IsComponentRoot, PrimitiveTagMap* OutTags,
+                                                     StyleMatchStats* Stats);
 
 // The five event props plus `class` are the exact shared method set every Box-derived
 // primitive's Builder exposes identically (Box::Builder, Label::Builder,
@@ -172,20 +205,22 @@ void ApplySharedProps(BuilderT& Builder, const IrisProps& Props) {
 // their ancestor.
 template <typename BoxLikeBuilder>
 void BuildAndAttachChildren(BoxLikeBuilder& Builder, const Component& Node, const BuildContext& Context,
-                             const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags) {
+                             const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags,
+                             StyleMatchStats* Stats) {
     for (const Component& Child : Node.Children) {
-        if (std::unique_ptr<WidgetBase> ChildWidget =
-                BuildWidgetTreeInternal(Child, Context, &ThisStyleElement, /*IsComponentRoot=*/false, OutTags)) {
+        if (std::unique_ptr<WidgetBase> ChildWidget = BuildWidgetTreeInternal(
+                Child, Context, &ThisStyleElement, /*IsComponentRoot=*/false, OutTags, Stats)) {
             Builder.child(std::move(ChildWidget));
         }
     }
 }
 
 std::unique_ptr<WidgetBase> BuildFrame(const Component& Node, const BuildContext& Context,
-                                        const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags) {
+                                        const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags,
+                                        StyleMatchStats* Stats) {
     Box::Builder Builder;
     ApplySharedProps(Builder, Node.Props);
-    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement, OutTags);
+    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement, OutTags, Stats);
     return Builder.build();
 }
 
@@ -195,20 +230,22 @@ std::unique_ptr<WidgetBase> BuildFrame(const Component& Node, const BuildContext
 // is a public field on `Box`, not something `Box::Builder` exposes — there's no
 // `layout()` Builder method to chain, so it's set directly on the built widget.
 std::unique_ptr<WidgetBase> BuildGrid(const Component& Node, const BuildContext& Context,
-                                       const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags) {
+                                       const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags,
+                                       StyleMatchStats* Stats) {
     Box::Builder Builder;
     ApplySharedProps(Builder, Node.Props);
-    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement, OutTags);
+    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement, OutTags, Stats);
     std::unique_ptr<Box> Built = Builder.build();
     Built->Layout = Penumbra::Widgets::LayoutMode::HorizontalStack;
     return Built;
 }
 
 std::unique_ptr<WidgetBase> BuildInline(const Component& Node, const BuildContext& Context,
-                                         const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags) {
+                                         const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags,
+                                         StyleMatchStats* Stats) {
     InlineContainer::Builder Builder;
     ApplySharedProps(Builder, Node.Props);
-    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement, OutTags);
+    BuildAndAttachChildren(Builder, Node, Context, ThisStyleElement, OutTags, Stats);
     return Builder.build();
 }
 
@@ -284,15 +321,16 @@ std::unique_ptr<WidgetBase> BuildIcon(const Component& Node, const BuildContext&
 // gives its shared props. wheelStep maps onto WheelStepLogical, the one dedicated field
 // this widget has.
 std::unique_ptr<WidgetBase> BuildScroll(const Component& Node, const BuildContext& Context,
-                                        const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags) {
+                                        const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags,
+                                        StyleMatchStats* Stats) {
     auto Built = std::make_unique<ScrollablePanel>();
     ApplySharedPropsToWidget(*Built, Node.Props);
     if (const auto WheelStep = GetFloatProp(Node.Props, "wheelStep")) {
         Built->WheelStepLogical = *WheelStep;
     }
     for (const Component& Child : Node.Children) {
-        if (std::unique_ptr<WidgetBase> ChildWidget =
-                BuildWidgetTreeInternal(Child, Context, &ThisStyleElement, /*IsComponentRoot=*/false, OutTags)) {
+        if (std::unique_ptr<WidgetBase> ChildWidget = BuildWidgetTreeInternal(
+                Child, Context, &ThisStyleElement, /*IsComponentRoot=*/false, OutTags, Stats)) {
             Built->AddChild(std::move(ChildWidget));
         }
     }
@@ -323,7 +361,8 @@ std::unique_ptr<WidgetBase> BuildInput(const Component& Node, const BuildContext
 
 std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const BuildContext& Context,
                                                      const WalkerStyleElement* ParentStyleElement,
-                                                     bool IsComponentRoot, PrimitiveTagMap* OutTags) {
+                                                     bool IsComponentRoot, PrimitiveTagMap* OutTags,
+                                                     StyleMatchStats* Stats) {
     // None/Slot build to nullptr with no widget at all -- nothing to construct a style
     // target for, same "no widget here" treatment BuildWidgetTree's own doc comment
     // describes.
@@ -338,13 +377,13 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
     std::unique_ptr<WidgetBase> Built;
     switch (Node.Tag) {
         case IrisElementTag::Frame:
-            Built = BuildFrame(Node, Context, ThisStyleElement, OutTags);
+            Built = BuildFrame(Node, Context, ThisStyleElement, OutTags, Stats);
             break;
         case IrisElementTag::Grid:
-            Built = BuildGrid(Node, Context, ThisStyleElement, OutTags);
+            Built = BuildGrid(Node, Context, ThisStyleElement, OutTags, Stats);
             break;
         case IrisElementTag::Inline:
-            Built = BuildInline(Node, Context, ThisStyleElement, OutTags);
+            Built = BuildInline(Node, Context, ThisStyleElement, OutTags, Stats);
             break;
         case IrisElementTag::Image:
             Built = BuildImage(Node, Context);
@@ -356,7 +395,7 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
             Built = BuildText(Node, Context);
             break;
         case IrisElementTag::Scroll:
-            Built = BuildScroll(Node, Context, ThisStyleElement, OutTags);
+            Built = BuildScroll(Node, Context, ThisStyleElement, OutTags, Stats);
             break;
         case IrisElementTag::Input:
             Built = BuildInput(Node, Context);
@@ -368,6 +407,12 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
     if (Built && Context.Style != nullptr && Context.StyleApplier != nullptr) {
         const auto Resolved = Lustre::ResolveStyle(ThisStyleElement, *Context.Style);
         Context.StyleApplier->Apply(*Built, Resolved);
+        if (Stats != nullptr && !ThisStyleElement.ClassName().empty()) {
+            ++Stats->ClassedNodes;
+            if (!ResolvedStyleIsEmpty(Resolved)) {
+                ++Stats->ResolvedNodes;
+            }
+        }
     }
 
     // Recorded regardless of whether OutTags is used for styling here -- this is the
@@ -385,7 +430,28 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
 
 std::unique_ptr<WidgetBase> BuildWidgetTree(const Component& Node, const BuildContext& Context,
                                              PrimitiveTagMap* OutTags) {
-    return BuildWidgetTreeInternal(Node, Context, /*ParentStyleElement=*/nullptr, /*IsComponentRoot=*/true, OutTags);
+    StyleMatchStats Stats;
+    std::unique_ptr<WidgetBase> Built =
+        BuildWidgetTreeInternal(Node, Context, /*ParentStyleElement=*/nullptr, /*IsComponentRoot=*/true, OutTags, &Stats);
+#ifndef NDEBUG
+    // docs/build_context_style_mismatch_gap.md: every classed node resolved
+    // nothing at all from Context.Style -- a near-certain sign the wrong
+    // StylesheetSet was passed for this component (the common way to get
+    // here: reusing a BuildContext captured for a different component,
+    // whose Style points at that other component's own stylesheet, which
+    // shares no class names with this one). A component deliberately built
+    // with Context.Style == nullptr ("no styling at all", a supported mode
+    // -- see BuildContext's own doc comment) never reaches this: the guard
+    // above only calls ResolveStyle/increments Stats when Context.Style is
+    // non-null in the first place.
+    if (Stats.ClassedNodes > 0 && Stats.ResolvedNodes == 0) {
+        std::fprintf(stderr,
+                     "PenumbraUiBackend::BuildWidgetTree: %zu widget(s) had a `class` prop, but none resolved any "
+                     "property from the given Context.Style -- likely the wrong StylesheetSet for this component.\n",
+                     Stats.ClassedNodes);
+    }
+#endif
+    return Built;
 }
 
 } // namespace PenumbraUiBackend
