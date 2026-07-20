@@ -144,6 +144,12 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
             AsLabel->FontBackend = FontBackend_;
             AsLabel->Font = ResolveFont(*Style.Font);
         }
+        if (Style.MaxWidthLogical) {
+            AsLabel->MaxWidthLogical = *Style.MaxWidthLogical;
+        }
+        if (Style.TextOverflowMode) {
+            AsLabel->TruncateWithEllipsis = (*Style.TextOverflowMode == ::Lustre::TextOverflow::Ellipsis);
+        }
     }
 
     // Checkbox's own style-specific fields (ColorCheckMark/ColorBoxChecked)

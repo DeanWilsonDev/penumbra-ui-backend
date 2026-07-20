@@ -199,6 +199,43 @@ void TestNoGradientLeavesBoxStyleGradientFieldsAtDefault() {
            "no background-gradient-* in the style leaves Box::Style.GradientTop at its zero-alpha default");
 }
 
+void TestMaxWidthAndEllipsisReachALabel() {
+    Label                   WidgetLabel;
+    ::Lustre::ResolvedStyle Style;
+    Style.MaxWidthLogical = 220.0F;
+    Style.TextOverflowMode = ::Lustre::TextOverflow::Ellipsis;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetLabel, Style);
+
+    Expect(WidgetLabel.MaxWidthLogical.has_value() && *WidgetLabel.MaxWidthLogical == 220.0F,
+           "max-width reaches Label::MaxWidthLogical");
+    Expect(WidgetLabel.TruncateWithEllipsis, "text-overflow: ellipsis reaches Label::TruncateWithEllipsis as true");
+}
+
+void TestTextOverflowClipReachesALabelAsFalse() {
+    Label                   WidgetLabel;
+    ::Lustre::ResolvedStyle Style;
+    Style.MaxWidthLogical = 100.0F;
+    Style.TextOverflowMode = ::Lustre::TextOverflow::Clip;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetLabel, Style);
+
+    Expect(!WidgetLabel.TruncateWithEllipsis, "text-overflow: clip reaches Label::TruncateWithEllipsis as false");
+}
+
+void TestNoMaxWidthLeavesLabelUnconstrained() {
+    Label      WidgetLabel;
+    const auto Style = MakeStyle(); // no max-width/text-overflow at all
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetLabel, Style);
+
+    Expect(!WidgetLabel.MaxWidthLogical.has_value(),
+           "no max-width in the style leaves Label::MaxWidthLogical unset");
+}
+
 void TestCheckboxStillReceivesItsBoxStyleSlice() {
     Checkbox                 WidgetCheckbox;
     const auto                Style = MakeStyle();
@@ -225,5 +262,8 @@ void RunLustreStyleApplierTests() {
     TestGapAndAlignItemsReachBox();
     TestGradientPairReachesBoxStyle();
     TestNoGradientLeavesBoxStyleGradientFieldsAtDefault();
+    TestMaxWidthAndEllipsisReachALabel();
+    TestTextOverflowClipReachesALabelAsFalse();
+    TestNoMaxWidthLeavesLabelUnconstrained();
     TestCheckboxStillReceivesItsBoxStyleSlice();
 }
