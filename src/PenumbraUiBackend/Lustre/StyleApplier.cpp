@@ -61,6 +61,13 @@ void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::Resolved
     if (Style.BackgroundColor) {
         Target.ColorBackground = ToPenumbraColor(*Style.BackgroundColor);
     }
+    // Resolver::Resolve only ever sets these as a pair (either both or
+    // neither) -- checking Start alone here is enough, no need to guard
+    // End separately.
+    if (Style.BackgroundGradientStart) {
+        Target.GradientTop = ToPenumbraColor(*Style.BackgroundGradientStart);
+        Target.GradientBottom = ToPenumbraColor(*Style.BackgroundGradientEnd);
+    }
     if (Style.BorderColor) {
         Target.ColorBorder = ToPenumbraColor(*Style.BorderColor);
     }

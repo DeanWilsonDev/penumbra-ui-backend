@@ -171,6 +171,34 @@ void TestGapAndAlignItemsReachBox() {
            "align-items reaches Box::CrossAlignment");
 }
 
+void TestGradientPairReachesBoxStyle() {
+    Box                     WidgetBox;
+    ::Lustre::ResolvedStyle Style;
+    Style.BackgroundGradientStart = ::Lustre::Color{0x4A, 0x90, 0xFF, 0xFF};
+    Style.BackgroundGradientEnd = ::Lustre::Color{0x2A, 0x5A, 0xDD, 0xFF};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.Style.GradientTop.R == 0x4A && WidgetBox.Style.GradientTop.G == 0x90 &&
+               WidgetBox.Style.GradientTop.B == 0xFF,
+           "background-gradient-start reaches Box::Style.GradientTop");
+    Expect(WidgetBox.Style.GradientBottom.R == 0x2A && WidgetBox.Style.GradientBottom.G == 0x5A &&
+               WidgetBox.Style.GradientBottom.B == 0xDD,
+           "background-gradient-end reaches Box::Style.GradientBottom");
+}
+
+void TestNoGradientLeavesBoxStyleGradientFieldsAtDefault() {
+    Box        WidgetBox;
+    const auto Style = MakeStyle(); // sets BackgroundColor, no gradient
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.Style.GradientTop.A == 0,
+           "no background-gradient-* in the style leaves Box::Style.GradientTop at its zero-alpha default");
+}
+
 void TestCheckboxStillReceivesItsBoxStyleSlice() {
     Checkbox                 WidgetCheckbox;
     const auto                Style = MakeStyle();
@@ -195,5 +223,7 @@ void RunLustreStyleApplierTests() {
     TestDisplayInlineMapsToLayoutNone();
     TestNoDisplaySetLeavesLayoutUntouched();
     TestGapAndAlignItemsReachBox();
+    TestGradientPairReachesBoxStyle();
+    TestNoGradientLeavesBoxStyleGradientFieldsAtDefault();
     TestCheckboxStillReceivesItsBoxStyleSlice();
 }
