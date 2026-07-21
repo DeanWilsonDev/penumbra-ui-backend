@@ -72,18 +72,19 @@ void TestHoverOverlayReachesButtonOnlyOnButtonWidgets() {
     LustreStyleApplier Applier;
     Applier.Apply(WidgetButton, Style);
 
-    Expect(WidgetButton.ColorBackgroundHovered.R == 0x66 && WidgetButton.ColorBackgroundHovered.G == 0xBB,
-           ":hover background-color reaches Button::ColorBackgroundHovered");
+    Expect(WidgetButton.Style.ColorBackgroundHovered.R == 0x66 && WidgetButton.Style.ColorBackgroundHovered.G == 0xBB,
+           ":hover background-color reaches Button::Style.ColorBackgroundHovered");
     // The base (non-hover) style still applies too -- overlays add to the
     // base rather than replacing what Apply() already did for it.
     Expect(WidgetButton.Style.ColorBackground.R == 0xE8, "the base style still applies alongside the hover overlay");
 }
 
 void TestHoverOverlayIsStubbedOnAPlainBox() {
-    // §2/lustre_style_gaps_requirements.md §1: BoxStyle has no
-    // interaction-state fields at all yet -- a :hover rule on a Frame-classed
-    // element resolves into the IR (Lustre's job) but has nowhere to land in
-    // Penumbra today. Apply() should simply not crash or misapply it.
+    // BoxStyle carries the interaction-state fields now (Penumbra dd1d6ab),
+    // but Apply()'s pseudo-class overlay is still gated to Button only -- a
+    // :hover rule on a Frame-classed plain Box resolves into the IR (Lustre's
+    // job) but Apply() doesn't route it anywhere yet. Apply() should simply
+    // not crash or misapply it.
     Box                      WidgetBox;
     ::Lustre::ResolvedStyle  Style;
     Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();

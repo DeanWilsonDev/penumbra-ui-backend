@@ -126,13 +126,13 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
     // penumbra-proto/docs/lustre_style_gaps_requirements.md §1.
     if (auto* AsButton = dynamic_cast<Button*>(&Widget)) {
         if (Style.Hover && Style.Hover->BackgroundColor) {
-            AsButton->ColorBackgroundHovered = ToPenumbraColor(*Style.Hover->BackgroundColor);
+            AsButton->Style.ColorBackgroundHovered = ToPenumbraColor(*Style.Hover->BackgroundColor);
         }
         if (Style.Active && Style.Active->BackgroundColor) {
-            AsButton->ColorBackgroundPressed = ToPenumbraColor(*Style.Active->BackgroundColor);
+            AsButton->Style.ColorBackgroundPressed = ToPenumbraColor(*Style.Active->BackgroundColor);
         }
         if (Style.Disabled && Style.Disabled->BackgroundColor) {
-            AsButton->ColorBackgroundDisabled = ToPenumbraColor(*Style.Disabled->BackgroundColor);
+            AsButton->Style.ColorBackgroundDisabled = ToPenumbraColor(*Style.Disabled->BackgroundColor);
         }
     }
 

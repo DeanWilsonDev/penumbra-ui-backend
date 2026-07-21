@@ -3,7 +3,7 @@
 	url = https://github.com/DeanWilsonDev/iris.git
 [submodule "vendor/penumbra"]
 	path = vendor/penumbra
-	url = https://github.com/DeanWilsonDev/penumbra-proto.git
+	url = https://github.com/DeanWilsonDev/penumbra.git
 [submodule "vendor/lustre"]
 	path = vendor/lustre
 	url = https://github.com/DeanWilsonDev/lustre.git

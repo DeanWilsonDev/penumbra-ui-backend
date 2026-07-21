@@ -3,7 +3,6 @@
 #include "PenumbraUiBackend/Lustre/StyleResolution.h"
 
 #include "Penumbra/Widgets/Box.h"
-#include "Penumbra/Widgets/Button.h"
 #include "Penumbra/Widgets/ImageWidget.h"
 #include "Penumbra/Widgets/InlineContainer.h"
 #include "Penumbra/Widgets/Label.h"
@@ -13,7 +12,6 @@
 namespace PenumbraUiBackend {
 
 using Penumbra::Widgets::Box;
-using Penumbra::Widgets::Button;
 using Penumbra::Widgets::ImageWidget;
 using Penumbra::Widgets::InlineContainer;
 using Penumbra::Widgets::Label;
@@ -92,11 +90,6 @@ std::vector<std::unique_ptr<ReconcileStyleElement>> BuildReconcileStyleChain(con
 void ResetStyleableFields(WidgetBase& Widget) {
     if (auto* AsBox = dynamic_cast<Box*>(&Widget)) {
         AsBox->Style = Penumbra::Widgets::BoxStyle{};
-    }
-    if (auto* AsButton = dynamic_cast<Button*>(&Widget)) {
-        AsButton->ColorBackgroundHovered = {};
-        AsButton->ColorBackgroundPressed = {};
-        AsButton->ColorBackgroundDisabled = {};
     }
     if (auto* AsLabel = dynamic_cast<Label*>(&Widget)) {
         AsLabel->ColorText = {};
