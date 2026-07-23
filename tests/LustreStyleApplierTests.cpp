@@ -3,6 +3,7 @@
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Button.h"
 #include "Penumbra/Widgets/Checkbox.h"
+#include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
 
 #include <cstdio>
@@ -25,6 +26,7 @@ using PenumbraUiBackend::Lustre::LustreStyleApplier;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::Button;
 using Penumbra::Widgets::Checkbox;
+using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::Label;
 
 ::Lustre::ResolvedStyle MakeStyle() {
@@ -206,6 +208,55 @@ void TestTextColorReachesALabel() {
            "color reaches Label::ColorText");
 }
 
+void TestColorReachesAnIconWidget() {
+    // IconWidget isn't a Box (same as ImageWidget) -- this exercises the
+    // dynamic_cast<IconWidget*> branch that has to run before Apply()'s
+    // Box-only early return.
+    IconWidget               WidgetIcon;
+    ::Lustre::ResolvedStyle  Style;
+    Style.TextColor = ::Lustre::Color{0xFF, 0xFF, 0xFF, 0xFF};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetIcon, Style);
+
+    Expect(WidgetIcon.ColorLogical.R == 0xFF && WidgetIcon.ColorLogical.G == 0xFF && WidgetIcon.ColorLogical.B == 0xFF,
+           "color reaches IconWidget::ColorLogical");
+}
+
+void TestHoverActiveAndDisabledColorOverlaysReachAnIconWidget() {
+    IconWidget               WidgetIcon;
+    ::Lustre::ResolvedStyle  Style;
+    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
+    Style.Hover->TextColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF};
+    Style.Active = std::make_shared<::Lustre::ResolvedStyle>();
+    Style.Active->TextColor = ::Lustre::Color{0x1A, 0x40, 0xAA, 0xFF};
+    Style.Disabled = std::make_shared<::Lustre::ResolvedStyle>();
+    Style.Disabled->TextColor = ::Lustre::Color{0x80, 0x80, 0x80, 0xFF};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetIcon, Style);
+
+    Expect(WidgetIcon.ColorLogicalHovered.R == 0x66 && WidgetIcon.ColorLogicalHovered.G == 0xBB,
+           ":hover color reaches IconWidget::ColorLogicalHovered");
+    Expect(WidgetIcon.ColorLogicalPressed.R == 0x1A && WidgetIcon.ColorLogicalPressed.B == 0xAA,
+           ":active color reaches IconWidget::ColorLogicalPressed");
+    Expect(WidgetIcon.ColorLogicalDisabled.R == 0x80 && WidgetIcon.ColorLogicalDisabled.G == 0x80,
+           ":disabled color reaches IconWidget::ColorLogicalDisabled");
+}
+
+void TestNoColorOverlayLeavesIconWidgetPerStateFieldsAtDefault() {
+    IconWidget               WidgetIcon;
+    ::Lustre::ResolvedStyle  Style;
+    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
+    Style.Hover->BackgroundColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF}; // no color in the overlay
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetIcon, Style);
+
+    Expect(WidgetIcon.ColorLogicalHovered.A == 0,
+           "a :hover overlay with no color leaves IconWidget::ColorLogicalHovered at its zero-alpha default");
+}
+
 void TestDisplayStackWithRowFlexDirectionMapsToHorizontalStack() {
     Box                     WidgetBox;
     ::Lustre::ResolvedStyle Style;
@@ -360,6 +411,9 @@ void RunLustreStyleApplierTests() {
     TestBoxShadowReachesBoxStyle();
     TestNoBoxShadowLeavesBoxStyleShadowFieldsAtDefault();
     TestTextColorReachesALabel();
+    TestColorReachesAnIconWidget();
+    TestHoverActiveAndDisabledColorOverlaysReachAnIconWidget();
+    TestNoColorOverlayLeavesIconWidgetPerStateFieldsAtDefault();
     TestDisplayStackWithRowFlexDirectionMapsToHorizontalStack();
     TestDisplayStackWithColumnFlexDirectionMapsToVerticalStack();
     TestDisplayInlineMapsToLayoutNone();

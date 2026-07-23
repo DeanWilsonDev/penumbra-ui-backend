@@ -156,7 +156,7 @@ void TestIconBuildsWithIconNameEvenWithoutBackendProvided() {
 
 void TestIconPicksUpIconBackendFromBuildContext() {
     struct FakeIconBackend : Penumbra::Backends::IIconBackend {
-        void DrawIcon(Penumbra::Render::Renderer&, std::string_view, Penumbra::Rect) override {}
+        void DrawIcon(Penumbra::Render::Renderer&, std::string_view, Penumbra::Rect, Penumbra::Render::Color) override {}
     } Backend;
 
     IrisProps Props;

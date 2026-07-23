@@ -2,6 +2,7 @@
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Checkbox.h"
+#include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
 
 namespace PenumbraUiBackend::Lustre {
@@ -110,13 +111,39 @@ Penumbra::Render::FontHandle LustreStyleApplier::ResolveFont(const ::Lustre::Fon
 void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lustre::ResolvedStyle& Style) const {
     using Penumbra::Widgets::Box;
     using Penumbra::Widgets::Checkbox;
+    using Penumbra::Widgets::IconWidget;
     using Penumbra::Widgets::Label;
 
-    // Every widget type in Penumbra's hierarchy is a Box (WidgetBase's only
-    // other direct subclass, ImageWidget, has no BoxStyle at all -- a
-    // pre-existing Penumbra gap, not something this applier can paper over;
-    // background-color/border/padding/margin simply don't reach an
-    // <Image>-backed widget yet).
+    // <Icon> (IconWidget) is a WidgetBase direct subclass, not a Box -- same
+    // as ImageWidget below -- so it has to be handled before the Box-only
+    // early return rather than after it. No dedicated `icon-color` Lustre
+    // property exists (or needs to): this reuses the same `color` property
+    // Label's ColorText branch below already resolves from TextColor, same
+    // "foreground color" concept CSS's own `color` (and `currentColor`)
+    // applies to both text and icons. Per-state overrides mirror
+    // Box::BorderForState's convention -- Style.Hover/Active/Disabled are
+    // full recursive ResolvedStyle blocks, so their own TextColor already
+    // covers this with no new field needed anywhere.
+    if (auto* AsIcon = dynamic_cast<IconWidget*>(&Widget)) {
+        if (Style.TextColor) {
+            AsIcon->ColorLogical = ToPenumbraColor(*Style.TextColor);
+        }
+        if (Style.Hover && Style.Hover->TextColor) {
+            AsIcon->ColorLogicalHovered = ToPenumbraColor(*Style.Hover->TextColor);
+        }
+        if (Style.Active && Style.Active->TextColor) {
+            AsIcon->ColorLogicalPressed = ToPenumbraColor(*Style.Active->TextColor);
+        }
+        if (Style.Disabled && Style.Disabled->TextColor) {
+            AsIcon->ColorLogicalDisabled = ToPenumbraColor(*Style.Disabled->TextColor);
+        }
+    }
+
+    // Every widget type in Penumbra's hierarchy is otherwise a Box
+    // (WidgetBase's other direct subclass, ImageWidget, has no BoxStyle at
+    // all -- a pre-existing Penumbra gap, not something this applier can
+    // paper over; background-color/border/padding/margin simply don't reach
+    // an <Image>-backed widget yet).
     auto* AsBox = dynamic_cast<Box*>(&Widget);
     if (!AsBox) {
         return;

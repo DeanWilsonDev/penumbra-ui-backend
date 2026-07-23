@@ -6,7 +6,44 @@
 > durable record).
 > Last updated: 2026-07-23.
 
-## Done this session (2026-07-23): `border-color`'s `:hover`/`:active`/`:disabled` wiring in `StyleApplier`
+## Done this session (2026-07-23, second pass): `<Icon>` color wired through `StyleApplier`
+
+Bumped the `vendor/penumbra` pin `7fad4dc` → `2f21c55` ("Add IconColor param
+to IIconBackend::DrawIcon, thread through IconWidget"), which added exactly
+the fields this needed: `IconWidget::ColorLogical`/`ColorLogicalHovered`/
+`ColorLogicalPressed`/`ColorLogicalDisabled`, resolved at draw time via
+`ColorForState()` (`vendor/penumbra/src/Penumbra/Widgets/IconWidget.cpp`),
+same fallback convention `Box::BorderForState()` uses for `border-color`.
+
+**Landed in `StyleApplier.cpp`'s `Apply()` only — no `Walker.cpp` change,
+and no new Lustre property.** `IconWidget` isn't a `Box` (same as
+`ImageWidget`), so its new `dynamic_cast<IconWidget*>(&Widget)` branch has
+to run *before* the existing `if (!AsBox) return;` early exit, not after it
+alongside the `Label` branch. And rather than adding a dedicated
+`icon-color`/`color` Iris prop, it reuses the same `color` Lustre property
+`Label`'s `ColorText` branch already resolves from `Style.TextColor` —
+`Style.Hover`/`Active`/`Disabled` are full recursive `ResolvedStyle` blocks,
+so their own `TextColor` already carries the per-state overlay with no new
+field needed anywhere. This is the CSS `color` (`currentColor`) convention:
+one cascading foreground-color property covers both text and icons, not two
+parallel ones.
+
+New regression coverage in `tests/LustreStyleApplierTests.cpp`:
+`TestColorReachesAnIconWidget`, `TestHoverActiveAndDisabledColorOverlaysReachAnIconWidget`,
+`TestNoColorOverlayLeavesIconWidgetPerStateFieldsAtDefault` — plus a
+one-line signature fix in `tests/WalkerTests.cpp`'s `FakeIconBackend` for
+`IIconBackend::DrawIcon`'s new `Render::Color` parameter. Full build +
+`penumbra_ui_backend_tests` (0 failures) + `test_iris` (124 passed) clean.
+
+**What this unblocks**: `pharos-proto`'s `ColorFilterDropdown`'s
+`DropdownTrigger`/`DropdownMenuRow` (`pharos-proto/src/ui/
+color_filter_dropdown.cpp`) can now express their state-dependent icon
+color as a `.lustre` `color`/`:hover`/`:active`/`:disabled` rule via
+`<Icon>` instead of a hand-rolled `DrawContent` override — the last blocker
+on those two widgets' `.iris`/`.lustre` migration. That migration is
+`pharos-proto`'s own follow-up, nothing further needed here.
+
+## Done previous session (2026-07-23): `border-color`'s `:hover`/`:active`/`:disabled` wiring in `StyleApplier`
 
 Bumped the `vendor/penumbra` pin `89216b4` → `7fad4dc` ("Add
 ColorBorder*/BorderForState and WidgetBase::OnDestroyed") to pick up
