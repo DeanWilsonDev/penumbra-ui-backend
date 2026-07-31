@@ -1,5 +1,7 @@
 #include "PenumbraUiBackend/Walker.h"
 
+#include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
+
 #include "Penumbra/Backends/IIconBackend.h"
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
@@ -7,6 +9,7 @@
 #include "Penumbra/Widgets/InlineContainer.h"
 #include "Penumbra/Widgets/Label.h"
 #include "Penumbra/Widgets/ScrollablePanel.h"
+#include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <cstdio>
@@ -31,6 +34,7 @@ using Iris::IrisProps;
 using Iris::IrisPropValue;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::BuildWidgetTree;
+using PenumbraUiBackend::PenumbraWidget;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::ImageWidget;
@@ -38,6 +42,8 @@ using Penumbra::Widgets::InlineContainer;
 using Penumbra::Widgets::Label;
 using Penumbra::Widgets::LayoutMode;
 using Penumbra::Widgets::ScrollablePanel;
+using Penumbra::Widgets::SplitAxis;
+using Penumbra::Widgets::SplitPanel;
 using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
@@ -271,6 +277,97 @@ void TestInputOnTextChangeReachesTextInputOnTextChanged() {
     }
 }
 
+void TestSplitBuildsASplitPanelWithBothPanesAndProps() {
+    IrisProps Props;
+    Props["axis"] = IrisPropValue{std::string("vertical")};
+    Props["ratio"] = IrisPropValue{0.3f};
+    Props["minPaneSize"] = IrisPropValue{50.0f};
+    Props["handleThickness"] = IrisPropValue{6.0f};
+
+    std::vector<Component> Panes;
+    Panes.push_back(MakeNode(IrisElementTag::Frame));
+    IrisProps SecondPaneProps;
+    SecondPaneProps["text"] = IrisPropValue{std::string("second-pane")};
+    Panes.push_back(MakeNode(IrisElementTag::Text, SecondPaneProps));
+    const auto Node = MakeNode(IrisElementTag::Split, Props, Panes);
+
+    const auto Built = BuildWidgetTree(Node, BuildContext{});
+    const auto* AsSplit = dynamic_cast<SplitPanel*>(Built.get());
+    Expect(AsSplit != nullptr, "<Split> builds a SplitPanel");
+    Expect(AsSplit != nullptr && AsSplit->Axis == SplitAxis::Vertical, "the axis prop reaches SplitPanel::Axis");
+    Expect(AsSplit != nullptr && AsSplit->SplitRatio == 0.3f, "the ratio prop reaches SplitPanel::SplitRatio");
+    Expect(AsSplit != nullptr && AsSplit->MinPaneSizeLogical == 50.0f,
+           "the minPaneSize prop reaches SplitPanel::MinPaneSizeLogical");
+    Expect(AsSplit != nullptr && AsSplit->HandleThicknessLogical == 6.0f,
+           "the handleThickness prop reaches SplitPanel::HandleThicknessLogical");
+    Expect(AsSplit != nullptr && AsSplit->GetChildCount() == 2, "both panes were attached via SetFirst/SetSecond");
+    const auto* FirstPane = AsSplit != nullptr ? dynamic_cast<const Box*>(AsSplit->GetChildAt(0)) : nullptr;
+    const auto* SecondPane = AsSplit != nullptr ? dynamic_cast<const Label*>(AsSplit->GetChildAt(1)) : nullptr;
+    Expect(FirstPane != nullptr, "the leading child (Children[0]) was reached via SetFirst, at GetChildAt(0)");
+    Expect(SecondPane != nullptr && SecondPane->Text == "second-pane",
+           "the trailing child (Children[1]) was reached via SetSecond, at GetChildAt(1) -- pane order isn't swapped");
+}
+
+void TestSplitWithNoPropsKeepsDefaults() {
+    std::vector<Component> Panes;
+    Panes.push_back(MakeNode(IrisElementTag::Frame));
+    Panes.push_back(MakeNode(IrisElementTag::Frame));
+    const auto Node = MakeNode(IrisElementTag::Split, {}, Panes);
+
+    const auto Built = BuildWidgetTree(Node, BuildContext{});
+    const auto* AsSplit = dynamic_cast<SplitPanel*>(Built.get());
+    Expect(AsSplit != nullptr && AsSplit->Axis == SplitAxis::Horizontal,
+           "an absent axis prop leaves SplitPanel::Axis at its own Horizontal default");
+    Expect(AsSplit != nullptr && AsSplit->SplitRatio == 0.5f,
+           "an absent ratio prop leaves SplitPanel::SplitRatio at its own 0.5 default");
+}
+
+void TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase() {
+    auto  InnerBox = std::make_unique<Box>();
+    Box* InnerBoxRaw = InnerBox.get();
+    auto  Wrapped = std::make_unique<PenumbraWidget>(std::move(InnerBox));
+
+    // std::function (what MakeNativeBuilder wraps this in) requires a copyable target --
+    // a bare move-captured unique_ptr in the lambda isn't, so it's boxed in a shared_ptr
+    // here purely to satisfy that, even though Build() is only ever actually invoked once.
+    auto SharedWrapped = std::make_shared<std::unique_ptr<PenumbraWidget>>(std::move(Wrapped));
+
+    Component Node = MakeNode(IrisElementTag::Native);
+    Node.NativeBuilder = Iris::MakeNativeBuilder(
+        [SharedWrapped]() -> std::unique_ptr<Umbra::IWidget> { return std::move(*SharedWrapped); });
+
+    const auto Built = BuildWidgetTree(Node, BuildContext{});
+    Expect(Built.get() == InnerBoxRaw,
+           "<Native> unwraps a PenumbraWidget handle back to the real WidgetBase it owns, via DetachOwnership");
+}
+
+void TestNativeWithNoBuilderProducesNoWidget() {
+    const auto Node = MakeNode(IrisElementTag::Native);
+    const auto Built = BuildWidgetTree(Node, BuildContext{});
+    Expect(Built == nullptr,
+           "<Native> with no build prop (malformed -- Codegen itself already rejects this) builds to nullptr, "
+           "not a crash");
+}
+
+void TestNativeBuildReturningNonPenumbraWidgetProducesNoWidget() {
+    struct FakeNonPenumbraWidget : Umbra::IWidget {
+        void                             ApplyPropDiff(const Umbra::IrisPropDiff&) override {}
+        std::size_t                     GetChildCount() const override { return 0; }
+        Umbra::IWidget*                 GetChildAt(std::size_t) const override { return nullptr; }
+        void                             InsertChildAt(std::size_t, std::unique_ptr<Umbra::IWidget>) override {}
+        std::unique_ptr<Umbra::IWidget> RemoveChildAt(std::size_t) override { return nullptr; }
+    };
+
+    Component Node = MakeNode(IrisElementTag::Native);
+    Node.NativeBuilder = Iris::MakeNativeBuilder(
+        []() -> std::unique_ptr<Umbra::IWidget> { return std::make_unique<FakeNonPenumbraWidget>(); });
+
+    const auto Built = BuildWidgetTree(Node, BuildContext{});
+    Expect(Built == nullptr,
+           "a build prop returning a non-PenumbraWidget Umbra::IWidget has nothing to unwrap -- builds to nullptr "
+           "rather than crashing the dynamic_cast");
+}
+
 void TestNestedTreeBuildsRecursively() {
     // <Frame class="party-row"><HealthBar-shaped Frame/></Frame> — a small stand-in for
     // the spec §9 PartyScreen shape, since <HealthBar> itself is a component invocation
@@ -342,6 +439,11 @@ void RunWalkerTests() {
     TestInputBuildsATextInputWithTextAndPreferredWidth();
     TestInputPicksUpFocusAndClipboardFromBuildContext();
     TestInputOnTextChangeReachesTextInputOnTextChanged();
+    TestSplitBuildsASplitPanelWithBothPanesAndProps();
+    TestSplitWithNoPropsKeepsDefaults();
+    TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase();
+    TestNativeWithNoBuilderProducesNoWidget();
+    TestNativeBuildReturningNonPenumbraWidgetProducesNoWidget();
     TestNestedTreeBuildsRecursively();
     TestRefTaggedNodeIsRecordedInOutRefs();
     TestNoRefLeavesOutRefsEmpty();

@@ -1,6 +1,7 @@
 #include "PenumbraUiBackend/Walker.h"
 
 #include "PenumbraUiBackend/Lustre/StyleResolution.h"
+#include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
@@ -8,6 +9,7 @@
 #include "Penumbra/Widgets/InlineContainer.h"
 #include "Penumbra/Widgets/Label.h"
 #include "Penumbra/Widgets/ScrollablePanel.h"
+#include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <cstdio>
@@ -28,6 +30,8 @@ using Penumbra::Widgets::ImageWidget;
 using Penumbra::Widgets::InlineContainer;
 using Penumbra::Widgets::Label;
 using Penumbra::Widgets::ScrollablePanel;
+using Penumbra::Widgets::SplitAxis;
+using Penumbra::Widgets::SplitPanel;
 using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
@@ -165,6 +169,8 @@ std::string IrisTagToLustreTag(IrisElementTag Tag) {
         case IrisElementTag::Text: return "Text";
         case IrisElementTag::Scroll: return "Scroll";
         case IrisElementTag::Input: return "Input";
+        case IrisElementTag::Native: return "Native";
+        case IrisElementTag::Split: return "Split";
         default: return ""; // None/Slot never reach here -- see BuildWidgetTreeInternal
     }
 }
@@ -365,6 +371,46 @@ std::unique_ptr<WidgetBase> BuildScroll(const Component& Node, const BuildContex
     return Built;
 }
 
+// <Split> (docs/native_split_backend_wiring_gap.md) -- SplitPanel has no Builder either
+// (same "plain fields, not a Builder chain" treatment BuildScroll above already gives
+// ScrollablePanel) and takes exactly two children through SetFirst/SetSecond rather than
+// a generic Children vector -- Codegen.cpp already enforces exactly two children at
+// compile time (`<Split> requires exactly two children`), so real `.iris`-authored trees
+// always have both; the size checks below only guard a malformed tree built directly
+// (e.g. a structural test bypassing Codegen), matching this walker's existing tolerance
+// for other malformed input.
+std::unique_ptr<WidgetBase> BuildSplit(const Component& Node, const BuildContext& Context,
+                                        const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags,
+                                        RefMap* OutRefs, StyleMatchStats* Stats) {
+    auto Built = std::make_unique<SplitPanel>();
+    ApplySharedPropsToWidget(*Built, Node.Props);
+    if (const auto Axis = GetStringProp(Node.Props, "axis")) {
+        Built->Axis = (*Axis == "vertical") ? SplitAxis::Vertical : SplitAxis::Horizontal;
+    }
+    if (const auto Ratio = GetFloatProp(Node.Props, "ratio")) {
+        Built->SplitRatio = *Ratio;
+    }
+    if (const auto MinPaneSize = GetFloatProp(Node.Props, "minPaneSize")) {
+        Built->MinPaneSizeLogical = *MinPaneSize;
+    }
+    if (const auto HandleThickness = GetFloatProp(Node.Props, "handleThickness")) {
+        Built->HandleThicknessLogical = *HandleThickness;
+    }
+    if (Node.Children.size() >= 1) {
+        if (auto First = BuildWidgetTreeInternal(Node.Children[0], Context, &ThisStyleElement,
+                                                  /*IsComponentRoot=*/false, OutTags, OutRefs, Stats)) {
+            Built->SetFirst(std::move(First));
+        }
+    }
+    if (Node.Children.size() >= 2) {
+        if (auto Second = BuildWidgetTreeInternal(Node.Children[1], Context, &ThisStyleElement,
+                                                   /*IsComponentRoot=*/false, OutTags, OutRefs, Stats)) {
+            Built->SetSecond(std::move(Second));
+        }
+    }
+    return Built;
+}
+
 // <Input> (docs/iris_core_spec.md §3.1) -- a leaf, same shape as <Icon>: TextInput has
 // no Builder either. FontBackend/Font are set directly from Context, the same
 // "Label::Builder has no method for it" treatment BuildText below already uses; Focus/
@@ -389,6 +435,27 @@ std::unique_ptr<WidgetBase> BuildInput(const Component& Node, const BuildContext
     Built->Focus = Context.Focus;
     Built->Clipboard = Context.Clipboard;
     return Built;
+}
+
+// <Native> (docs/native_split_backend_wiring_gap.md) -- an opaque escape hatch whose
+// `build` prop already returns a live Umbra::IWidget handle, not more Component IR to
+// walk (Component::NativeBuilder, `vendor/iris/include/Iris/Component.h`). Every real
+// Umbra::IWidget in this stack is a PenumbraWidget -- this file and
+// PenumbraWidgetAdapter.cpp are the only two places one is ever constructed -- so this
+// downcasts to reclaim the real WidgetBase ownership via DetachOwnership(), the same
+// owning -> attached transition InsertChildAt (PenumbraWidgetAdapter.cpp) already relies
+// on elsewhere, just invoked here instead of there. A `build` prop that hands back some
+// other Umbra::IWidget implementation has no real Penumbra widget to unwrap and builds to
+// nullptr -- the same "no widget here" treatment None/Slot already get, not an error.
+std::unique_ptr<WidgetBase> BuildNative(const Component& Node) {
+    if (!Node.NativeBuilder) {
+        return nullptr; // Codegen already rejects a <Native> with no build prop
+    }
+    std::unique_ptr<Umbra::IWidget> Handle = Node.NativeBuilder->Build();
+    if (auto* AsPenumbraWidget = dynamic_cast<PenumbraWidget*>(Handle.get())) {
+        return AsPenumbraWidget->DetachOwnership();
+    }
+    return nullptr;
 }
 
 std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const BuildContext& Context,
@@ -431,6 +498,12 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
             break;
         case IrisElementTag::Input:
             Built = BuildInput(Node, Context);
+            break;
+        case IrisElementTag::Native:
+            Built = BuildNative(Node);
+            break;
+        case IrisElementTag::Split:
+            Built = BuildSplit(Node, Context, ThisStyleElement, OutTags, OutRefs, Stats);
             break;
         default:
             break; // unreachable -- None/Slot returned above, every other tag handled
