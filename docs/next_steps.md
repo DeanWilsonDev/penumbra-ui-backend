@@ -250,6 +250,10 @@ here.
 
 ## Read first
 
+- `docs/native_split_backend_wiring_gap.md` — **open, blocking**: `iris` landed
+  `<Native>`/`<Split>` (its `main` commit `37fbcc3`) but `Walker.cpp` has no build case
+  for either yet, blocking `pharos-proto`'s next round of componentization
+  (`TreeRow`/`DropdownTrigger`/`ChevronSeparator`/`ViewportWidget`/the root layout).
 - `docs/pseudo_class_plain_box_decision.md` — the open decision above.
 - `docs/build_context_style_mismatch_gap.md` — a previous real
   `pharos-proto`-triggered bug in this same `StyleApplier`/`Walker`
