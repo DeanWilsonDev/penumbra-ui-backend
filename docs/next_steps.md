@@ -250,10 +250,13 @@ here.
 
 ## Read first
 
-- `docs/native_split_backend_wiring_gap.md` — **open, blocking**: `iris` landed
-  `<Native>`/`<Split>` (its `main` commit `37fbcc3`) but `Walker.cpp` has no build case
-  for either yet, blocking `pharos-proto`'s next round of componentization
-  (`TreeRow`/`DropdownTrigger`/`ChevronSeparator`/`ViewportWidget`/the root layout).
+- `docs/native_split_backend_wiring_gap.md` — **implemented** (commit `52f6f14`):
+  `Walker.cpp` now has `BuildNative`/`BuildSplit` build cases for both tags `iris` landed
+  (`main` commit `37fbcc3`), unblocking `pharos-proto`'s next round of componentization
+  (`TreeRow`/`DropdownTrigger`/`ChevronSeparator`/`ViewportWidget`/the root layout). Two
+  smaller follow-on questions noted in the doc's own "Explicitly not requested" section
+  are still open (Lustre-styling-through-`<Native>` semantics, `SplitPanelStyle`'s
+  handle-color fields).
 - `docs/pseudo_class_plain_box_decision.md` — the open decision above.
 - `docs/build_context_style_mismatch_gap.md` — a previous real
   `pharos-proto`-triggered bug in this same `StyleApplier`/`Walker`

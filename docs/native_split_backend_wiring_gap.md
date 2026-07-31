@@ -1,11 +1,25 @@
 # penumbra-ui-backend — `<Native>`/`<Split>` have no `Walker.cpp` build case yet
 
-> **Status:** Open, blocking. Both tags exist in `iris` as of its `main` commit
-> `37fbcc3` ("Add `<Native>` and `<Split>` Core primitives") but produce nothing in this
-> repo — `Walker.cpp`'s `BuildWidgetTreeInternal` switch has no `case` for either, so
-> building a `.iris` tree that uses one either falls through to the `default: break;`
-> "unreachable" comment (stale once these two tags exist) or never compiles against a
-> real consumer at all.
+> **Status:** Implemented (commit `52f6f14`, "Wire `<Native>`/`<Split>` build cases into
+> Walker.cpp"), per "Proposed fix" in both §1 and §2 below almost exactly as sketched —
+> `BuildNative`/`BuildSplit` added, wired into `BuildWidgetTreeInternal`'s switch and
+> `IrisTagToLustreTag`. `vendor/iris` bumped to `37fbcc3` (was still pinned to `bedaa15`,
+> predating both tags, at the time this doc was originally written). 5 new
+> `WalkerTests.cpp` cases; full `penumbra_ui_backend_tests` (163 assertions) and `iris`'s
+> own `test_iris` (138/138) both pass, full top-level build clean. The two "Explicitly not
+> requested" items below (Lustre-styling-through-`<Native>` semantics,
+> `SplitPanelStyle`'s handle-color fields) are still genuinely open, not resolved by this.
+> **Trigger:** `pharos-proto` asked whether it could proceed componentizing `TreeRow`
+> (`src/ui/explorer_panel.cpp`), `DropdownTrigger`/`DropdownMenuRow`
+> (`src/ui/color_filter_dropdown.cpp`), `ChevronSeparator` and the `ViewportWidget`-hosted
+> treemap (`src/ui/atlas_panel.cpp`), and the app's root `SplitPanel`-based layout
+> (`src/main.cpp`) — all five were blocked on `iris`-language gaps logged in `iris`'s own
+> `docs/next-steps.md` on 2026-07-30. Checking this repo's actual current state (not just
+> `iris`'s docs) found `<Native>`/`<Split>` landed upstream but with no backend-mapping
+> half here yet — confirmed by reading `Walker.cpp` directly (`grep -n
+> "IrisElementTag::" src/PenumbraUiBackend/Walker.cpp` returns only
+> `Frame`/`Inline`/`Grid`/`Image`/`Icon`/`Text`/`Scroll`/`Input`), not assumed from the
+> `iris`-side doc's own "required changes elsewhere" note.
 > **Trigger:** `pharos-proto` asked whether it could proceed componentizing `TreeRow`
 > (`src/ui/explorer_panel.cpp`), `DropdownTrigger`/`DropdownMenuRow`
 > (`src/ui/color_filter_dropdown.cpp`), `ChevronSeparator` and the `ViewportWidget`-hosted
