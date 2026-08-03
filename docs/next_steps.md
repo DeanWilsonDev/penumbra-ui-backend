@@ -6,6 +6,24 @@
 > durable record).
 > Last updated: 2026-08-03.
 
+## Done this session (2026-08-03, third pass): sized (not designed) a real component-logic hot-reload gap in `iris`
+
+A conversation about eventually plugging Lustre/Iris into a genuinely interpreted host
+language (source re-executed live, Penumbra updating the drawing as it changes) surfaced
+that `iris`'s own docs had already flagged this twice (`next-steps.md`'s "Live-widget root
+registry, for Lustre's hot-reload" entry, `lustre_handoff.md` §3) without ever sizing it
+against the real code. Checked directly: `vendor/iris/docs/iris_interpreted_host_hot_reload_gap.md`
+(new, commit `ad3b6b6`, pushed) — three concrete blockers. `ComponentInstance`/`Signal` have
+no identity across two runs of the same component (state would reset to `InitExpr` on every
+reload); the reconciler's only entry point needs an owning widget pointer plus the exact
+prior `Component` IR tree, neither of which exists outside a `SlotState`, so "diff a fresh
+tree against whatever's live" doesn't mechanically work today even with `RegisterRoot`/
+`GetRoot` in place; and Nyx (Iris's own planned scripting host), as currently specced, is
+still a preprocessed-then-compiled host, not the re-executed-live semantics a genuinely
+interpreted language implies. `vendor/iris` bumped `37fbcc3` → `ad3b6b6` to pick up the doc.
+No code changed in `iris` or here — gap-only, deliberately not designed, per this
+ecosystem's usual convention for something this size.
+
 ## Done this session (2026-08-03, second pass): CSS-style `color`/`font` inheritance
 
 A follow-up question on the `<Split>` handle-color work below ("can the handle color be
