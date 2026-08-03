@@ -6,6 +6,38 @@
 > durable record).
 > Last updated: 2026-08-03.
 
+## Done this session (2026-08-03, second pass): CSS-style `color`/`font` inheritance
+
+A follow-up question on the `<Split>` handle-color work below ("can the handle color be
+controlled independently from a Label's text color?") surfaced that Lustre had no property
+inheritance at all — `.card .card-title`-style nesting only ever affects *selector
+matching*, never propagates an already-resolved ancestor's value down to an unset
+descendant. Real CSS inherits `color`/`font` by default; implemented properly in `lustre`
+itself (`https://github.com/DeanWilsonDev/lustre`, commit `7779d94`, pushed to `main`) —
+new `Lustre::ResolveStyle()`, which also absorbs the two-layer cascade composition this
+repo used to hand-roll itself (`StyleResolution.cpp`'s old `MergeInto` + two `Resolver::
+Resolve()` calls), since inheritance needs each ancestor's fully-cascaded value and only
+that composition ever produces one. `Resolver::Resolve()` itself untouched, no breaking
+change. Full decision record, including the one non-obvious call (inheritance crosses
+component boundaries, unlike descendant-selector matching) in
+`docs/lustre_style_inheritance_decision.md`.
+
+`vendor/lustre` pin bumped `0d8bfa5` → `7779d94`. `StyleResolution.cpp` simplified to a
+thin pass-through (old `MergeInto` deleted, moved to `lustre` as canonical). New coverage:
+`vendor/lustre`'s own `tests/InheritanceTests.cpp` (10 cases) plus two end-to-end cases in
+this repo's `tests/StyleWiringTests.cpp` proving it through a real `BuildWidgetTree` call
+(an `<Icon>` with no class inherits `color` from an ancestor `<Frame class="row">`;
+`background-color` does not leak the same way). Full build + `penumbra_ui_backend_tests`
+(0 failures) + `test_lustre` (41 passed, up from 29) + `test_iris` (138 passed) clean.
+
+**What this unblocks**: any `pharos-proto` `.lustre` file can now set `color`/`font-family`/
+`font-size` once on a wrapping element and have it reach unstyled `<Label>`/`<Icon>`/
+`<Split>` descendants automatically, instead of needing an explicit rule on every leaf —
+matching real CSS. **Blast radius, not auto-fixed**: this is a real behavior change for any
+existing `.lustre` file relying on today's "unstyled leaf stays at its own default" —
+flagged in the decision doc; this repo's own `demo/` should get a visual check, and
+`pharos-proto` gets a heads-up since it vendors the same `lustre` pin.
+
 ## Done this session (2026-08-03): closed both open follow-ons from the `<Native>`/`<Split>` wiring gap
 
 `docs/native_split_backend_wiring_gap.md`'s two "Explicitly not requested" items were the
@@ -302,11 +334,14 @@ Everything logged in this repo's own `docs/*_gap.md`/`*_decision.md` files is no
 session. The docs below are worth reading before touching `StyleApplier.cpp`/`Walker.cpp`
 again, as background/precedent, not as a to-do list:
 
+- `docs/lustre_style_inheritance_decision.md` — new this session: `color`/`font`
+  inheritance, implemented in `lustre` itself (not just this repo), why it crosses
+  component boundaries, and the blast-radius flag for existing `.lustre` files.
 - `docs/native_split_backend_wiring_gap.md` — `<Native>`/`<Split>` build cases
   (`BuildNative`/`BuildSplit` in `Walker.cpp`), plus both of its own follow-on questions
   (closed this session, see above).
-- `docs/native_lustre_styling_decision.md` — new this session: why Lustre styling applies
-  generically to `<Native>`-wrapped widgets, no opt-out.
+- `docs/native_lustre_styling_decision.md` — why Lustre styling applies generically to
+  `<Native>`-wrapped widgets, no opt-out.
 - `docs/pseudo_class_plain_box_decision.md` — why `:hover`/`:active`/`:disabled`
   background-color applies to any `Box`, not just `Button`; the precedent this session's
   `<Split>` handle-color reuse of `color` (not a new property) also follows.

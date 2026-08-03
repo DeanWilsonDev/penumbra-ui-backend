@@ -4,6 +4,7 @@
 #include "Lustre/Parser.h"
 
 #include "Penumbra/Widgets/Box.h"
+#include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
 
 #include <cstdio>
@@ -35,6 +36,7 @@ using PenumbraUiBackend::PrimitiveTagMap;
 using PenumbraUiBackend::WrapExistingTree;
 using PenumbraUiBackend::Lustre::LustreStyleApplier;
 using Penumbra::Widgets::Box;
+using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::Label;
 using Penumbra::Widgets::WidgetBase;
 
@@ -166,6 +168,64 @@ void TestMountMergesGradientAcrossGlobalAndComponentLayers() {
            "global.lustre's background-gradient-start still applies once merged with a component layer");
     Expect(AsBox != nullptr && AsBox->Style.BorderRadius == 4.0F,
            "the component file's own border-radius applies alongside global's gradient");
+}
+
+// lustre_core_spec.md §1.7: color/font inherit from the nearest ancestor that sets them.
+// Proves inheritance reaches a real Penumbra widget through an actual BuildWidgetTree
+// call (not just a synthetic lustre-level Resolver test) -- an <Icon> reuses the same
+// `color` property Label's ColorText does (docs/next_steps.md's 2026-07-23 second-pass
+// entry), so it's the concrete scenario a follow-up question about this session's
+// <Split> handle-color work raised: is a nested leaf's foreground color tied to an
+// ancestor's, or independently controllable? Answer: independently controllable by
+// default (its own `color` rule always wins), but it now inherits when it sets none.
+void TestColorInheritsFromAnAncestorFrameToANestedIconWithNoClass() {
+    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(".row { color: #FFFFFF; }", "test.lustre");
+
+    const LustreStyleApplier Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext Context;
+    Context.Style = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    std::vector<Component> Children;
+    Children.push_back(MakeNode(IrisElementTag::Icon)); // no class of its own
+    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("row"), std::move(Children));
+
+    const auto Built = BuildWidgetTree(Node, Context);
+    const auto* AsBox = dynamic_cast<Box*>(Built.get());
+    const WidgetBase* ChildWidget =
+        (AsBox != nullptr && AsBox->GetChildCount() == 1) ? AsBox->GetChildAt(0) : nullptr;
+    const auto* AsIcon = dynamic_cast<const IconWidget*>(ChildWidget);
+
+    Expect(AsIcon != nullptr && AsIcon->ColorLogical.R == 0xFF && AsIcon->ColorLogical.G == 0xFF &&
+               AsIcon->ColorLogical.B == 0xFF,
+           "an <Icon> with no class of its own inherits color from its ancestor <Frame class=\"row\">");
+}
+
+// Companion to the test above -- proves inheritance is scoped to color/font only (§1.7),
+// not every property, through the same real BuildWidgetTree path.
+void TestBackgroundColorDoesNotInheritToANestedChildWithNoClass() {
+    const ::Lustre::Stylesheet ComponentSheet =
+        ParseOrDie(".row { background-color: #FF0000; color: #FFFFFF; }", "test.lustre");
+
+    const LustreStyleApplier Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext Context;
+    Context.Style = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    std::vector<Component> Children;
+    Children.push_back(MakeNode(IrisElementTag::Frame)); // a plain child Box, no class
+    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("row"), std::move(Children));
+
+    const auto Built = BuildWidgetTree(Node, Context);
+    const auto* AsBox = dynamic_cast<Box*>(Built.get());
+    const WidgetBase* ChildWidget =
+        (AsBox != nullptr && AsBox->GetChildCount() == 1) ? AsBox->GetChildAt(0) : nullptr;
+    const auto* ChildAsBox = dynamic_cast<const Box*>(ChildWidget);
+
+    Expect(ChildAsBox != nullptr && ChildAsBox->Style.ColorBackground.A == 0,
+           "background-color does not inherit to a nested child with no class of its own");
 }
 
 void TestClassChangeReResolvesAndAppliesTheNewStyle() {
@@ -340,6 +400,8 @@ void RunStyleWiringTests() {
     TestMountResolvesADescendantSelectorAcrossRealAncestry();
     TestMountMergesGlobalAndComponentLayers();
     TestMountMergesGradientAcrossGlobalAndComponentLayers();
+    TestColorInheritsFromAnAncestorFrameToANestedIconWithNoClass();
+    TestBackgroundColorDoesNotInheritToANestedChildWithNoClass();
     TestClassChangeReResolvesAndAppliesTheNewStyle();
     TestClassChangeIsANoOpWithoutStyleContext();
     TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree();
