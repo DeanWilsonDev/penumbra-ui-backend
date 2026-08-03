@@ -6,9 +6,11 @@
 > `IrisTagToLustreTag`. `vendor/iris` bumped to `37fbcc3` (was still pinned to `bedaa15`,
 > predating both tags, at the time this doc was originally written). 5 new
 > `WalkerTests.cpp` cases; full `penumbra_ui_backend_tests` (163 assertions) and `iris`'s
-> own `test_iris` (138/138) both pass, full top-level build clean. The two "Explicitly not
-> requested" items below (Lustre-styling-through-`<Native>` semantics,
-> `SplitPanelStyle`'s handle-color fields) are still genuinely open, not resolved by this.
+> own `test_iris` (138/138) both pass, full top-level build clean. Both "Explicitly not
+> requested" items below are now also resolved, in later sessions: the
+> Lustre-styling-through-`<Native>` question by `docs/native_lustre_styling_decision.md`
+> (documents the already-generic apply as intentional, no code change), and
+> `SplitPanelStyle`'s handle-color fields by §2's own follow-up below.
 > **Trigger:** `pharos-proto` asked whether it could proceed componentizing `TreeRow`
 > (`src/ui/explorer_panel.cpp`), `DropdownTrigger`/`DropdownMenuRow`
 > (`src/ui/color_filter_dropdown.cpp`), `ChevronSeparator` and the `ViewportWidget`-hosted
@@ -168,12 +170,47 @@ like any other `Box`-derived widget).
 
 ### Required changes elsewhere
 
-`SplitPanelStyle` (`SplitPanel.h:11-15`) has `ColorHandle`/`ColorHandleHovered`/
-`ColorHandleDragged` fields `BoxStyle` doesn't — `StyleApplier.cpp`'s generic
-`ApplyBoxStyle` won't reach them. Whether that's in scope for this same wiring pass or a
-separate follow-up (a new Lustre property, e.g. `handle-color`) is left to whoever
-implements this — not resolved here, since `pharos-proto`'s own root-layout `SplitPanel`
-usage may or may not need custom handle coloring on day one.
+**Status: implemented, in a later session.** `SplitPanelStyle` (`SplitPanel.h:11-15`) has
+`ColorHandle`/`ColorHandleHovered`/`ColorHandleDragged` fields `BoxStyle` doesn't —
+`StyleApplier.cpp`'s generic `ApplyBoxStyle` doesn't reach them.
+
+Rather than a new `handle-color` Lustre property (rejected — see below), the fix reuses
+the existing `color` property: `StyleApplier.cpp`'s `Apply()` now has a
+`dynamic_cast<SplitPanel*>` branch (after the generic `AsBox` path, since `SplitPanel :
+Box`) that resolves `Style.TextColor`/`Style.Hover->TextColor`/`Style.Active->TextColor`
+into `ColorHandle`/`ColorHandleHovered`/`ColorHandleDragged` via `SplitPanel::ApplyStyle`
+— the same "one cascading foreground-color property, not a new component-specific one"
+reasoning already applied to `<Icon>`'s color (`docs/next_steps.md`'s 2026-07-23 second-pass
+entry). No `:disabled` variant, matching the gradient overlays' precedent (no
+`ColorHandleDisabled` field exists).
+
+Two things this needed that weren't free:
+- `SplitPanel::ApplyStyle(const SplitPanelStyle&)` assigns the whole inherited `BoxStyle`
+  slice wholesale (`Style = static_cast<const BoxStyle&>(InStyle)`, not field-by-field),
+  so the wiring first seeds a local `SplitPanelStyle` from `AsBox->Style` (already
+  populated by `ApplyBoxStyle` earlier in `Apply()`) and from the widget's own current
+  handle-color getters, before overwriting only the fields this call's `Style` actually
+  sets — otherwise it would silently clobber background/border/padding/etc, or reset an
+  unrelated handle state back to transparent.
+- Those getters didn't exist: `ColorHandle`/`ColorHandleHovered`/`ColorHandleDragged` were
+  private on `SplitPanel` with no accessor (`Draw()` was the only reader). Added
+  `GetHandleColor()`/`GetHandleColorHovered()`/`GetHandleColorDragged()` to
+  `vendor/penumbra`'s `SplitPanel.h` (commit `4a45581`, pushed to its `main`, same
+  `GetInteractionState()`-alongside-private-field shape `WidgetBase` already uses).
+
+New regression coverage in `tests/LustreStyleApplierTests.cpp`:
+`TestColorReachesASplitPanelHandle`, `TestHoverAndActiveColorOverlaysReachASplitPanelHandle`,
+`TestNoColorOverlayLeavesSplitPanelHandleAtDefaultAndKeepsBoxStyle`. Full build +
+`penumbra_ui_backend_tests` (0 failures) + `test_lustre` (29 passed) + `test_iris` (138
+passed) clean.
+
+**Why not a new `handle-color` property**: flagged during review — this codebase already
+has exactly three general-purpose color concepts (`background-color`, `border-color`,
+`color`/foreground), and a split handle is a foreground-ish decorative bar, not a second
+background or a border — inventing `handle-color` would have been a component-specific
+property where CSS convention (and this repo's own `<Icon>` precedent) says a cascading
+`color` should do. No `vendor/lustre` change was needed at all as a result — `color`
+already resolves to `ResolvedStyle::TextColor` and required no new parsing.
 
 ## 3. Explicitly not requested
 
@@ -183,10 +220,10 @@ usage may or may not need custom handle coloring on day one.
   can actually occur today. A `build{}` escape hatch handing back some other backend's
   widget wrapped as `Umbra::IWidget` isn't a real scenario in this stack.
 - **Deciding whether Lustre styling should apply to `<Native>`-wrapped widgets at all** —
-  flagged as an open question above, deliberately left for whoever implements this to
-  settle against the real `pharos-proto` consumer, not decided in this doc.
-- **`SplitPanelStyle`'s handle-color fields** — noted above as a real but separate gap,
-  not bundled into "wire `<Split>`'s build case" itself.
+  flagged as an open question above at the time; resolved in a later session, see
+  `docs/native_lustre_styling_decision.md`.
+- **`SplitPanelStyle`'s handle-color fields** — noted above as a real but separate gap at
+  the time; resolved in a later session, see §2's own follow-up above.
 - **Implementing any of this** — per this ecosystem's "ask the dependency, then stop"
   convention, this doc is the handoff; `pharos-proto`'s own migration of `TreeRow`/
   `DropdownTrigger`/`ChevronSeparator`/`ViewportWidget`/the root layout to `<Native>`/

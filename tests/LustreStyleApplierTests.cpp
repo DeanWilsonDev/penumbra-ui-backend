@@ -5,6 +5,7 @@
 #include "Penumbra/Widgets/Checkbox.h"
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
+#include "Penumbra/Widgets/SplitPanel.h"
 
 #include <cstdio>
 #include <string>
@@ -28,6 +29,7 @@ using Penumbra::Widgets::Button;
 using Penumbra::Widgets::Checkbox;
 using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::Label;
+using Penumbra::Widgets::SplitPanel;
 
 ::Lustre::ResolvedStyle MakeStyle() {
     ::Lustre::ResolvedStyle Style;
@@ -257,6 +259,51 @@ void TestNoColorOverlayLeavesIconWidgetPerStateFieldsAtDefault() {
            "a :hover overlay with no color leaves IconWidget::ColorLogicalHovered at its zero-alpha default");
 }
 
+void TestColorReachesASplitPanelHandle() {
+    // SplitPanel : Box, so no dedicated `handle-color` property -- this
+    // exercises the same `color`/TextColor reuse as IconWidget above, landing
+    // on the divider handle instead of a text/icon foreground.
+    SplitPanel               WidgetSplit;
+    ::Lustre::ResolvedStyle  Style;
+    Style.TextColor = ::Lustre::Color{0xFF, 0xFF, 0xFF, 0xFF};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetSplit, Style);
+
+    const auto Handle = WidgetSplit.GetHandleColor();
+    Expect(Handle.R == 0xFF && Handle.G == 0xFF && Handle.B == 0xFF, "color reaches SplitPanel's handle color");
+}
+
+void TestHoverAndActiveColorOverlaysReachASplitPanelHandle() {
+    SplitPanel                WidgetSplit;
+    ::Lustre::ResolvedStyle   Style;
+    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
+    Style.Hover->TextColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF};
+    Style.Active = std::make_shared<::Lustre::ResolvedStyle>();
+    Style.Active->TextColor = ::Lustre::Color{0x1A, 0x40, 0xAA, 0xFF};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetSplit, Style);
+
+    const auto Hovered = WidgetSplit.GetHandleColorHovered();
+    const auto Dragged = WidgetSplit.GetHandleColorDragged();
+    Expect(Hovered.R == 0x66 && Hovered.G == 0xBB, ":hover color reaches SplitPanel's hovered handle color");
+    Expect(Dragged.R == 0x1A && Dragged.B == 0xAA, ":active color reaches SplitPanel's dragged handle color");
+}
+
+void TestNoColorOverlayLeavesSplitPanelHandleAtDefaultAndKeepsBoxStyle() {
+    SplitPanel               WidgetSplit;
+    const auto                Style = MakeStyle(); // sets BackgroundColor, no color at all
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetSplit, Style);
+
+    const auto Handle = WidgetSplit.GetHandleColor();
+    Expect(Handle.A == 0, "no color in the style leaves SplitPanel's handle color at its zero-alpha default");
+    Expect(WidgetSplit.Style.ColorBackground.R == 0xE8,
+           "the universal BoxStyle slice still reaches a SplitPanel's own Box::Style unaffected by the handle logic");
+}
+
 void TestDisplayStackWithRowFlexDirectionMapsToHorizontalStack() {
     Box                     WidgetBox;
     ::Lustre::ResolvedStyle Style;
@@ -414,6 +461,9 @@ void RunLustreStyleApplierTests() {
     TestColorReachesAnIconWidget();
     TestHoverActiveAndDisabledColorOverlaysReachAnIconWidget();
     TestNoColorOverlayLeavesIconWidgetPerStateFieldsAtDefault();
+    TestColorReachesASplitPanelHandle();
+    TestHoverAndActiveColorOverlaysReachASplitPanelHandle();
+    TestNoColorOverlayLeavesSplitPanelHandleAtDefaultAndKeepsBoxStyle();
     TestDisplayStackWithRowFlexDirectionMapsToHorizontalStack();
     TestDisplayStackWithColumnFlexDirectionMapsToVerticalStack();
     TestDisplayInlineMapsToLayoutNone();

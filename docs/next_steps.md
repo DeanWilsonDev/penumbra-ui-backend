@@ -4,7 +4,54 @@
 > the end of each work session; supersedes its own previous contents
 > rather than accumulating history (the individual gap/spec docs are the
 > durable record).
-> Last updated: 2026-07-23.
+> Last updated: 2026-08-03.
+
+## Done this session (2026-08-03): closed both open follow-ons from the `<Native>`/`<Split>` wiring gap
+
+`docs/native_split_backend_wiring_gap.md`'s two "Explicitly not requested" items were the
+last genuinely open work in this repo (everything else in this doc's history was already
+marked Implemented). Both are now closed:
+
+1. **`<Native>`-wrapped widget Lustre-styling semantics** — decided, no code change:
+   `Walker.cpp`'s post-build Lustre-apply step already runs unconditionally for every
+   built widget including `<Native>` ones, and that's kept as the intended behavior
+   (consistency with every other tag, and it's the `class="..."` hook `iris`'s own
+   proposed-API sketch wanted). Full reasoning in the new
+   `docs/native_lustre_styling_decision.md`.
+2. **`SplitPanelStyle`'s handle-color fields** (`ColorHandle`/`ColorHandleHovered`/
+   `ColorHandleDragged`) — implemented. First-instinct approach was a new `handle-color`
+   Lustre property; caught in review as exactly the kind of component-specific property
+   this codebase has deliberately avoided elsewhere (`background-color`/`border-color`/
+   `color` cover every case so far, including `<Icon>`'s color reusing plain `color` — see
+   the 2026-07-23 second-pass entry below). A split handle is a foreground-ish decorative
+   bar, not a second background or a border, so it reuses `color`/`TextColor` instead —
+   **no `vendor/lustre` change needed at all**, since that property and its resolver
+   support already existed.
+
+   `StyleApplier.cpp`'s `Apply()` gained a `dynamic_cast<SplitPanel*>` branch (after the
+   generic `AsBox` path, since `SplitPanel : Box`) resolving `Style.TextColor`/
+   `Style.Hover->TextColor`/`Style.Active->TextColor` into the three handle-color fields
+   via `SplitPanel::ApplyStyle`. Two wrinkles: `ApplyStyle` assigns the whole inherited
+   `BoxStyle` slice wholesale rather than field-by-field, so the wiring seeds a local
+   `SplitPanelStyle` from `AsBox->Style` and the widget's own current handle colors first
+   to avoid clobbering either; and `ColorHandle`/`ColorHandleHovered`/`ColorHandleDragged`
+   had no accessor at all (private, `Draw()`-only), so `vendor/penumbra`'s `SplitPanel.h`
+   picked up three small read-only getters (commit `4a45581`, pushed to `main` on its
+   GitHub remote — a clean fast-forward, `origin/main` was still at this repo's own prior
+   pin).
+
+New regression coverage in `tests/LustreStyleApplierTests.cpp`: `TestColorReachesASplitPanelHandle`,
+`TestHoverAndActiveColorOverlaysReachASplitPanelHandle`,
+`TestNoColorOverlayLeavesSplitPanelHandleAtDefaultAndKeepsBoxStyle`. Full build +
+`penumbra_ui_backend_tests` (0 failures) + `test_lustre` (29 passed) + `test_iris` (138
+passed) clean.
+
+**What this unblocks**: `pharos-proto`'s root-layout `SplitPanel` (`src/main.cpp`) can now
+express handle hover/drag feedback as a `.lustre` `color`/`:hover`/`:active` rule on its
+`<Split>`, same as it would for any other widget's foreground color — the last of the two
+follow-on gaps this doc's own history had left open. That styling is `pharos-proto`'s own
+follow-up, nothing further needed here.
+
 
 ## Done this session (2026-07-23, third pass): shared `.lustre`-file-loading helper
 
@@ -250,14 +297,19 @@ here.
 
 ## Read first
 
-- `docs/native_split_backend_wiring_gap.md` — **implemented** (commit `52f6f14`):
-  `Walker.cpp` now has `BuildNative`/`BuildSplit` build cases for both tags `iris` landed
-  (`main` commit `37fbcc3`), unblocking `pharos-proto`'s next round of componentization
-  (`TreeRow`/`DropdownTrigger`/`ChevronSeparator`/`ViewportWidget`/the root layout). Two
-  smaller follow-on questions noted in the doc's own "Explicitly not requested" section
-  are still open (Lustre-styling-through-`<Native>` semantics, `SplitPanelStyle`'s
-  handle-color fields).
-- `docs/pseudo_class_plain_box_decision.md` — the open decision above.
+Everything logged in this repo's own `docs/*_gap.md`/`*_decision.md` files is now
+**implemented** — no open cross-repo asks or undecided questions remain as of this
+session. The docs below are worth reading before touching `StyleApplier.cpp`/`Walker.cpp`
+again, as background/precedent, not as a to-do list:
+
+- `docs/native_split_backend_wiring_gap.md` — `<Native>`/`<Split>` build cases
+  (`BuildNative`/`BuildSplit` in `Walker.cpp`), plus both of its own follow-on questions
+  (closed this session, see above).
+- `docs/native_lustre_styling_decision.md` — new this session: why Lustre styling applies
+  generically to `<Native>`-wrapped widgets, no opt-out.
+- `docs/pseudo_class_plain_box_decision.md` — why `:hover`/`:active`/`:disabled`
+  background-color applies to any `Box`, not just `Button`; the precedent this session's
+  `<Split>` handle-color reuse of `color` (not a new property) also follows.
 - `docs/build_context_style_mismatch_gap.md` — a previous real
   `pharos-proto`-triggered bug in this same `StyleApplier`/`Walker`
   pairing, same shape of "compiles clean, fails silently downstream" risk

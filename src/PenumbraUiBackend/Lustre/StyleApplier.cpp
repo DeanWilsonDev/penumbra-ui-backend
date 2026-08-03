@@ -4,6 +4,7 @@
 #include "Penumbra/Widgets/Checkbox.h"
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
+#include "Penumbra/Widgets/SplitPanel.h"
 
 namespace PenumbraUiBackend::Lustre {
 
@@ -190,6 +191,44 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
     if (Style.Active && Style.Active->BackgroundGradientStart) {
         AsBox->Style.GradientTopPressed = ToPenumbraColor(*Style.Active->BackgroundGradientStart);
         AsBox->Style.GradientBottomPressed = ToPenumbraColor(*Style.Active->BackgroundGradientEnd);
+    }
+
+    // <Split> (SplitPanel)'s draggable divider handle -- a foreground-ish
+    // decorative element, not a second background, so this reuses the same
+    // `color` property Label/IconWidget's TextColor branches already resolve
+    // rather than inventing a component-specific `handle-color` (no such
+    // property exists in Lustre, deliberately). SplitPanel keeps its handle
+    // colours private, poured in only via ApplyStyle(SplitPanelStyle), which
+    // assigns the whole BoxStyle slice wholesale (SplitPanel.cpp) rather than
+    // field-by-field like ApplyBoxStyle above -- so this seeds HandleStyle from
+    // AsBox->Style (already fully populated above) and from the widget's own
+    // current handle-color getters first, to avoid clobbering either half with
+    // SplitPanelStyle's own defaults when only some of the three states are set
+    // this call. No :disabled variant (SplitPanelStyle has no
+    // ColorHandleDisabled field), same as the gradient overlays above.
+    if (auto* AsSplit = dynamic_cast<Penumbra::Widgets::SplitPanel*>(&Widget)) {
+        Penumbra::Widgets::SplitPanelStyle HandleStyle;
+        static_cast<Penumbra::Widgets::BoxStyle&>(HandleStyle) = AsBox->Style;
+        HandleStyle.ColorHandle = AsSplit->GetHandleColor();
+        HandleStyle.ColorHandleHovered = AsSplit->GetHandleColorHovered();
+        HandleStyle.ColorHandleDragged = AsSplit->GetHandleColorDragged();
+
+        bool AnyHandleColorSet = false;
+        if (Style.TextColor) {
+            HandleStyle.ColorHandle = ToPenumbraColor(*Style.TextColor);
+            AnyHandleColorSet = true;
+        }
+        if (Style.Hover && Style.Hover->TextColor) {
+            HandleStyle.ColorHandleHovered = ToPenumbraColor(*Style.Hover->TextColor);
+            AnyHandleColorSet = true;
+        }
+        if (Style.Active && Style.Active->TextColor) {
+            HandleStyle.ColorHandleDragged = ToPenumbraColor(*Style.Active->TextColor);
+            AnyHandleColorSet = true;
+        }
+        if (AnyHandleColorSet) {
+            AsSplit->ApplyStyle(HandleStyle);
+        }
     }
 
     if (auto* AsLabel = dynamic_cast<Label*>(&Widget)) {
