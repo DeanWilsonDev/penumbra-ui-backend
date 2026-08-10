@@ -4,7 +4,36 @@
 > the end of each work session; supersedes its own previous contents
 > rather than accumulating history (the individual gap/spec docs are the
 > durable record).
-> Last updated: 2026-08-10.
+> Last updated: 2026-08-10 (second pass).
+
+## Done this session (2026-08-10, second pass): `justify-content` wired through `StyleApplier`
+
+`pharos-proto` asked directly for the main-axis-distribution gap `penumbra`'s own
+`docs/next_steps.md` cross-referenced (`Box::JustifyContentMode`, "What this unblocks")
+to be resolved. `penumbra` (bumped `43cd669` → `e449d11`, "Add Box::JustifyContentMode:
+main-axis space-distribution for stack layouts") landed the `Box`-algorithm half; `lustre`
+already shipped the CSS-parsing half (`Lustre::Justify`/`ResolvedStyle::JustifyContent`,
+2026-08-03) — the only piece missing here was the `StyleApplier` mapping between them.
+
+`StyleApplier.cpp`'s `ApplyLayout()` gained a `ToPenumbraJustify` conversion (mirrors
+`ToPenumbraCrossAlign` exactly) and a `Style.JustifyContent` branch writing into
+`Box::JustifyContentMode`, same "optional field, present only when the resolved style
+actually set it" convention every other property in this function already follows.
+
+New regression coverage in `tests/LustreStyleApplierTests.cpp`:
+`TestJustifyContentReachesBox` (`justify-content: space-between` reaches
+`Box::JustifyContentMode`) and `TestNoJustifyContentSetLeavesItUntouched` (absence leaves
+whatever the widget already had, same "never clobber an unset property" contract
+`TestNoDisplaySetLeavesLayoutUntouched` already established for `display`). Full build +
+`penumbra_ui_backend_tests` (174 assertions, up from 163 — this pass's two plus whatever
+else landed since the count was last written down here, 0 failures) clean.
+
+**What this unblocks**: `pharos-proto`'s `ThreeZoneRow` (`src/ui/layout_helpers.h`) can now
+be replaced by an ordinary `<Frame class="...">` with `display: stack; flex-direction: row;
+justify-content: space-between;` — the last of the two structural blockers on
+`DropdownTrigger`'s `<Native>` migration (the `ViewportWidget` half already closed via
+`AtlasContentStrip.iris`/`FixedLeadingStack`). That migration itself is `pharos-proto`'s
+own follow-up, nothing further needed here.
 
 ## Done this session (2026-08-10): closed the `demo/` visual-check follow-up from the color/font inheritance change
 

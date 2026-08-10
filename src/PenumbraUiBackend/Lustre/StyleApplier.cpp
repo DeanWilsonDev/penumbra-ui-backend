@@ -26,6 +26,16 @@ Penumbra::Widgets::CrossAlign ToPenumbraCrossAlign(::Lustre::Align A) {
     return Penumbra::Widgets::CrossAlign::Start;
 }
 
+Penumbra::Widgets::Justify ToPenumbraJustify(::Lustre::Justify J) {
+    switch (J) {
+        case ::Lustre::Justify::Start: return Penumbra::Widgets::Justify::Start;
+        case ::Lustre::Justify::Center: return Penumbra::Widgets::Justify::Center;
+        case ::Lustre::Justify::End: return Penumbra::Widgets::Justify::End;
+        case ::Lustre::Justify::SpaceBetween: return Penumbra::Widgets::Justify::SpaceBetween;
+    }
+    return Penumbra::Widgets::Justify::Start;
+}
+
 // §2: display/flex-direction/gap/align-items map onto Box's own layout
 // fields directly -- siblings of Style (BoxStyle), not part of it, and
 // Box::Builder has no method for any of them either, the same "public
@@ -50,6 +60,9 @@ void ApplyLayout(Penumbra::Widgets::Box& Target, const ::Lustre::ResolvedStyle& 
     }
     if (Style.AlignItems) {
         Target.CrossAlignment = ToPenumbraCrossAlign(*Style.AlignItems);
+    }
+    if (Style.JustifyContent) {
+        Target.JustifyContentMode = ToPenumbraJustify(*Style.JustifyContent);
     }
 }
 

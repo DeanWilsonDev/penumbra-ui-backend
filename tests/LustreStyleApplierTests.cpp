@@ -368,6 +368,30 @@ void TestGapAndAlignItemsReachBox() {
            "align-items reaches Box::CrossAlignment");
 }
 
+void TestJustifyContentReachesBox() {
+    Box                     WidgetBox;
+    ::Lustre::ResolvedStyle Style;
+    Style.JustifyContent = ::Lustre::Justify::SpaceBetween;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.JustifyContentMode == Penumbra::Widgets::Justify::SpaceBetween,
+           "justify-content reaches Box::JustifyContentMode");
+}
+
+void TestNoJustifyContentSetLeavesItUntouched() {
+    Box WidgetBox;
+    WidgetBox.JustifyContentMode = Penumbra::Widgets::Justify::Center;
+    const auto Style = MakeStyle(); // never sets JustifyContent
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    Expect(WidgetBox.JustifyContentMode == Penumbra::Widgets::Justify::Center,
+           "a style that never sets justify-content leaves Box::JustifyContentMode exactly as it was");
+}
+
 void TestGradientPairReachesBoxStyle() {
     Box                     WidgetBox;
     ::Lustre::ResolvedStyle Style;
@@ -469,6 +493,8 @@ void RunLustreStyleApplierTests() {
     TestDisplayInlineMapsToLayoutNone();
     TestNoDisplaySetLeavesLayoutUntouched();
     TestGapAndAlignItemsReachBox();
+    TestJustifyContentReachesBox();
+    TestNoJustifyContentSetLeavesItUntouched();
     TestGradientPairReachesBoxStyle();
     TestNoGradientLeavesBoxStyleGradientFieldsAtDefault();
     TestMaxWidthAndEllipsisReachALabel();
