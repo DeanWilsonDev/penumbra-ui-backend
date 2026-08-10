@@ -102,12 +102,20 @@ Iris::Component MakeHealthBarNode(const std::string& BarClass) {
 } // namespace
 
 int main() {
+    // `.bar-label` deliberately has no `color` rule of its own -- its text renders
+    // white by inheriting `.health-bar`'s `color` down through two levels of nested
+    // Frames (docs/lustre_style_inheritance_decision.md), not from a rule on itself.
+    // Proves inheritance survives both wiring points this demo exercises: the
+    // mount-time resolve in Walker.cpp, and the reconcile-time re-resolve
+    // PenumbraWidgetAdapter::ApplyPropDiff runs on the .bar-normal/.bar-critical
+    // class toggle.
     const std::string StylesheetSource = R"(
 .health-bar {
     display: stack;
     background-color: #222222;
     border-radius: 10px;
     padding: 16px;
+    color: #FFFFFF;
 }
 
 .bar-normal {
@@ -122,10 +130,6 @@ int main() {
     background-color: #E8593C;
     border-radius: 6px;
     padding: 10px 20px;
-}
-
-.bar-label {
-    color: #FFFFFF;
 }
 )";
     ::Lustre::Parser       Parser(StylesheetSource, "HealthBar.lustre");
