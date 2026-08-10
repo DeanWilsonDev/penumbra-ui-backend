@@ -4,7 +4,35 @@
 > the end of each work session; supersedes its own previous contents
 > rather than accumulating history (the individual gap/spec docs are the
 > durable record).
-> Last updated: 2026-08-03.
+> Last updated: 2026-08-10.
+
+## Done this session (2026-08-10): closed the `demo/` visual-check follow-up from the color/font inheritance change
+
+The 2026-08-03 (second pass) inheritance entry below flagged one un-auto-fixed follow-up:
+"this repo's own `demo/` should get a visual check" for the behavior change (an unstyled
+leaf now inherits `color`/`font` from an ancestor instead of staying at its own default).
+That check hadn't actually happened — `demo/main.cpp`'s own stylesheet set `color:
+#FFFFFF` directly on `.bar-label`, so the running demo never exercised inheritance at all,
+despite looking like a plausible place it would.
+
+Verified two ways. First, ran the demo as committed (`.claude/skills/
+run-penumbra-ui-backend`) for a baseline screenshot — correct, unregressed, but not a real
+test of inheritance. Then moved `color: #FFFFFF` off `.bar-label` and onto the outer
+`.health-bar` ancestor, rebuilt, and re-ran: the label text still rendered white, now
+purely via inheritance through two nested `Frame` levels, at both wiring points this demo
+targets — mount time (`Walker.cpp`'s build-time resolve) and reconcile time
+(`PenumbraWidgetAdapter::ApplyPropDiff` re-resolving after the `.bar-normal`/
+`.bar-critical` class toggle). No regression.
+
+Made permanent (commit `c2874a8`, `demo/main.cpp`): `.health-bar` now carries `color:
+#FFFFFF`, `.bar-label`'s rule (which had nothing else in it) was deleted outright, and a
+new comment on the stylesheet explains why the label is deliberately left without its own
+color rule. `penumbra_ui_backend_tests` (69 assertions, 0 failures) clean on the rebuilt
+binary.
+
+**What this closes**: the one action item the inheritance entry below left open for this
+repo specifically. The `pharos-proto` heads-up in that same entry is still that repo's own
+follow-up — nothing further to do on that front from here.
 
 ## Done this session (2026-08-03, third pass): sized (not designed) a real component-logic hot-reload gap in `iris`
 
@@ -352,9 +380,11 @@ Everything logged in this repo's own `docs/*_gap.md`/`*_decision.md` files is no
 session. The docs below are worth reading before touching `StyleApplier.cpp`/`Walker.cpp`
 again, as background/precedent, not as a to-do list:
 
-- `docs/lustre_style_inheritance_decision.md` — new this session: `color`/`font`
-  inheritance, implemented in `lustre` itself (not just this repo), why it crosses
-  component boundaries, and the blast-radius flag for existing `.lustre` files.
+- `docs/lustre_style_inheritance_decision.md` — `color`/`font` inheritance, implemented
+  in `lustre` itself (not just this repo), why it crosses component boundaries, and the
+  blast-radius flag for existing `.lustre` files (this repo's own `demo/` visually
+  checked and updated to exercise it, 2026-08-10, see above; `pharos-proto`'s heads-up
+  is still that repo's own follow-up).
 - `docs/native_split_backend_wiring_gap.md` — `<Native>`/`<Split>` build cases
   (`BuildNative`/`BuildSplit` in `Walker.cpp`), plus both of its own follow-on questions
   (closed this session, see above).
