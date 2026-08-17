@@ -4,6 +4,7 @@
 #include "PenumbraUiBackend/Lustre/StyleApplier.h"
 
 #include "Iris/Component.h"
+#include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
 #include "Penumbra/Backends/IImageBackend.h"
 #include "Penumbra/Platform/IClipboard.h"
@@ -75,6 +76,16 @@ struct BuildContext {
 
     const ::Lustre::StylesheetSet* Style{nullptr};
     const Lustre::IStyleApplier*    StyleApplier{nullptr};
+
+    // docs/next_steps.md's "reconciler-side wiring for a framework-owned component
+    // lifecycle system" ask. When set, every built widget whose originating Component
+    // carries a live `Instance->Lifecycle` (iris::RegisterLifecycle, `Iris/
+    // ComponentInstance.h`) gets registered against this Application's own
+    // RegisterLifecycle/UnregisterLifecycle pair automatically -- see Walker.cpp's
+    // BuildWidgetTreeInternal for the actual wiring. Left null (the default) means
+    // exactly pre-wiring behavior: no registration happens, matching every other
+    // optional BuildContext resource above.
+    Penumbra::Application* LifecycleHost{nullptr};
 };
 
 // Walks a single `Component` IR node (docs/iris_core_spec.md §2.5, from the `iris`
@@ -122,6 +133,15 @@ struct BuildContext {
 // `Ref` field always carries the string an `IIFE` wrapper set it from) is silently
 // skipped, same "malformed input is simply not recorded" tolerance the rest of this
 // walker already has for e.g. a wrongly-typed `class` prop.
+//
+// When Context.LifecycleHost is non-null, every node's `Component::Instance` is checked
+// for a live `Instance->Lifecycle` (set via `iris::RegisterLifecycle` inside that
+// component's own body) -- not just Node itself: `MountComponentInstance` sets
+// `Instance` for *every* component invocation `Codegen.h` wraps, including a plain
+// nested `<ChildComponent .../>` used as an ordinary static child with no `<Slot>`
+// involved, so this check happens at the same per-node point PrimitiveTagMap/RefMap
+// above already record at, not once at Node's own root. See BuildContext::
+// LifecycleHost's own comment for what registering actually does.
 std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Iris::Component& Node,
                                                                  const BuildContext&        Context,
                                                                  PrimitiveTagMap*           OutTags = nullptr,

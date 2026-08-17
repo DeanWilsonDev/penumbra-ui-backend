@@ -3,6 +3,8 @@
 #include "PenumbraUiBackend/Lustre/StyleResolution.h"
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
+#include "Iris/ComponentInstance.h"
+
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/ImageWidget.h"
@@ -199,6 +201,61 @@ private:
     bool        IsComponentRoot_;
     const WalkerStyleElement* Parent_;
 };
+
+// docs/next_steps.md's "reconciler-side wiring for a framework-owned component
+// lifecycle system" ask. `Umbra::IWidgetLifecycle` (`iris::ComponentInstance::
+// Lifecycle`'s own type) and `Penumbra::IWidgetLifecycle` (what `Penumbra::Application::
+// RegisterLifecycle` takes) are two distinct classes with identical virtual signatures
+// -- deliberately mirrored, per `Penumbra::IWidgetLifecycle`'s own doc comment, rather
+// than one shared type, since Penumbra doesn't depend on umbra-interfaces. This repo is
+// the one place that sees both sides of the mirror, so it's the one that has to bridge
+// them -- not a framework gap on either side.
+class UmbraLifecycleBridge : public Penumbra::IWidgetLifecycle {
+public:
+    explicit UmbraLifecycleBridge(Umbra::IWidgetLifecycle* Inner) : Inner_(Inner) {}
+
+    void OnMount() override { Inner_->OnMount(); }
+    void OnUnmount() override { Inner_->OnUnmount(); }
+    void OnTick(const Penumbra::TickInfo& Info) override { Inner_->OnTick(Umbra::TickInfo{Info.DeltaSeconds}); }
+
+private:
+    Umbra::IWidgetLifecycle* Inner_;
+};
+
+// Registers Node's own component lifecycle (if any) against Context.LifecycleHost, and
+// arranges for it to unregister automatically when Built is actually torn down. Called
+// once per built widget from BuildWidgetTreeInternal, at the same per-node point
+// OutTags/OutRefs are already recorded -- see Walker.h's BuildWidgetTree comment for why
+// this can't be a one-shot root-only check (a plain nested `<ChildComponent .../>` with
+// no `<Slot>` also carries its own Component::Instance, inline in the same tree).
+//
+// `Application::RegisterLifecycle`/`UnregisterLifecycle` already call `OnMount()`/
+// `OnUnmount()` internally (`vendor/penumbra`'s `Application.cpp`), so this function's
+// only job is picking the right moments to call them. `WidgetBase::OnDestroyed`
+// (`Penumbra/Widgets/WidgetBase.h`) -- an existing, generic "this widget is being torn
+// down" hook, unused anywhere else in this repo -- fires from `~WidgetBase()`, giving
+// exactly the unmount timing needed without requiring `ComponentInstance` to grow a
+// destructor or a registry reference of its own (`iris-proto`'s own decision, see
+// `Iris/ComponentInstance.h`'s `Lifecycle` field comment: passive and non-owning,
+// deliberately no self-unregister-at-destruction). The bridge itself needs no separate
+// storage anywhere -- the OnDestroyed lambda's own capture owns it for exactly as long
+// as it needs to live, freeing it the instant UnregisterLifecycle has been called.
+//
+// `Bridge` is a `shared_ptr`, not `unique_ptr`, purely so the capturing lambda stays
+// copyable -- `WidgetBase::OnDestroyed` is a `std::function<void()>`, which requires a
+// copyable target, the same constraint `TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase`
+// (`tests/WalkerTests.cpp`) already worked around the same way for a move-only capture.
+// `Built.OnDestroyed` is only ever invoked once (from `~WidgetBase()`), so the shared
+// ownership never actually gets shared in practice.
+void RegisterLifecycleIfPresent(const Component& Node, const BuildContext& Context, WidgetBase& Built) {
+    if (Context.LifecycleHost == nullptr || !Node.Instance || Node.Instance->Lifecycle == nullptr) {
+        return;
+    }
+    auto                    Bridge = std::make_shared<UmbraLifecycleBridge>(Node.Instance->Lifecycle);
+    Penumbra::Application* Host = Context.LifecycleHost;
+    Host->RegisterLifecycle(Bridge.get());
+    Built.OnDestroyed = [Host, Bridge]() { Host->UnregisterLifecycle(Bridge.get()); };
+}
 
 std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const BuildContext& Context,
                                                      const WalkerStyleElement* ParentStyleElement,
@@ -535,6 +592,13 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
         if (const auto RefName = GetRefName(Node)) {
             (*OutRefs)[*RefName] = Built.get();
         }
+    }
+
+    // Same per-node reasoning as OutTags/OutRefs above -- Node.Instance is only
+    // reachable here, not from the built WidgetBase tree later, and isn't limited to
+    // Node's own root (see RegisterLifecycleIfPresent's own comment).
+    if (Built) {
+        RegisterLifecycleIfPresent(Node, Context, *Built);
     }
 
     return Built;

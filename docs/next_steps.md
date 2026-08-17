@@ -6,6 +6,85 @@
 > durable record).
 > Last updated: 2026-08-17.
 
+## Done this session (2026-08-17, second pass): reconciler-side wiring for a framework-owned component lifecycle system
+
+**Not this repo's idea — a cross-repo ask from `pharos-proto`,** wanting
+`pharos_nyx_bootstrap`'s app-level `OnUpdate` (hand-sequencing ~15 named host calls every
+frame) eventually replaced by each mounted component owning its own update logic, run
+automatically by the framework. Matching asks were filed in `iris-proto`/`nyx-proto`'s
+own docs; this was this repo's own piece — the "reconciler" layer that sees both a live
+`Component`/`ComponentInstance` (Iris side) and a live `Penumbra::Application*`
+(Penumbra side) at the same time.
+
+`iris-proto` landed its half first (`Umbra::IWidgetLifecycle* Lifecycle`, a passive
+non-owning field on `ComponentInstance`; `iris::RegisterLifecycle(...)`, an
+ambient-current-instance free function mirroring `IRIS_SIGNAL`'s `DeclareSignal`,
+`Iris/ComponentInstance.h`) — `vendor/iris` pin bumped `ad3b6b6` → `1349183`
+("Implement iris::RegisterLifecycle for framework-owned per-component update"). No
+nested-submodule re-init needed (`libs/amanuensis`/`libs/cimmerian`/`libs/
+umbra-interfaces` all already at the right commit).
+
+Two real wrinkles found while implementing against the landed API, neither guessed in
+advance:
+
+1. **`Component::Instance` isn't root-only.** `MountComponentInstance` wraps *every*
+   component invocation `Codegen.h` emits for a `<Name .../>` call, not just the
+   outermost mount root — a plain nested `<ChildComponent .../>` used as an ordinary
+   static child (no `<Slot>` involved) gets its own `Instance` inline in the same
+   `Component` tree one `BuildWidgetTree` call recurses through. Registration therefore
+   happens at the same per-node point `PrimitiveTagMap`/`RefMap` already record at
+   (`BuildWidgetTreeInternal`, `Walker.cpp`), not once at `BuildWidgetTree`'s outer
+   entry — confirmed with a dedicated test (`TestNestedNonSlotComponentInvocationAlso
+   RegistersItsOwnLifecycle`, see below).
+2. **`Umbra::IWidgetLifecycle` and `Penumbra::IWidgetLifecycle` are two distinct
+   classes**, not one type shared across namespaces — identical virtual signatures,
+   deliberately mirrored (`Penumbra::IWidgetLifecycle`'s own doc comment), no
+   inheritance relationship. `Penumbra::Application::RegisterLifecycle`/
+   `UnregisterLifecycle` want the `Penumbra::` one specifically, so a small local
+   `UmbraLifecycleBridge` (`Walker.cpp`, anonymous namespace) forwards each call —
+   this repo's normal bridging job, not a framework gap on either side.
+
+**Implemented** (`include/PenumbraUiBackend/Walker.h`, `src/PenumbraUiBackend/
+Walker.cpp`):
+
+- `BuildContext` gained `Penumbra::Application* LifecycleHost{nullptr}` — same
+  optional-resource convention every other field already follows (null skips
+  registration entirely, exactly pre-wiring behavior).
+- `BuildWidgetTreeInternal`'s existing per-node recording point (right where
+  `OutTags`/`OutRefs` get populated) gained a call to `RegisterLifecycleIfPresent`:
+  when `Context.LifecycleHost && Node.Instance && Node.Instance->Lifecycle` are all
+  non-null, it wraps the pointer in an `UmbraLifecycleBridge`, calls
+  `LifecycleHost->RegisterLifecycle(...)` (which already calls `OnMount()` internally,
+  `Application.cpp`), and sets `Built->OnDestroyed` — `WidgetBase`'s existing, generic
+  "this widget is being torn down" hook (`WidgetBase.h:65`), unused anywhere in this
+  repo before now — to unregister (`UnregisterLifecycle` already calls `OnUnmount()`
+  internally) when the real widget is actually destroyed. No new member storage
+  anywhere: the `OnDestroyed` lambda's own capture (a `shared_ptr`, not `unique_ptr` —
+  `std::function` needs a copyable target, same wrinkle
+  `TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase` already worked around) owns the
+  bridge for exactly as long as it needs to live. This means `ComponentInstance` never
+  needed a destructor or a registry reference of its own — `iris-proto`'s own decision,
+  confirmed to compose cleanly with this repo's side.
+
+New regression coverage in `tests/WalkerTests.cpp`:
+`TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet`,
+`TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed`,
+`TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance`,
+`TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost`,
+`TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle`. Full build +
+`penumbra_ui_backend_tests` (183 assertions, 0 failures) clean.
+
+**What this unblocks**: together with `iris-proto`'s landed half, a mounted `.irisx`
+component's lifecycle hooks now get registered/unregistered automatically as part of
+the normal build/mount/unmount flow, once a consumer passes a real
+`Penumbra::Application*` as `BuildContext::LifecycleHost` — no hand-written
+`Build*IfNeeded`/teardown sequencing needed on the consuming app's side. Wiring an
+actual `BuildContext::LifecycleHost` through to a real running app (e.g.
+`pharos_nyx_bootstrap`'s `IrisNyxDriver`-consuming mount code) is that consumer's own
+follow-up, not this repo's — nothing further needed here for this ask.
+
+---
+
 ## Session note (2026-08-17): stood by, no work started, stopped for fleet retirement
 
 This session was part of a multi-repo coordination experiment (pharos-proto as

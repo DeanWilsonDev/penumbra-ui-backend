@@ -2,6 +2,9 @@
 
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
+#include "Iris/ComponentInstance.h"
+
+#include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
@@ -418,6 +421,116 @@ void TestNoRefLeavesOutRefsEmpty() {
     Expect(Refs.empty(), "a tree with no `ref` props records nothing, even when OutRefs is provided");
 }
 
+// docs/next_steps.md's "reconciler-side wiring for a framework-owned component
+// lifecycle system" ask. FakeLifecycle counts each hook call rather than asserting
+// order/timing beyond what each test below checks explicitly.
+struct FakeLifecycle : Umbra::IWidgetLifecycle {
+    int MountCount = 0;
+    int UnmountCount = 0;
+    int TickCount = 0;
+
+    void OnMount() override { ++MountCount; }
+    void OnUnmount() override { ++UnmountCount; }
+    void OnTick(const Umbra::TickInfo&) override { ++TickCount; }
+};
+
+// A Component with a real ComponentInstance whose Lifecycle field points at Lifecycle --
+// the same shape `iris::RegisterLifecycle` produces inside a real component body, built
+// by hand here since these tests build a Component tree directly rather than going
+// through Codegen.
+Component MakeNodeWithLifecycle(IrisElementTag Tag, Umbra::IWidgetLifecycle* Lifecycle) {
+    Component Node = MakeNode(Tag);
+    Node.Instance = std::make_shared<iris::ComponentInstance>();
+    Node.Instance->Lifecycle = Lifecycle;
+    return Node;
+}
+
+void TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet() {
+    FakeLifecycle Lifecycle;
+    Penumbra::Application Host;
+    BuildContext Context;
+    Context.LifecycleHost = &Host;
+
+    const auto Node = MakeNodeWithLifecycle(IrisElementTag::Frame, &Lifecycle);
+    const auto Built = BuildWidgetTree(Node, Context);
+
+    Expect(Lifecycle.MountCount == 1,
+           "building a Component with a live Instance->Lifecycle registers it against "
+           "Context.LifecycleHost, which calls OnMount immediately (Application::RegisterLifecycle)");
+
+    Host.Tick(0.5f);
+    Expect(Lifecycle.TickCount == 1, "the registered lifecycle receives OnTick from the host Application");
+}
+
+void TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed() {
+    FakeLifecycle Lifecycle;
+    Penumbra::Application Host;
+    BuildContext Context;
+    Context.LifecycleHost = &Host;
+
+    const auto Node = MakeNodeWithLifecycle(IrisElementTag::Frame, &Lifecycle);
+    auto Built = BuildWidgetTree(Node, Context);
+    Expect(Lifecycle.UnmountCount == 0, "not yet unmounted while the built widget is still alive");
+
+    Built.reset(); // real widget teardown -- WidgetBase::OnDestroyed should fire
+    Expect(Lifecycle.UnmountCount == 1,
+           "destroying the built widget fires WidgetBase::OnDestroyed, which unregisters the "
+           "lifecycle (calling OnUnmount via Application::UnregisterLifecycle) without needing "
+           "ComponentInstance to have a destructor of its own");
+
+    Host.Tick(0.1f);
+    Expect(Lifecycle.TickCount == 0, "once unregistered, the host Application no longer dispatches OnTick to it");
+}
+
+void TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance() {
+    FakeLifecycle Lifecycle;
+    BuildContext  Context; // LifecycleHost left null, the default
+
+    const auto Node = MakeNodeWithLifecycle(IrisElementTag::Frame, &Lifecycle);
+    const auto Built = BuildWidgetTree(Node, Context);
+
+    Expect(Lifecycle.MountCount == 0,
+           "Context.LifecycleHost == nullptr (the default) skips registration entirely, exactly "
+           "pre-wiring behavior, even when Instance->Lifecycle is live");
+}
+
+void TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost() {
+    Penumbra::Application Host;
+    BuildContext           Context;
+    Context.LifecycleHost = &Host;
+
+    const auto Node = MakeNode(IrisElementTag::Frame); // Node.Instance left unset
+    const auto Built = BuildWidgetTree(Node, Context);
+    Expect(Built != nullptr, "builds normally with no Instance at all -- registration is purely opt-in");
+}
+
+void TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle() {
+    // A plain nested <ChildComponent .../> (no <Slot>) still gets its own
+    // Component::Instance from MountComponentInstance, inline in the same tree --
+    // confirmed by reading Iris/Component.h directly. The registration check has to
+    // happen at every node BuildWidgetTreeInternal visits, not just the outer Node
+    // BuildWidgetTree itself was called with.
+    FakeLifecycle OuterLifecycle;
+    FakeLifecycle InnerLifecycle;
+    Penumbra::Application Host;
+    BuildContext Context;
+    Context.LifecycleHost = &Host;
+
+    Component Inner = MakeNodeWithLifecycle(IrisElementTag::Frame, &InnerLifecycle);
+    std::vector<Component> Children;
+    Children.push_back(std::move(Inner));
+
+    Component Outer = MakeNodeWithLifecycle(IrisElementTag::Frame, &OuterLifecycle);
+    Outer.Children = std::move(Children);
+
+    const auto Built = BuildWidgetTree(Outer, Context);
+
+    Expect(OuterLifecycle.MountCount == 1, "the outer (root) Component's own lifecycle registers");
+    Expect(InnerLifecycle.MountCount == 1,
+           "a nested Component's lifecycle also registers, even though it isn't Node's own root -- "
+           "the per-node walk, not a root-only check, is what BuildWidgetTree.h's own comment documents");
+}
+
 } // namespace
 
 void RunWalkerTests() {
@@ -447,6 +560,11 @@ void RunWalkerTests() {
     TestNestedTreeBuildsRecursively();
     TestRefTaggedNodeIsRecordedInOutRefs();
     TestNoRefLeavesOutRefsEmpty();
+    TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet();
+    TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed();
+    TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance();
+    TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost();
+    TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle();
 }
 
 void RunPenumbraWidgetAdapterTests();      // tests/PenumbraWidgetAdapterTests.cpp
