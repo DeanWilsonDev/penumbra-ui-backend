@@ -3,6 +3,7 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
 #include "Iris/ComponentInstance.h"
+#include "Iris/IrisNyxDriver.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
@@ -16,6 +17,8 @@
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 int Failures = 0; // shared across all test files in this executable
@@ -531,6 +534,122 @@ void TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle() {
            "the per-node walk, not a root-only check, is what BuildWidgetTree.h's own comment documents");
 }
 
+// docs/next_steps.md's "a Nyx-authored OnMount/OnTick has no way to reach its own
+// component's ref'd widgets" ask. Unlike the hand-built-Component lifecycle tests above,
+// GetRef needs a real `Iris::NyxDriverState` (a real nyx::host::NyxRuntime::NyxScope with a
+// real Environment) behind Node.Instance->DriverState -- only IrisNyxDriver::MountRoot
+// produces that, so these tests go through the real `.irisx` -> IrisIrDocument -> Component
+// pipeline end to end, the same way iris-proto's own IrisNyxDriverTests.cpp verifies
+// `auto OnTick = ...` itself. TempProject mirrors that file's own test helper exactly (a
+// real on-disk fixture, not a hand-built IrisIrDocument).
+class TempProject {
+public:
+    TempProject() {
+        Root_ = std::filesystem::temp_directory_path() / "penumbra_ui_backend_getref_test";
+        std::filesystem::remove_all(Root_);
+        std::filesystem::create_directories(Root_ / "demo");
+    }
+    ~TempProject() { std::filesystem::remove_all(Root_); }
+
+    std::string Write(const std::string& Name, std::string_view Source) {
+        const std::filesystem::path Path = Root_ / "demo" / Name;
+        std::ofstream(Path) << Source;
+        return Path.string();
+    }
+
+    std::string RootPath() const { return Root_.string(); }
+
+private:
+    std::filesystem::path Root_;
+};
+
+Iris::IrisConfig UmbraConfig() {
+    Iris::IrisConfig Config;
+    Config.Target      = Iris::IrisBuildTarget::UmbraEngine;
+    Config.SearchPaths = {"demo"};
+    return Config;
+}
+
+void TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef() {
+    TempProject       Project;
+    const std::string AppPath = Project.Write("RefTicker.irisx",
+                                               "void RefTicker() {\n"
+                                               "    auto OnTick = (float dt) -> {\n"
+                                               "        auto handle = GetRef(\"label\");\n"
+                                               "        handle.SetText(\"ticked\");\n"
+                                               "        handle.SetColor(1, 2, 3, 255);\n"
+                                               "        handle.SetVisible(false);\n"
+                                               "    };\n"
+                                               "\n"
+                                               "    render {\n"
+                                               "        <Text ref=\"label\">idle</Text>\n"
+                                               "    }\n"
+                                               "}\n");
+
+    Iris::IrisNyxDriver Driver(UmbraConfig(), Project.RootPath());
+    const Component      Root = Driver.MountRoot(AppPath, "RefTicker");
+    Expect(Driver.Errors().empty(), "the RefTicker fixture compiles and mounts with no errors");
+    Expect(Root.Instance != nullptr && Root.Instance->Lifecycle != nullptr,
+           "the `auto OnTick = ...` local wires a real Instance->Lifecycle, same as iris-proto's own test");
+
+    BuildContext Context;
+    Context.NyxHost = &Driver.Runtime();
+    PenumbraUiBackend::RefMap Refs;
+    const auto                Built = BuildWidgetTree(Root, Context, /*OutTags=*/nullptr, &Refs);
+
+    auto* LabelWidget = Refs.count("label") != 0 ? dynamic_cast<Label*>(Refs.at("label")) : nullptr;
+    Expect(LabelWidget != nullptr, "the ref=\"label\" node built a real Label, recorded in RefMap");
+    Expect(LabelWidget != nullptr && LabelWidget->Text == "idle",
+           "before OnTick ever runs, the Label still shows its original render-time text");
+
+    Root.Instance->Lifecycle->OnTick(Umbra::TickInfo{0.5f});
+
+    Expect(LabelWidget != nullptr && LabelWidget->Text == "ticked",
+           "OnTick's GetRef(\"label\").SetText(...) call reached the real built Label, not a copy");
+    Expect(LabelWidget != nullptr && LabelWidget->ColorText.R == 1 && LabelWidget->ColorText.G == 2 &&
+               LabelWidget->ColorText.B == 3 && LabelWidget->ColorText.A == 255,
+           "GetRef(...).SetColor(...) reached the same real Label's ColorText field");
+    Expect(LabelWidget != nullptr && !LabelWidget->GetIsVisible(),
+           "GetRef(...).SetVisible(false) reached the same real Label's WidgetBase::IsVisible field");
+}
+
+void TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle() {
+    TempProject       Project;
+    const std::string AppPath = Project.Write("NoHostTicker.irisx",
+                                               "void NoHostTicker() {\n"
+                                               "    auto OnTick = (float dt) -> {\n"
+                                               "        auto handle = GetRef(\"label\");\n"
+                                               "        handle.SetText(\"ticked\");\n"
+                                               "    };\n"
+                                               "\n"
+                                               "    render {\n"
+                                               "        <Text ref=\"label\">idle</Text>\n"
+                                               "    }\n"
+                                               "}\n");
+
+    Iris::IrisNyxDriver Driver(UmbraConfig(), Project.RootPath());
+    const Component      Root = Driver.MountRoot(AppPath, "NoHostTicker");
+    Expect(Driver.Errors().empty(), "the NoHostTicker fixture compiles and mounts with no errors");
+
+    BuildContext Context; // NyxHost left null, the default
+    PenumbraUiBackend::RefMap Refs;
+    const auto                Built = BuildWidgetTree(Root, Context, /*OutTags=*/nullptr, &Refs);
+
+    auto* LabelWidget = Refs.count("label") != 0 ? dynamic_cast<Label*>(Refs.at("label")) : nullptr;
+    Expect(LabelWidget != nullptr, "the ref=\"label\" node still builds normally with no NyxHost set");
+
+    // GetRef was never defined into this instance's own RenderScope Environment, so the
+    // OnTick body's own GetRef(...) call hits an ordinary Nyx-level "undefined variable"
+    // RuntimeError -- caught and converted to an error Value inside NyxRuntime::
+    // EvaluateInScope, not a C++ exception escaping this call, and not a crash.
+    Root.Instance->Lifecycle->OnTick(Umbra::TickInfo{0.5f});
+
+    Expect(LabelWidget != nullptr && LabelWidget->Text == "idle",
+           "Context.NyxHost == nullptr (the default) means GetRef doesn't exist for this component at "
+           "all -- OnTick's own call to it fails at the Nyx level and never reaches the real Label, "
+           "exactly pre-wiring behavior");
+}
+
 } // namespace
 
 void RunWalkerTests() {
@@ -565,6 +684,8 @@ void RunWalkerTests() {
     TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance();
     TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost();
     TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle();
+    TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef();
+    TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle();
 }
 
 void RunPenumbraWidgetAdapterTests();      // tests/PenumbraWidgetAdapterTests.cpp

@@ -4,7 +4,193 @@
 > the end of each work session; supersedes its own previous contents
 > rather than accumulating history (the individual gap/spec docs are the
 > durable record).
-> Last updated: 2026-08-17.
+> Last updated: 2026-08-18.
+
+## Done (2026-08-18): a Nyx-authored `OnMount`/`OnTick` can now reach its own component's `ref`'d widgets via `GetRef`
+
+**Implemented, closing the ask below.** `vendor/iris` bumped `1349183` → `efc6c1e` first —
+the pinned commit predated `NyxLifecycleAdapter`/the whole `.irisx` reserved-name
+`OnMount`/`OnUnmount`/`OnTick` wiring entirely (added in iris-proto's `69dba6d`; `efc6c1e`
+on top fixes `IrisNyxDriver::GetFileScope` re-pushing globals into a cached file scope,
+cited by this ask's own "one real open design question" section). No nested-submodule
+re-init needed (`libs/amanuensis`/`libs/cimmerian`/`libs/umbra-interfaces` all unchanged
+between those two commits). This surfaced a real gap in how this doc's own ask was
+verified before implementation started: without the pin bump, the new regression test
+below crashed on a null `Instance->Lifecycle` (the reserved-name detection simply didn't
+exist yet at the old pin) — worth remembering for any future ask grounded in a sibling
+repo's real source: confirm the *vendored* pin actually has what the sibling repo's HEAD
+has, not just that the sibling repo's own checkout does.
+
+**The "one real open design question" is resolved in favor of per-instance scoping, not
+global** — confirmed against real source, not the "global is likely sufficient" lean the
+original ask below tentatively reasoned toward:
+
+- A global `GetRef` (on `Runtime.Globals()`) would be one flat binding shared by every
+  concurrently-mounted lifecycle-bearing component. The ask itself names
+  Explorer/Atlas/Inspector/Toolbar as eventual `GetRef` consumers, all mounted at once in
+  the same app tree — the last `BuildWidgetTree` call to (re)register it would silently
+  win for every other already-mounted component's own later `OnTick` calls too, a real
+  cross-component ref collision (ref names are only unique *within* one `BuildWidgetTree`
+  call, per `RefMap`'s own doc comment, not across separately-built sibling components).
+- Per-instance scoping needs **zero new iris-proto/nyx-proto API** — confirmed by reading
+  both repos' real source, not assumed: `Iris::NyxDriverState` (`IrisNyxDriver.h`) is
+  already public, `RenderScope` is the exact Environment
+  `BuildFreeFunctionLifecycleAdapter`'s own `Scope.context.env->FindOwn("OnTick")` check
+  already reads (`IrisNyxDriver.cpp`), and `nyx::runtime::Environment::Define` (already
+  public) creates a binding "in this scope only." Nyx variable lookup is late (walks the
+  live parent chain at call time, not a snapshot taken when a closure was declared), so
+  defining `GetRef` into that same live Environment object at build time is visible to
+  that instance's `OnMount`/`OnTick` with no ordering hazard, and with no cross-instance
+  collision at all, since every instance gets its own Environment.
+- Confirmed a real, deliberate scope boundary rather than trying to close it: Model 2
+  (class-based) components dispatch lifecycle hooks via
+  `Interpreter::TryCallInstanceMethod` against the *file-level* shared
+  interpreter/registry (`BuildClassLifecycleAdapter`), never through any per-instance
+  Environment — there is no analogous scope to define `GetRef` into for that model today.
+  A class-based `OnTick` calling `GetRef` gets an ordinary Nyx-level "undefined variable"
+  error, not a wrong-widget bug. Model 1 (free-function) is the only authoring style every
+  `.irisx` example in this ecosystem has used so far, including the concrete target
+  (`InspectorPanel.irisx`), so this isn't a blocker for the ask that motivated it.
+
+**Implemented** (`include/PenumbraUiBackend/Walker.h`, `src/PenumbraUiBackend/
+Walker.cpp`):
+
+- `BuildContext` gained `nyx::host::NyxRuntime* NyxHost{nullptr}` — same optional-resource
+  convention every other field already follows.
+- `WidgetRefHandle` (anonymous namespace, `Walker.cpp`): the four operations the original
+  ask named as the validated minimum bar — `SetText`/`SetIconName` (via `dynamic_cast` to
+  `Label`/`IconWidget`), `SetColor` (four 0-255 channel ints, since Nyx has no native color
+  literal), and `SetVisible` (`WidgetBase::SetIsVisible` directly, no cast needed). A
+  mismatched call (e.g. `SetIconName` on a plain `Box`) is a silent no-op, matching this
+  walker's existing "malformed/mismatched input is simply not applied" tolerance.
+- `EnsureWidgetRefTypeRegistered`: registers the `WidgetRef` host type against
+  `Context.NyxHost` exactly once (cached by `NyxRuntime*`), reusable across every
+  component's own `GetRef` closure — `HostObject` method dispatch resolves entirely
+  through `host->descriptor` at call time (confirmed against `nyx-proto`'s
+  `Interpreter::CallInstanceMethod`), never through any Environment/`Globals()` lookup, so
+  one registration is visible from every returned handle regardless of which component's
+  own `RenderScope` built it.
+- `RegisterGetRefIfPresent`: the actual per-instance wiring described above, called at the
+  same per-node point `RegisterLifecycleIfPresent` already fires in
+  `BuildWidgetTreeInternal` — and *before* it, so `GetRef` is already reachable from inside
+  the Nyx-authored `OnMount` body that `RegisterLifecycleIfPresent`'s own
+  `Host->RegisterLifecycle` call triggers immediately afterward. Gated on
+  `Node.Instance->DriverState` being non-null (exclusively set by `IrisNyxDriver`, per
+  `ComponentInstance::DriverState`'s own doc comment, so this never misinterprets a
+  C++-authored `.iris` component's driver state as a Nyx one). Handles are cached per ref
+  name inside the closure (not reallocated every call) to stay bounded under a real
+  per-frame `OnTick`.
+
+New regression coverage in `tests/WalkerTests.cpp`, going through the real `.irisx` ->
+`IrisIrDocument` -> `Component` pipeline end to end via `IrisNyxDriver::MountRoot` (a real
+on-disk fixture, `TempProject`, mirroring `iris-proto`'s own `IrisNyxDriverTests.cpp` test
+helper exactly — not a hand-built `Component` tree, since `GetRef` needs a real
+`NyxDriverState`/`Environment` behind `Node.Instance->DriverState`):
+`TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef` (a `ref="label"` `<Text>` node's real
+built `Label` is mutated by an `auto OnTick = ...` local calling
+`GetRef("label").SetText/SetColor/SetVisible(...)`, verified via `Instance->Lifecycle
+->OnTick(...)`, not a mock) and `TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle`
+(`Context.NyxHost` left null means `GetRef` doesn't exist at all — the same real fixture's
+`OnTick` call fails at the Nyx level, caught inside `NyxRuntime::EvaluateInScope`, and never
+reaches the real `Label`). Full rebuild + `penumbra_ui_backend_tests` (215 assertions, 0
+failures) + `test_iris` (251 passed, up from 183 — the new pin's own `IrisNyxDriverTests.cpp`
+lifecycle coverage) + `test_lustre` (42 passed) clean.
+
+**What this unblocks**: `pharos-proto`'s `InspectorPanel.irisx` can now move its ~90 lines
+of hand-written per-frame row-sync C++ (`inspector_panel_native.cpp`'s `panel.sync`) into a
+real `OnTick` declared directly in the `.irisx` file, reaching its own `ref`'d
+`Label`/`IconWidget`/`Box` rows via `GetRef(name)` — once `pharos-proto` also passes a real
+`nyx::host::NyxRuntime*` (its own `IrisNyxDriver::Runtime()`) as `BuildContext::NyxHost`.
+That wiring, and the actual `InspectorPanel.irisx` migration itself, is `pharos-proto`'s own
+follow-up — nothing further needed here.
+
+The original ask, kept for context on what was actually requested:
+
+## (resolved, see above) a Nyx-authored `OnMount`/`OnTick` has no way to reach its own component's `ref`'d widgets
+
+**Not this repo's idea — a cross-repo ask from `pharos-proto`.** Its `pharos_nyx_bootstrap`
+app is mid-way through eliminating its own hand-written `*_native.cpp` orchestration
+(`docs/nyx_native_app_goal.md` there: "the Nyx-native app should require no additional C++
+files to work at all... all its logic belongs in Nyx"). `InspectorPanel.irisx` is the next
+target: it should become a real invoked component (`<InspectorPanel />` in `App.irisx`,
+already unblocked by this repo's own "swap a live real widget" entry above) whose per-frame
+row-sync logic — currently ~90 lines of hand-written C++ in `inspector_panel_native.cpp`
+(`panel.sync`, called every frame) that reads a selected node and writes `Text`/`IconName`/
+`ColorText`/`SetIsVisible` onto 21 rows' worth of `ref`'d `Label`/`IconWidget`/`Box` widgets
+— should instead live as an `OnTick` declared directly inside `InspectorPanel.irisx` itself,
+using the already-landed `.irisx` lifecycle primitive (this repo's own "reconciler-side
+wiring" entry below, `iris-proto`'s `iris::RegisterLifecycle`/`NyxLifecycleAdapter`).
+
+**Confirmed, from real source in three repos, this doesn't work today — not a hunch:**
+
+- `Umbra::IWidgetLifecycle::OnMount()`/`OnTick(const TickInfo&)` (`penumbra-proto`,
+  `include/Umbra/IWidgetLifecycle.h`, and `Penumbra::IWidgetLifecycle` mirroring it) take no
+  parameter that could carry a widget/ref handle — `OnTick`'s only payload is `DeltaSeconds`.
+- `Iris::NyxLifecycleAdapter::HookInvoker` (`iris-proto`, `include/Iris/
+  NyxLifecycleAdapter.h`) calls into Nyx by reconstructing `"OnTick(<args>)"` as literal
+  source text (`NumericLiteralText` in `IrisNyxDriver.cpp`) and re-parsing it — only numeric
+  literals can cross this boundary at all; there's no way to marshal an opaque host object
+  (a ref lookup, a widget handle) through it even if `OnMount`/`OnTick` gained a parameter.
+- **This repo's own `BuildContext` (`include/PenumbraUiBackend/Walker.h`) has zero field for
+  reaching the Nyx side at all** — not `nyx::host::NyxRuntime`, not `Iris::IrisNyxDriver`,
+  nothing. Confirmed by reading the whole struct: `FontBackend`/`ImageBackend`/`IconBackend`/
+  `Focus`/`Clipboard`/`Style`/`StyleApplier`/`LifecycleHost`, and that's the complete list.
+  So even though this repo is the one that owns `RefMap` (`Walker.h:45`) and is the one that
+  actually triggers `OnMount()` (via `LifecycleHost->RegisterLifecycle(...)`, confirmed
+  calling it internally per this repo's own lifecycle entry below), it currently has no way
+  to hand anything back to the Nyx side that produced the component being built.
+
+**The one fact that makes this tractable, not just aspirational — also confirmed against real
+source, not assumed:** `BuildWidgetTreeInternal`'s existing per-node recording point (where
+`RegisterLifecycleIfPresent` — and therefore `OnMount()` — already fires, `Walker.cpp:591-601`)
+runs *after* `Built` is fully constructed, which for any non-leaf node means every descendant
+(including every one of that subtree's own `ref`s) was already recursed into and recorded in
+`*OutRefs` first. **By the time a component's `OnMount` fires, every `ref` belonging to that
+component's own subtree is already sitting in `*OutRefs`.** This is a pure wiring gap, not a
+sequencing one — nothing needs to be reordered, something just needs a way to reach the map
+that's already correctly populated at exactly the right moment.
+
+### Proposed shape (a grounded starting point, not a spec — real design questions below)
+
+Mirror `LifecycleHost`'s own exact convention: a new optional `BuildContext` field (something
+like `nyx::host::NyxRuntime* NyxHost{nullptr}` — this repo already transitively depends on
+`nyx-proto` via `iris-proto`'s `Iris/Component.h`, so this is a new `#include` + field, not a
+new dependency edge). When set, at the same point `RegisterLifecycleIfPresent` already fires,
+register (or refresh) a Nyx-callable ref lookup — e.g. `GetRef(name: string)` returning a
+small host-object handle with typed setters: `SetText(string)`, `SetIconName(string)`,
+`SetColor(...)`, `SetVisible(bool)`, dispatched by `dynamic_cast`ing the looked-up
+`WidgetBase*` to `Label`/`IconWidget`/`Box`. Those four operations aren't a guess — they're
+exactly the full set `pharos-proto`'s own `inspector_panel_native.cpp` hand-writes today, so
+they're a real, validated minimum bar, not a speculative API surface.
+
+**One real open design question, not pre-decided here — worth resolving against real source
+before implementing, not guessed:** should `GetRef` be registered once, globally, on the
+driver's shared `Runtime_.Globals()` (capturing a stable pointer into the same live `RefMap`
+that keeps growing as the walk proceeds — `std::unordered_map` element references stay valid
+across insertions, so this is safe even though `*OutRefs` isn't finished growing yet when an
+early component's `OnMount` fires), or does it need to be bound per-instance onto that
+specific `ComponentInstance`'s own `NyxDriverState::RenderScope` Environment (`iris-proto`,
+`IrisNyxDriver.h`)? The global-registration option looks sufficient at first read — `ref`
+names are already unique across one whole `BuildWidgetTree` call (`RefMap` is one flat map),
+and `iris-proto`'s `IrisNyxDriver::GetFileScope` now refreshes a cached file's own interpreter
+from `Runtime_.Globals()` on every reuse (`efc6c1e`, `pharos-proto`'s recent UAF fix) — meaning
+a freshly-registered `GetRef` reliably becomes visible to an already-mounted `.irisx` file's
+own scope, which wasn't true before that fix landed. If that holds up under real
+implementation, this may need **no `iris-proto` change at all** — but confirm it against real
+source rather than assuming, since this repo doesn't currently touch `IrisNyxDriver` directly
+anywhere (only `Iris::Component`/`ComponentInstance`), and this would be the first place it
+did.
+
+**What this explicitly is not**: `pharos-proto` hand-rolling this per-panel (another
+`RegisterFunction("GetRef", ...)` written directly in its own `main.cpp` or
+`inspector_panel_native.cpp`) would just move the C++ orchestration around, not eliminate it
+— its own `docs/nyx_native_app_goal.md` says as much directly ("making the C++ orchestration
+more correct is not progress toward this goal"). This needs to be a framework-owned,
+`BuildContext`-opt-in capability here, the same way `LifecycleHost` itself already is, so
+`InspectorPanel.irisx` (and eventually Explorer/Atlas/Toolbar too) gets it for free once
+wired up, with zero per-panel C++ on the consuming app's side.
+
+---
 
 ## Done (2026-08-17, third pass): swap a live real widget when a reconciled `<Native>` re-renders
 
