@@ -6,6 +6,92 @@
 > durable record).
 > Last updated: 2026-08-17.
 
+## Done (2026-08-17, third pass): swap a live real widget when a reconciled `<Native>` re-renders
+
+**Not this repo's idea — a cross-repo ask from `pharos-proto`, and a direct follow-on to the
+lifecycle wiring done earlier this session (previous entry below).** Matching ask filed in
+`iris-proto/docs/next-steps.md` (same date) — that repo owns the trigger side (does a
+re-rendering `<Slot>` even reach a `<Native>` leaf inside it and re-invoke its builder at all
+today); this is this repo's own piece (once it does, or once it's made to, what does
+`penumbra-ui-backend` need to do with the freshly-built widget).
+
+**`iris-proto`'s side landed first (`aea7286`): `<Native>` already reaches this repo's own
+`Component::NativeBuilder` correctly on a key change** — no reconciler change was needed there,
+just three new tests proving it. That settled the open design question below (`Component::Key`
+identity matching does already reach `<Native>` nodes), so this repo's own piece proceeded on
+that basis.
+
+**This repo's side: `PenumbraWidget::ReplaceRawWidget`** (`include/PenumbraUiBackend/
+PenumbraWidgetAdapter.h`, `src/PenumbraUiBackend/PenumbraWidgetAdapter.cpp`) — swaps a wrapper's
+live widget in place (same real parent, same slot) without losing the wrapper's own identity or
+tree position. Three cases, each handled distinctly: a `Box` parent uses the existing
+`Box::ReplaceChild`, handing the old widget back intact; a `SplitPanel` parent uses
+`SetFirst`/`SetSecond` (no `ReplaceChild`-equivalent exists there today — the old widget is
+destroyed inline, not handed back, a real upstream `penumbra` gap this stands in for — see the
+method's own header comment); the mount root (`Parent_ == nullptr`) swaps `OwnedWidget_`
+directly. `Tags`/`Refs` are re-seeded for the new subtree the same way `WrapExistingTree`'s
+initial wrap already does.
+
+**A real, live bug found and fixed along the way, not part of the original ask:**
+`InsertChildAt`/`RemoveChildAt` only ever checked `dynamic_cast<Box*>`, which silently
+*succeeds* for a `SplitPanel` (`SplitPanel : Box`) and would have written into its
+inherited-but-unused `Box::Children` vector instead of its real First/Second slots — the widget
+would have been genuinely invisible and unreachable, not just misplaced. Both now check for
+`SplitPanel` first.
+
+**Verified: full rebuild clean, full test suite 0 failures**, including 5 new tests covering all
+three `ReplaceRawWidget` cases plus the `InsertChildAt`/`RemoveChildAt` `SplitPanel` fix
+(`TestRemoveThenInsertOnASplitPanelParentSwapsTheFirstPaneWithoutTouchingBoxChildren`,
+`TestReplaceRawWidgetOnABoxParentHandsBackTheOldWidgetIntact`,
+`TestReplaceRawWidgetOnASplitPanelParentSwapsTheFirstPane`/`...SecondPane`,
+`TestReplaceRawWidgetOnTheMountRootSwapsItsOwnWidget`,
+`TestReplaceRawWidgetSeedsTagsAndRefsForTheNewSubtree`).
+
+**What unblocks:** `pharos-proto`'s `ExplorerPanel`/`AtlasPanel`/`InspectorPanel` can now become
+real invoked Iris components (`<ExplorerPanel />` in `App.irisx`) instead of `<Native
+build={...} />` splices, with rebuild-on-data-change driven by the reconciler through this
+method rather than hand-rolled teardown/rebuild in `pharos-proto`'s own `main.cpp`. That
+conversion is `pharos-proto`'s own follow-up, not this repo's.
+
+The original write-up, kept for context on what was actually asked:
+
+**The concrete pain:** `pharos-proto`'s `pharos_nyx_bootstrap` app has four panels spliced into
+`App.irisx` via `<Native build={...} />`. Reloading a fixture or switching lens needs three of
+them torn down and rebuilt against new data — today done entirely by hand in `pharos-proto`'s
+own `nyx_app/main.cpp` (`loadFixtureFromPath()`/`switchLens()`): detach the live `SplitPanel`
+children (`GRootSplit->SetFirst(nullptr)`), reset/rebuild the C++ panel objects, re-splice the
+new widgets in (`GRootSplit->SetFirst(std::move(...))`). That's a reconciler's job, not an app's.
+
+**Grounding, from this repo's own real source:** `BuildWidgetTree` (`include/PenumbraUiBackend/
+Walker.h:84-86`) is explicit today: "Stage 2 only: a one-shot tree build, no diffing, no
+identity tracking... matching by key across two trees is Stage 3's reconciler's job." `BuildNative`
+(`src/PenumbraUiBackend/Walker.cpp`, confirmed earlier this session at lines 450-459) calls
+`Component::NativeBuilder->Build()` exactly once, `DetachOwnership()`s the resulting `WidgetBase`
+from its `PenumbraWidget` wrapper, and hands it off — nothing about that call site is set up to
+be invoked a second time for the same live tree position, nor to know what to do with a second
+result if it were (there's no "replace this already-mounted child" operation anywhere in this
+repo today; callers like `SplitPanel::SetFirst`/`SetSecond` are the closest primitive, and
+they're not driven by anything here automatically).
+
+### What's needed, once `iris-proto`'s side answers whether/how `<Native>` re-invocation happens
+
+A way for this repo to be told "this `<Native>` node's builder just produced a new widget for
+a position that already has a live one mounted," and swap it in — presumably threading through
+whatever real Penumbra parent widget owns that position (a `SplitPanel`, in `pharos-proto`'s own
+case) via its existing `SetFirst`/`SetSecond`-style API, but driven automatically by this repo's
+own reconciliation pass rather than by the consuming app calling it by hand. Exact shape is an
+open design question here, not pre-decided by this entry — depends heavily on what `iris-proto`
+finds about whether `Component::Key`-based identity matching already reaches `<Native>` nodes.
+
+### What unblocks
+
+Once both halves land, a component like `pharos-proto`'s `ExplorerPanel` can own its own
+"rebuild when the underlying data changes" behavior entirely — the actual target of that repo's
+own Phase 3 write-up (`pharos-proto/docs/next_steps.md`), which today still has to hand-roll
+teardown/rebuild/re-splice in C++ because this capability doesn't exist yet.
+
+---
+
 ## Done this session (2026-08-17, second pass): reconciler-side wiring for a framework-owned component lifecycle system
 
 **Not this repo's idea — a cross-repo ask from `pharos-proto`,** wanting

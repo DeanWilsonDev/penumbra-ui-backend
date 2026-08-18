@@ -5,6 +5,7 @@
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Label.h"
+#include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <cstdio>
@@ -33,7 +34,9 @@ using PenumbraUiBackend::PenumbraWidget;
 using PenumbraUiBackend::WrapExistingTree;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::Label;
+using Penumbra::Widgets::SplitPanel;
 using Penumbra::Widgets::TextInput;
+using Penumbra::Widgets::WidgetBase;
 
 Component MakeFrame(const std::string& ClassName, std::vector<Component> Children = {},
                          std::optional<IrisPropValue> Key = std::nullopt) {
@@ -204,6 +207,180 @@ void TestGetByRefIsCallableFromANonRootWrapper() {
            "GetByRef works from a non-root wrapper too -- it walks up to the mount root's own registry");
 }
 
+// docs/next_steps.md's "swap a live real widget when a reconciled `<Native>` re-renders"
+// ask -- a real, live gap found investigating it: InsertChildAt/RemoveChildAt only ever
+// checked `dynamic_cast<Box*>`, which silently *succeeds* for a SplitPanel (SplitPanel :
+// Box) and writes into its inherited-but-unused Box::Children vector instead of its real
+// First/Second slots. Exercises the exact RemoveChildAt-then-InsertChildAt pattern
+// `iris::ReconcileChildrenAt`'s own doc comment (Reconciler.h) says a structural
+// replacement actually uses.
+void TestRemoveThenInsertOnASplitPanelParentSwapsTheFirstPaneWithoutTouchingBoxChildren() {
+    std::vector<Component> Panes;
+    Panes.push_back(MakeFrame("first-old"));
+    Panes.push_back(MakeFrame("second"));
+    const Component Root(IrisElementTag::Split, IrisProps{}, std::move(Panes), nullptr);
+
+    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+
+    auto* AsSplit = dynamic_cast<SplitPanel*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
+    Expect(AsSplit != nullptr, "the root wraps a real SplitPanel");
+
+    WidgetBase* SecondRaw = AsSplit != nullptr ? AsSplit->GetChildAt(1) : nullptr;
+
+    std::unique_ptr<Umbra::IWidget> Removed = Wrapped->RemoveChildAt(0);
+    Expect(Wrapped->GetChildCount() == 1, "the wrapper now reports one child");
+    Expect(AsSplit != nullptr && AsSplit->GetChildCount() == 1,
+           "the real SplitPanel also now reports one child -- the first pane was really cleared");
+    Expect(AsSplit != nullptr && AsSplit->GetChildAt(0) == SecondRaw,
+           "the remaining pane is really the second one, not silently reassigned");
+
+    auto        NewFirst = Box::Builder().className("first-new").build();
+    WidgetBase* NewFirstRaw = NewFirst.get();
+    Wrapped->InsertChildAt(0, std::make_unique<PenumbraWidget>(std::move(NewFirst)));
+
+    Expect(AsSplit != nullptr && AsSplit->GetChildCount() == 2, "the real SplitPanel has both panes again");
+    Expect(AsSplit != nullptr && AsSplit->GetChildAt(0) == NewFirstRaw,
+           "the real SplitPanel's own first pane is really the freshly-inserted widget");
+    Expect(AsSplit != nullptr && AsSplit->GetChildAt(1) == SecondRaw,
+           "the second pane, never touched by this remove/insert pair, is still the original widget");
+}
+
+// docs/next_steps.md's "swap a live real widget when a reconciled `<Native>` re-renders"
+// ask -- ReplaceRawWidget's Box-parent path, the one case that CAN honor
+// Box::ReplaceChild's own "hand the replaced widget back intact, never destroy it as a
+// side effect" contract.
+void TestReplaceRawWidgetOnABoxParentHandsBackTheOldWidgetIntact() {
+    std::vector<Component> Inner;
+    Inner.push_back(MakeFrame("child-old"));
+    const Component Root = MakeFrame("parent", std::move(Inner));
+
+    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+
+    auto* ChildWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(0));
+    Expect(ChildWrapper != nullptr, "the child position wraps a real PenumbraWidget");
+    WidgetBase* OldRaw = ChildWrapper->RawWidget();
+
+    auto        NewBox = Box::Builder().className("child-new").build();
+    WidgetBase* NewRaw = NewBox.get();
+
+    std::unique_ptr<WidgetBase> Old = ChildWrapper->ReplaceRawWidget(std::move(NewBox));
+
+    Expect(Old != nullptr && Old.get() == OldRaw, "the old widget is handed back intact, not destroyed inline");
+    Expect(ChildWrapper->RawWidget() == NewRaw, "the wrapper now views the new widget");
+    Expect(Wrapped->GetChildAt(0) == ChildWrapper,
+           "the wrapper's own identity and tree position are unchanged by the swap");
+
+    auto* ParentAsBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
+    Expect(ParentAsBox != nullptr && ParentAsBox->Children.size() == 1 && ParentAsBox->Children[0].get() == NewRaw,
+           "the real parent Box's own Children vector holds the new widget, in the same slot");
+}
+
+// The SplitPanel-parent path -- see ReplaceRawWidget's own header comment for why this
+// case can't hand the old widget back intact today (no SplitPanel::ReplaceFirst/
+// ReplaceSecond upstream yet). Still must perform a correct, non-corrupting swap.
+void TestReplaceRawWidgetOnASplitPanelParentSwapsTheFirstPane() {
+    std::vector<Component> Panes;
+    Panes.push_back(MakeFrame("first-old"));
+    Panes.push_back(MakeFrame("second"));
+    const Component Root(IrisElementTag::Split, IrisProps{}, std::move(Panes), nullptr);
+
+    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+
+    auto* RootAsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
+    auto* AsSplit = dynamic_cast<SplitPanel*>(RootAsPenumbra->RawWidget());
+    Expect(AsSplit != nullptr, "the root wraps a real SplitPanel");
+
+    auto* FirstWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(0));
+    Expect(FirstWrapper != nullptr, "the first pane wraps a real PenumbraWidget");
+
+    auto        NewBox = Box::Builder().className("first-new").build();
+    WidgetBase* NewRaw = NewBox.get();
+
+    std::unique_ptr<WidgetBase> Old = FirstWrapper->ReplaceRawWidget(std::move(NewBox));
+
+    Expect(Old == nullptr,
+           "SplitPanel's SetFirst destroys the replaced widget inline -- documented, not handed back");
+    Expect(AsSplit != nullptr && AsSplit->GetChildAt(0) == NewRaw, "the real SplitPanel's own first pane is the new widget");
+    Expect(FirstWrapper->RawWidget() == NewRaw, "the wrapper now views the new widget");
+    Expect(Wrapped->GetChildAt(0) == FirstWrapper, "the wrapper's own identity and tree position are unchanged");
+}
+
+void TestReplaceRawWidgetOnASplitPanelParentSwapsTheSecondPane() {
+    std::vector<Component> Panes;
+    Panes.push_back(MakeFrame("first"));
+    Panes.push_back(MakeFrame("second-old"));
+    const Component Root(IrisElementTag::Split, IrisProps{}, std::move(Panes), nullptr);
+
+    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+
+    auto* AsSplit = dynamic_cast<SplitPanel*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
+    auto* SecondWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(1));
+    Expect(SecondWrapper != nullptr, "the second pane wraps a real PenumbraWidget");
+
+    auto        NewBox = Box::Builder().className("second-new").build();
+    WidgetBase* NewRaw = NewBox.get();
+    SecondWrapper->ReplaceRawWidget(std::move(NewBox));
+
+    Expect(AsSplit != nullptr && AsSplit->GetChildAt(1) == NewRaw, "the real SplitPanel's own second pane is the new widget");
+    Expect(Wrapped->GetChildAt(1) == SecondWrapper, "the wrapper's own identity and tree position are unchanged");
+}
+
+// The mount-root path -- no real parent container exists to thread through at all.
+void TestReplaceRawWidgetOnTheMountRootSwapsItsOwnWidget() {
+    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("root-old", {MakeFrame("stale-child")}));
+
+    auto*       AsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
+    WidgetBase* OldRaw = AsPenumbra->RawWidget();
+
+    auto        NewRoot = Box::Builder().className("root-new").build();
+    WidgetBase* NewRaw = NewRoot.get();
+
+    std::unique_ptr<WidgetBase> Old = AsPenumbra->ReplaceRawWidget(std::move(NewRoot));
+
+    Expect(Old != nullptr && Old.get() == OldRaw, "the mount root's own old widget is handed back intact");
+    Expect(AsPenumbra->RawWidget() == NewRaw, "the wrapper now views the new root widget");
+    Expect(AsPenumbra->GetChildCount() == 0,
+           "the wrapper's children were rebuilt from the new (childless) root, not left stale from the old one");
+}
+
+// ReplaceRawWidget's Tags/Refs propagation -- the exact plumbing a real `<Native>`
+// re-invocation would need: the freshly-built replacement's own ref-tagged descendant
+// must become reachable via GetByRef from the *mount root* afterward, same as an
+// initial WrapExistingTree wrap already guarantees.
+void TestReplaceRawWidgetSeedsTagsAndRefsForTheNewSubtree() {
+    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("parent", {MakeFrame("native-slot-old")}));
+
+    auto* SlotWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(0));
+    Expect(SlotWrapper != nullptr, "the swap position wraps a real PenumbraWidget");
+
+    Component RefChild = MakeFrame("inner");
+    RefChild.Ref = IrisPropValue{std::string("swapped-in")};
+    std::vector<Component> NewChildren;
+    NewChildren.push_back(std::move(RefChild));
+    const Component NewContent = MakeFrame("new-content", std::move(NewChildren));
+
+    PenumbraUiBackend::PrimitiveTagMap Tags;
+    PenumbraUiBackend::RefMap          Refs;
+    std::unique_ptr<WidgetBase> NewWidget = PenumbraUiBackend::BuildWidgetTree(NewContent, BuildContext{}, &Tags, &Refs);
+
+    SlotWrapper->ReplaceRawWidget(std::move(NewWidget), &Tags, &Refs);
+
+    Expect(SlotWrapper->GetPrimitiveTag() == "Frame", "the swapped node's own primitive tag was seeded from Tags");
+    Expect(SlotWrapper->GetChildCount() == 1, "the swapped node's own children were rebuilt from the new subtree");
+
+    Umbra::IWidget* Found = Wrapped->GetChildAt(0) != nullptr ? SlotWrapper->GetByRef("swapped-in") : nullptr;
+    Expect(Found != nullptr, "the new subtree's ref-tagged descendant is reachable via GetByRef from the mount root");
+    auto* FoundAsBox =
+        Found != nullptr ? dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Found)->RawWidget()) : nullptr;
+    Expect(FoundAsBox != nullptr && FoundAsBox->ClassName == "inner", "the found widget is really the new descendant");
+}
+
 } // namespace
 
 void RunPenumbraWidgetAdapterTests() {
@@ -216,4 +393,9 @@ void RunPenumbraWidgetAdapterTests() {
     TestGetByRefFindsARefTaggedDescendant();
     TestGetByRefOnAnUnknownNameReturnsNull();
     TestGetByRefIsCallableFromANonRootWrapper();
+    TestReplaceRawWidgetOnABoxParentHandsBackTheOldWidgetIntact();
+    TestReplaceRawWidgetOnASplitPanelParentSwapsTheFirstPane();
+    TestReplaceRawWidgetOnASplitPanelParentSwapsTheSecondPane();
+    TestReplaceRawWidgetOnTheMountRootSwapsItsOwnWidget();
+    TestReplaceRawWidgetSeedsTagsAndRefsForTheNewSubtree();
 }

@@ -6,6 +6,7 @@
 #include "Penumbra/Widgets/ImageWidget.h"
 #include "Penumbra/Widgets/InlineContainer.h"
 #include "Penumbra/Widgets/Label.h"
+#include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <algorithm>
@@ -16,6 +17,7 @@ using Penumbra::Widgets::Box;
 using Penumbra::Widgets::ImageWidget;
 using Penumbra::Widgets::InlineContainer;
 using Penumbra::Widgets::Label;
+using Penumbra::Widgets::SplitPanel;
 using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
@@ -219,13 +221,38 @@ void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWi
     ChildImpl->StyleApplier_ = StyleApplier_;
     ChildImpl->Parent_ = this;
 
-    if (auto* AsBox = dynamic_cast<Box*>(RawWidget())) {
+    // docs/next_steps.md's "swap a live real widget when a reconciled `<Native>`
+    // re-renders" ask -- a real, live gap found investigating it, not hypothetical:
+    // SplitPanel has exactly two fixed slots addressed by structural position (Index 0
+    // == First, Index 1 == Second -- Codegen guarantees a real <Split> always has
+    // exactly two children in this order, docs/native_split_backend_wiring_gap.md), not
+    // the generic Box::Children vector it inherits but never actually uses. Must be
+    // checked *before* the generic Box fallback below: SplitPanel : Box, so without this
+    // branch the cast below would silently succeed and write into a vector SplitPanel's
+    // own Draw/Arrange/GetChildAt never look at -- the widget would be genuinely
+    // invisible and unreachable, not just misplaced. Whatever already occupies the
+    // target slot (if anything) is destroyed as a side effect of SetFirst/SetSecond's
+    // own plain unique_ptr move-assignment -- correct and expected for the paired
+    // RemoveChildAt-then-InsertChildAt pattern `iris::ReconcileChildrenAt` actually uses
+    // (the slot is already empty by the time this runs, see RemoveChildAt's own
+    // comment), not safe for a bare InsertChildAt into an already-occupied slot with no
+    // matching prior removal -- SplitPanel has no `Box::ReplaceChild`-equivalent to fall
+    // back on for that case (this repo's own docs/next_steps.md carries the precise
+    // upstream `penumbra` ask this stands in for).
+    if (auto* AsSplit = dynamic_cast<SplitPanel*>(RawWidget())) {
+        if (Index == 0) {
+            AsSplit->SetFirst(ChildImpl->DetachOwnership());
+        } else {
+            AsSplit->SetSecond(ChildImpl->DetachOwnership());
+        }
+    } else if (auto* AsBox = dynamic_cast<Box*>(RawWidget())) {
         AsBox->InsertChildAt(Index, ChildImpl->DetachOwnership());
     }
-    // If RawWidget() isn't a Box (e.g. <Image>, a leaf), there's no real child slot to
-    // place this into — Core primitives never give a leaf primitive children in the
-    // first place (docs/iris_core_spec.md §3.1), so this path is unreachable in
-    // practice; the wrapper bookkeeping below still stays consistent regardless.
+    // If RawWidget() is neither of the above (e.g. <Image>, a leaf), there's no real
+    // child slot to place this into — Core primitives never give a leaf primitive
+    // children in the first place (docs/iris_core_spec.md §3.1), so this path is
+    // unreachable in practice; the wrapper bookkeeping below still stays consistent
+    // regardless.
     Children_.insert(Children_.begin() + static_cast<long>(Index),
                       std::unique_ptr<PenumbraWidget>(static_cast<PenumbraWidget*>(Child.release())));
 }
@@ -235,7 +262,22 @@ std::unique_ptr<Umbra::IWidget> PenumbraWidget::RemoveChildAt(std::size_t Index)
     Children_.erase(Children_.begin() + static_cast<long>(Index));
     Removed->Parent_ = nullptr; // detached -- no longer anyone's child until re-inserted
 
-    if (auto* AsBox = dynamic_cast<Box*>(RawWidget())) {
+    if (auto* AsSplit = dynamic_cast<SplitPanel*>(RawWidget())) {
+        // See InsertChildAt's own comment -- Index 0/1 map onto First/Second by
+        // structural position, checked before the generic Box fallback for the same
+        // "SplitPanel : Box would otherwise silently take the wrong branch" reason.
+        // SetFirst/SetSecond(nullptr) destroys whatever was there as a side effect --
+        // unlike the Box path below (Box::ReplaceChild hands the removed widget back
+        // intact), there is no way to reclaim it here, so Removed must report no widget
+        // at all afterward rather than a now-dangling AttachedWidget_ pointer.
+        if (Index == 0) {
+            AsSplit->SetFirst(nullptr);
+        } else {
+            AsSplit->SetSecond(nullptr);
+        }
+        Removed->OwnedWidget_.reset();
+        Removed->AttachedWidget_ = nullptr;
+    } else if (auto* AsBox = dynamic_cast<Box*>(RawWidget())) {
         WidgetBase* RemovedRaw = Removed->RawWidget();
         const auto  It = std::find_if(AsBox->Children.begin(), AsBox->Children.end(),
                                        [&](const std::unique_ptr<WidgetBase>& Owned) { return Owned.get() == RemovedRaw; });
@@ -273,6 +315,86 @@ void PenumbraWidget::AdoptChildrenFromRawTree(
                                                 RegistryRoot);
         Children_.push_back(std::move(ChildWrapper));
     }
+}
+
+std::unique_ptr<WidgetBase> PenumbraWidget::ReplaceRawWidget(std::unique_ptr<WidgetBase> NewWidget,
+                                                               const PrimitiveTagMap* Tags, const RefMap* Refs) {
+    WidgetBase* OldRaw = RawWidget();
+    WidgetBase* NewRaw = NewWidget.get();
+
+    std::unique_ptr<WidgetBase> Old;
+    if (Parent_ == nullptr) {
+        // Mount root: no real parent container to thread through -- this wrapper owns
+        // its widget directly, so just swap what it owns.
+        Old = std::move(OwnedWidget_);
+        OwnedWidget_ = std::move(NewWidget);
+        AttachedWidget_ = nullptr;
+    } else {
+        WidgetBase* ParentRaw = Parent_->RawWidget();
+        if (auto* AsSplit = dynamic_cast<SplitPanel*>(ParentRaw)) {
+            // See this method's own header comment -- SplitPanel has no
+            // ReplaceChild-style primitive, so the widget being swapped out can't be
+            // handed back intact here; SetFirst/SetSecond destroy it immediately.
+            //
+            // Addressed by this wrapper's own structural position among
+            // Parent_->Children_ (0 == First, 1 == Second, same convention
+            // InsertChildAt/RemoveChildAt use), not by matching OldRaw against
+            // SplitPanel::GetChildAt's own *compacted* enumeration (which collapses an
+            // empty First away, so GetChildAt(0) can legitimately mean "Second" -- would
+            // misidentify the slot whenever First is empty and Second isn't).
+            const auto OwnIt =
+                std::find_if(Parent_->Children_.begin(), Parent_->Children_.end(),
+                             [&](const std::unique_ptr<PenumbraWidget>& Sibling) { return Sibling.get() == this; });
+            const bool IsFirst = OwnIt == Parent_->Children_.begin();
+            if (IsFirst) {
+                AsSplit->SetFirst(std::move(NewWidget));
+            } else {
+                AsSplit->SetSecond(std::move(NewWidget));
+            }
+            Old = nullptr;
+        } else if (auto* AsBox = dynamic_cast<Box*>(ParentRaw)) {
+            Old = AsBox->ReplaceChild(OldRaw, std::move(NewWidget));
+        } else {
+            // Every real container a live wrapper's Parent_ can point at is either a
+            // Box or a SplitPanel (Core primitives never give a leaf primitive
+            // children, docs/iris_core_spec.md §3.1) -- unreachable in practice, same
+            // tolerance InsertChildAt's own analogous "not a Box" branch already has.
+            return nullptr;
+        }
+        OwnedWidget_.reset();
+        AttachedWidget_ = NewRaw;
+    }
+
+    if (Tags != nullptr) {
+        if (auto It = Tags->find(NewRaw); It != Tags->end()) {
+            SetPrimitiveTag(It->second);
+        }
+    }
+
+    // This wrapper's own Children_ pointed into the now-detached old subtree -- rebuild
+    // from NewRaw's real structure, same as WrapExistingTree's own initial adoption
+    // step, propagating this wrapper's existing image/style context to the new
+    // children exactly the way it already does for an initial wrap.
+    Children_.clear();
+
+    std::unordered_map<const WidgetBase*, std::string> ReverseRefs;
+    PenumbraWidget*                                     RegistryRoot = nullptr;
+    if (Refs != nullptr) {
+        RegistryRoot = this;
+        while (RegistryRoot->Parent_ != nullptr) {
+            RegistryRoot = RegistryRoot->Parent_;
+        }
+        for (const auto& [Name, Widget] : *Refs) {
+            ReverseRefs[Widget] = Name;
+        }
+        if (auto It = ReverseRefs.find(NewRaw); It != ReverseRefs.end()) {
+            RegistryRoot->RefRegistry_[It->second] = this;
+        }
+    }
+    AdoptChildrenFromRawTree(ImageBackend_, SdlRenderer_, Sheets_, StyleApplier_, Tags,
+                              Refs != nullptr ? &ReverseRefs : nullptr, RegistryRoot);
+
+    return Old;
 }
 
 std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>         Root,

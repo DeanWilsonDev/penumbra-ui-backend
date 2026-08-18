@@ -105,6 +105,66 @@ public:
     // to the root via GetParent() first.
     Umbra::IWidget* GetByRef(std::string_view Ref) const;
 
+    // docs/next_steps.md's "swap a live real widget when a reconciled `<Native>`
+    // re-renders" ask. Swaps this wrapper's own live widget for NewWidget, in place at
+    // the exact same tree position -- same real Penumbra parent, same slot -- without
+    // this wrapper ever losing its own identity (this `PenumbraWidget*`, and its own
+    // position in `Parent_->Children_`) or its wrapper-tree `Parent_` pointer. Only what
+    // `RawWidget()` returns, and everything reachable under it, changes.
+    //
+    // This is deliberately a plain method on the concrete class, not an override of any
+    // `Umbra::IWidget` virtual -- `Umbra::IWidget` (vendored via `vendor/iris/libs/
+    // umbra-interfaces`, a different repo) has no such operation today, and adding one
+    // there is exactly the cross-repo handoff-shape question this ask's own doc entry
+    // flags as still open with `iris-proto`'s reconciler side. Calling this today means
+    // going through a concrete `PenumbraWidget*` (e.g. one already obtained via
+    // `GetByRef`), not through the backend-agnostic `Umbra::IWidget*` interface a real
+    // reconciler would actually be holding -- a real, load-bearing gap, not an oversight;
+    // see this method's own .cpp comment and docs/next_steps.md for the full picture.
+    //
+    // For a *Box*-backed parent, this is a thin wrapper over the already-existing
+    // `Box::ReplaceChild` (`vendor/penumbra`'s `Box.h`) -- which hands the replaced
+    // widget back intact rather than destroying it, letting the caller decide exactly
+    // when its destructor cascade (and anything hooked to its `WidgetBase::OnDestroyed`,
+    // e.g. a lifecycle unregistration, `Walker.cpp`'s `RegisterLifecycleIfPresent`) runs.
+    // This method preserves that same "hand the old widget back, never destroy it as a
+    // side effect" contract for the Box case.
+    //
+    // For a *SplitPanel*-backed parent, that contract can NOT be honored today:
+    // `SplitPanel::SetFirst`/`SetSecond` (`vendor/penumbra`'s `SplitPanel.h`) are the only
+    // mutation surface `SplitPanel` exposes, and both destroy whatever they replace
+    // immediately via plain `unique_ptr` move-assignment -- there is no
+    // `SplitPanel::ReplaceFirst`/`ReplaceSecond` mirroring `Box::ReplaceChild`'s
+    // hand-it-back shape. This method still performs the swap correctly (matching
+    // `pharos-proto`'s own hand-rolled `GRootSplit->SetFirst(...)` behavior today -- no
+    // regression), but always returns `nullptr` for that case; a widget that needs
+    // advance notice before this happens should hook its own `WidgetBase::OnDestroyed`,
+    // which still fires correctly during the resulting destructor cascade regardless of
+    // which path replaced it. See docs/next_steps.md for the precise proposed upstream
+    // `penumbra` API this is standing in for.
+    //
+    // For the root of a whole mount (`Parent_ == nullptr`), there is no real parent
+    // container to thread through at all -- this wrapper's own `OwnedWidget_` is swapped
+    // directly, and the old one is always handed back intact (nothing to destroy inline
+    // in this case; the wrapper owns it directly).
+    //
+    // Every case rebuilds this wrapper's own `Children_` from `NewWidget`'s real
+    // structure afterward (the old ones pointed into the now-detached subtree) --
+    // `Tags`/`Refs`, if given, seed the new children's `GetPrimitiveTag()`/this mount's
+    // `GetByRef()` registry exactly the way `WrapExistingTree`'s own initial wrap does
+    // (found by walking up to the true mount root via `GetParent()`, since `RefRegistry_`
+    // only ever lives there). This wrapper's own `SetImageContext`/`SetStyleContext`
+    // values are propagated to the new children the same way `AdoptChildrenFromRawTree`
+    // already does for an initial wrap. Re-resolving this position's own Lustre style
+    // (as opposed to its descendants', already covered by the recursive `AdoptChildren`
+    // walk) is deliberately out of scope here -- unlike `ApplyPropDiff`'s `ClassName`
+    // branch, a whole-widget swap has no single changed prop driving it, and whatever
+    // produced NewWidget (typically a `<Native>` builder calling `BuildWidgetTree` with
+    // its own `BuildContext` again) already owns styling its own output.
+    std::unique_ptr<Penumbra::Widgets::WidgetBase>
+    ReplaceRawWidget(std::unique_ptr<Penumbra::Widgets::WidgetBase> NewWidget, const PrimitiveTagMap* Tags = nullptr,
+                      const RefMap* Refs = nullptr);
+
 private:
     // Non-owning (attached) construction — used for every non-root node when wrapping
     // an already-built subtree (`WrapExistingTree`).
