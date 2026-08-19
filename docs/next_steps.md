@@ -4,7 +4,60 @@
 > the end of each work session; supersedes its own previous contents
 > rather than accumulating history (the individual gap/spec docs are the
 > durable record).
-> Last updated: 2026-08-18.
+> Last updated: 2026-08-19.
+
+## Done (2026-08-19): widened `BuildContext::LifecycleHost` from `Penumbra::Application*` to `Penumbra::LifecycleRegistry*`
+
+**Cross-repo ask from `pharos-proto`, filed and implemented same day.** `vendor/penumbra` bumped
+`e449d11` → `f4db86f` ("Factor IWidgetLifecycle registration/ticking out of Application into a
+standalone LifecycleRegistry") — no nested-submodule re-init needed, `penumbra` itself has no
+submodules. Confirmed `f4db86f` was origin/main's actual HEAD before pinning to it.
+
+Implemented exactly the three-step fix this entry originally proposed, all confirmed correct
+against the landed `penumbra` source before touching anything:
+
+1. `Walker.h`: `LifecycleHost` retyped `Penumbra::Application*` → `Penumbra::LifecycleRegistry*`;
+   `#include "Penumbra/Application.h"` swapped for `#include "Penumbra/LifecycleRegistry.h"` —
+   confirmed `Application` had no other use anywhere else in the header first (`grep -n
+   Application`, one include + one field, nothing else).
+2. `Walker.cpp`: `RegisterLifecycleIfPresent`'s local `Host` pointer retyped to match; no other
+   change, since `RegisterLifecycle`/`UnregisterLifecycle` exist unchanged on the new type.
+3. `tests/WalkerTests.cpp`: **four** tests needed the fixture swap, not three as originally
+   estimated (`TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet`,
+   `TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed`,
+   `TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost`,
+   `TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle`) — grep undercounted because
+   two of them share a line-wrapped declaration. All four now construct a bare
+   `Penumbra::LifecycleRegistry Host;` directly. This turned out load-bearing, not just simpler:
+   `Application::Tick` became `private` in the `f4db86f` refactor (Run()'s own frame loop is now
+   the only caller; external ticking goes through `LifecycleRegistry::Tick`, which stayed public),
+   so the two tests calling `Host.Tick(...)` would no longer have compiled against an
+   `Application`-typed fixture at all.
+
+   Checked the "independent coverage" caveat directly rather than assuming: `penumbra-proto`'s
+   vendored checkout has no `tests/` directory and no test target anywhere in its
+   `CMakeLists.txt` — so nothing outside this repo exercises `Application::RegisterLifecycle`/
+   `UnregisterLifecycle`'s own forward onto its owned `LifecycleRegistry`. Added one new test,
+   `TestApplicationRegisterLifecycleStillForwardsToItsOwnLifecycleRegistry` (`tests/
+   WalkerTests.cpp`), exercising `Penumbra::Application`'s own public API directly (unrelated to
+   `BuildContext`/`Walker` otherwise) — `RegisterLifecycle`/`GetLifecycleRegistry().Tick`/
+   `UnregisterLifecycle` all still forward correctly post-refactor. New
+   `FakePenumbraLifecycle` (implements `Penumbra::IWidgetLifecycle`, distinct from the existing
+   `FakeLifecycle` which implements `Umbra::IWidgetLifecycle`) backs it.
+
+Full rebuild clean + `penumbra_ui_backend_tests` (219 assertions, up from 215 — 4 new from the
+added test, 0 net change in test *count* elsewhere — 0 failures) + `test_iris` (251 passed) +
+`test_lustre` (42 passed) clean.
+
+**What this unblocks:** `pharos-proto/src/main.cpp` can now construct its own
+`Penumbra::LifecycleRegistry` alongside its hand-rolled `PlatformWindow`/`Renderer`, call
+`.Tick(deltaSeconds)` once per frame, and set `appContext.LifecycleHost`/`NyxHost` — letting the
+real `pharos` binary's `<InspectorPanel />` mount sync live for the first time, and letting
+`pharos-proto` delete `inspector_panel.cpp`'s hand-rolled `buildInspectorPanel()`/`panel.sync()`
+mechanism entirely (bar its own visual-test host, which mounts it directly), matching what
+`inspector_panel_native.cpp` already did for `pharos_nyx_bootstrap`. That wiring itself is
+`pharos-proto`'s own follow-up — nothing further needed here. Bumping `pharos-proto`'s own vendored
+`penumbra-ui-backend` pin to pick this up is also that repo's follow-up.
 
 ## Done (2026-08-18): a Nyx-authored `OnMount`/`OnTick` can now reach its own component's `ref`'d widgets via `GetRef`
 

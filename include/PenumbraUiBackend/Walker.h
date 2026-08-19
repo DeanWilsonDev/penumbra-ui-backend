@@ -5,9 +5,9 @@
 
 #include "Iris/Component.h"
 #include "Iris/IrisNyxDriver.h"
-#include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
 #include "Penumbra/Backends/IImageBackend.h"
+#include "Penumbra/LifecycleRegistry.h"
 #include "Penumbra/Platform/IClipboard.h"
 #include "Penumbra/Render/IFontBackend.h"
 #include "Penumbra/Widgets/FocusState.h"
@@ -81,12 +81,21 @@ struct BuildContext {
     // docs/next_steps.md's "reconciler-side wiring for a framework-owned component
     // lifecycle system" ask. When set, every built widget whose originating Component
     // carries a live `Instance->Lifecycle` (iris::RegisterLifecycle, `Iris/
-    // ComponentInstance.h`) gets registered against this Application's own
+    // ComponentInstance.h`) gets registered against this registry's own
     // RegisterLifecycle/UnregisterLifecycle pair automatically -- see Walker.cpp's
     // BuildWidgetTreeInternal for the actual wiring. Left null (the default) means
     // exactly pre-wiring behavior: no registration happens, matching every other
     // optional BuildContext resource above.
-    Penumbra::Application* LifecycleHost{nullptr};
+    //
+    // Typed as the standalone Penumbra::LifecycleRegistry rather than
+    // Penumbra::Application (docs/next_steps.md's "widen BuildContext::LifecycleHost"
+    // entry) so a consumer that isn't itself Application-based -- e.g. a hand-rolled
+    // Platform::PlatformWindow-owning app -- can construct a LifecycleRegistry directly
+    // and pass it here; an Application-based consumer passes
+    // &App->GetLifecycleRegistry() instead. Only RegisterLifecycle/UnregisterLifecycle
+    // are ever called on this pointer (see RegisterLifecycleIfPresent in Walker.cpp),
+    // both unchanged in signature/behavior on the new type.
+    Penumbra::LifecycleRegistry* LifecycleHost{nullptr};
 
     // docs/next_steps.md's "a Nyx-authored OnMount/OnTick has no way to reach its own
     // component's ref'd widgets" ask. When set (alongside LifecycleHost, and only for a

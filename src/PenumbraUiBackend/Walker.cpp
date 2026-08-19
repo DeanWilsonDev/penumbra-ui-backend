@@ -213,8 +213,9 @@ private:
 
 // docs/next_steps.md's "reconciler-side wiring for a framework-owned component
 // lifecycle system" ask. `Umbra::IWidgetLifecycle` (`iris::ComponentInstance::
-// Lifecycle`'s own type) and `Penumbra::IWidgetLifecycle` (what `Penumbra::Application::
-// RegisterLifecycle` takes) are two distinct classes with identical virtual signatures
+// Lifecycle`'s own type) and `Penumbra::IWidgetLifecycle` (what
+// `Penumbra::LifecycleRegistry::RegisterLifecycle` takes) are two distinct classes with
+// identical virtual signatures
 // -- deliberately mirrored, per `Penumbra::IWidgetLifecycle`'s own doc comment, rather
 // than one shared type, since Penumbra doesn't depend on umbra-interfaces. This repo is
 // the one place that sees both sides of the mirror, so it's the one that has to bridge
@@ -238,8 +239,8 @@ private:
 // this can't be a one-shot root-only check (a plain nested `<ChildComponent .../>` with
 // no `<Slot>` also carries its own Component::Instance, inline in the same tree).
 //
-// `Application::RegisterLifecycle`/`UnregisterLifecycle` already call `OnMount()`/
-// `OnUnmount()` internally (`vendor/penumbra`'s `Application.cpp`), so this function's
+// `LifecycleRegistry::RegisterLifecycle`/`UnregisterLifecycle` already call `OnMount()`/
+// `OnUnmount()` internally (`vendor/penumbra`'s `LifecycleRegistry.cpp`), so this function's
 // only job is picking the right moments to call them. `WidgetBase::OnDestroyed`
 // (`Penumbra/Widgets/WidgetBase.h`) -- an existing, generic "this widget is being torn
 // down" hook, unused anywhere else in this repo -- fires from `~WidgetBase()`, giving
@@ -260,8 +261,8 @@ void RegisterLifecycleIfPresent(const Component& Node, const BuildContext& Conte
     if (Context.LifecycleHost == nullptr || !Node.Instance || Node.Instance->Lifecycle == nullptr) {
         return;
     }
-    auto                    Bridge = std::make_shared<UmbraLifecycleBridge>(Node.Instance->Lifecycle);
-    Penumbra::Application* Host = Context.LifecycleHost;
+    auto                         Bridge = std::make_shared<UmbraLifecycleBridge>(Node.Instance->Lifecycle);
+    Penumbra::LifecycleRegistry* Host = Context.LifecycleHost;
     Host->RegisterLifecycle(Bridge.get());
     Built.OnDestroyed = [Host, Bridge]() { Host->UnregisterLifecycle(Bridge.get()); };
 }

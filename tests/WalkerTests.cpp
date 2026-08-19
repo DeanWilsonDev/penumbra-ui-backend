@@ -7,6 +7,7 @@
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
+#include "Penumbra/LifecycleRegistry.h"
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/ImageWidget.h"
@@ -450,7 +451,7 @@ Component MakeNodeWithLifecycle(IrisElementTag Tag, Umbra::IWidgetLifecycle* Lif
 
 void TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet() {
     FakeLifecycle Lifecycle;
-    Penumbra::Application Host;
+    Penumbra::LifecycleRegistry Host;
     BuildContext Context;
     Context.LifecycleHost = &Host;
 
@@ -459,15 +460,15 @@ void TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet() {
 
     Expect(Lifecycle.MountCount == 1,
            "building a Component with a live Instance->Lifecycle registers it against "
-           "Context.LifecycleHost, which calls OnMount immediately (Application::RegisterLifecycle)");
+           "Context.LifecycleHost, which calls OnMount immediately (LifecycleRegistry::RegisterLifecycle)");
 
     Host.Tick(0.5f);
-    Expect(Lifecycle.TickCount == 1, "the registered lifecycle receives OnTick from the host Application");
+    Expect(Lifecycle.TickCount == 1, "the registered lifecycle receives OnTick from the host LifecycleRegistry");
 }
 
 void TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed() {
     FakeLifecycle Lifecycle;
-    Penumbra::Application Host;
+    Penumbra::LifecycleRegistry Host;
     BuildContext Context;
     Context.LifecycleHost = &Host;
 
@@ -478,11 +479,11 @@ void TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed() {
     Built.reset(); // real widget teardown -- WidgetBase::OnDestroyed should fire
     Expect(Lifecycle.UnmountCount == 1,
            "destroying the built widget fires WidgetBase::OnDestroyed, which unregisters the "
-           "lifecycle (calling OnUnmount via Application::UnregisterLifecycle) without needing "
+           "lifecycle (calling OnUnmount via LifecycleRegistry::UnregisterLifecycle) without needing "
            "ComponentInstance to have a destructor of its own");
 
     Host.Tick(0.1f);
-    Expect(Lifecycle.TickCount == 0, "once unregistered, the host Application no longer dispatches OnTick to it");
+    Expect(Lifecycle.TickCount == 0, "once unregistered, the host LifecycleRegistry no longer dispatches OnTick to it");
 }
 
 void TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance() {
@@ -498,8 +499,8 @@ void TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance() {
 }
 
 void TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost() {
-    Penumbra::Application Host;
-    BuildContext           Context;
+    Penumbra::LifecycleRegistry Host;
+    BuildContext                Context;
     Context.LifecycleHost = &Host;
 
     const auto Node = MakeNode(IrisElementTag::Frame); // Node.Instance left unset
@@ -515,7 +516,7 @@ void TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle() {
     // BuildWidgetTree itself was called with.
     FakeLifecycle OuterLifecycle;
     FakeLifecycle InnerLifecycle;
-    Penumbra::Application Host;
+    Penumbra::LifecycleRegistry Host;
     BuildContext Context;
     Context.LifecycleHost = &Host;
 
@@ -532,6 +533,47 @@ void TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle() {
     Expect(InnerLifecycle.MountCount == 1,
            "a nested Component's lifecycle also registers, even though it isn't Node's own root -- "
            "the per-node walk, not a root-only check, is what BuildWidgetTree.h's own comment documents");
+}
+
+// docs/next_steps.md's "widen BuildContext::LifecycleHost from Penumbra::Application* to
+// Penumbra::LifecycleRegistry*" ask. The tests above now construct a bare
+// Penumbra::LifecycleRegistry directly (BuildWidgetTree/RegisterLifecycleIfPresent only ever
+// call RegisterLifecycle/UnregisterLifecycle on Context.LifecycleHost, so they no longer need a
+// full Application), which means Application::RegisterLifecycle/UnregisterLifecycle's own thin
+// forward onto its owned LifecycleRegistry (Application.cpp, since f4db86f's refactor) is no
+// longer exercised anywhere in this walk. penumbra-proto itself has no test suite of its own
+// (confirmed: no tests/ directory, no test target in its CMakeLists.txt) to cover that forward
+// independently, so this one test keeps it covered here -- unrelated to BuildContext/Walker
+// otherwise, it exercises Application's own public API directly.
+struct FakePenumbraLifecycle : Penumbra::IWidgetLifecycle {
+    int MountCount = 0;
+    int UnmountCount = 0;
+    int TickCount = 0;
+
+    void OnMount() override { ++MountCount; }
+    void OnUnmount() override { ++UnmountCount; }
+    void OnTick(const Penumbra::TickInfo&) override { ++TickCount; }
+};
+
+void TestApplicationRegisterLifecycleStillForwardsToItsOwnLifecycleRegistry() {
+    Penumbra::Application     Host;
+    FakePenumbraLifecycle Lifecycle;
+
+    Host.RegisterLifecycle(&Lifecycle);
+    Expect(Lifecycle.MountCount == 1,
+           "Application::RegisterLifecycle still forwards to its owned LifecycleRegistry's "
+           "RegisterLifecycle (which calls OnMount immediately), unchanged since the f4db86f refactor");
+
+    Host.GetLifecycleRegistry().Tick(0.25f);
+    Expect(Lifecycle.TickCount == 1,
+           "the lifecycle registered via Application::RegisterLifecycle is reachable through "
+           "Application::GetLifecycleRegistry(), the same registry object -- not a separate copy");
+
+    Host.UnregisterLifecycle(&Lifecycle);
+    Expect(Lifecycle.UnmountCount == 1, "Application::UnregisterLifecycle still forwards too, calling OnUnmount");
+
+    Host.GetLifecycleRegistry().Tick(0.25f);
+    Expect(Lifecycle.TickCount == 1, "once unregistered via Application's own API, it no longer receives OnTick");
 }
 
 // docs/next_steps.md's "a Nyx-authored OnMount/OnTick has no way to reach its own
@@ -684,6 +726,7 @@ void RunWalkerTests() {
     TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance();
     TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost();
     TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle();
+    TestApplicationRegisterLifecycleStillForwardsToItsOwnLifecycleRegistry();
     TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef();
     TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle();
 }
