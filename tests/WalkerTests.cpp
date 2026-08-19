@@ -17,6 +17,9 @@
 #include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextInput.h"
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -486,6 +489,46 @@ void TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed() {
     Expect(Lifecycle.TickCount == 0, "once unregistered, the host LifecycleRegistry no longer dispatches OnTick to it");
 }
 
+// umbra-interfaces' Umbra::LivenessGuard (commit b59bf17) -- UmbraLifecycleBridge (this
+// file, private to the anonymous namespace) now wires its own Inner_ through a
+// LivenessGuard::Watch and calls AssertAlive() before every OnMount/OnUnmount/OnTick
+// dereference. This reproduces the exact ordering mistake pharos-proto hit in
+// production -- Inner_'s own pointee destroyed while the bridge built from it is still
+// registered against a live LifecycleRegistry, previously an EXC_BAD_ACCESS only
+// diagnosable after the fact via lldb -- and confirms it now aborts immediately with a
+// clear message instead. No existing death-test convention anywhere in this repo's test
+// suite (grepped tests/*.cpp for fork/abort/SIGABRT/death before writing this -- none),
+// so this uses a plain fork()/waitpid() subprocess check rather than inventing an
+// unproven pattern; UmbraLifecycleBridge itself has no test-reachable entry point of its
+// own (anonymous-namespace, private to Walker.cpp), so this exercises it the only way
+// test code can -- indirectly, through BuildWidgetTree/Host.Tick(), same as the two
+// lifecycle tests directly above.
+void TestUmbraLifecycleBridgeAbortsWhenInnerLifecycleIsDestroyedFirst() {
+    const pid_t Pid = fork();
+    Expect(Pid >= 0, "fork() succeeded");
+    if (Pid == 0) {
+        // Child process: build up the real dangling-pointer shape, then trigger the
+        // dereference that used to crash.
+        Penumbra::LifecycleRegistry Host;
+        BuildContext                Context;
+        Context.LifecycleHost = &Host;
+
+        std::unique_ptr<Penumbra::Widgets::WidgetBase> Built;
+        {
+            FakeLifecycle Lifecycle;
+            Built = BuildWidgetTree(MakeNodeWithLifecycle(IrisElementTag::Frame, &Lifecycle), Context);
+        } // Lifecycle destroyed here -- Built (and Host's registration of its bridge) is still alive.
+
+        Host.Tick(0.1f); // Should AssertAlive() -> abort(), not dereference a dangling Lifecycle.
+        _exit(0);        // Unreachable if the guard is working.
+    }
+    int Status = 0;
+    waitpid(Pid, &Status, 0);
+    Expect(WIFSIGNALED(Status) && WTERMSIG(Status) == SIGABRT,
+           "UmbraLifecycleBridge::OnTick aborts via LivenessGuard::AssertAlive when its Inner_ pointee "
+           "was destroyed first, instead of dereferencing a dangling pointer");
+}
+
 void TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance() {
     FakeLifecycle Lifecycle;
     BuildContext  Context; // LifecycleHost left null, the default
@@ -723,6 +766,7 @@ void RunWalkerTests() {
     TestNoRefLeavesOutRefsEmpty();
     TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet();
     TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed();
+    TestUmbraLifecycleBridgeAbortsWhenInnerLifecycleIsDestroyedFirst();
     TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance();
     TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost();
     TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle();

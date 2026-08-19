@@ -220,16 +220,35 @@ private:
 // than one shared type, since Penumbra doesn't depend on umbra-interfaces. This repo is
 // the one place that sees both sides of the mirror, so it's the one that has to bridge
 // them -- not a framework gap on either side.
+// `InnerWatch_` (umbra-interfaces' `Umbra::LivenessGuard::Watch`) guards exactly the
+// dangling-pointer shape this repo has actually hit: `Inner_` outliving its own pointee
+// when whatever owns it (an iris-proto `NyxDriverState`, transitively through
+// `Node.Instance`) is torn down before this bridge's own `OnUnmount()`/`OnTick()` is
+// called by `Penumbra::LifecycleRegistry` -- previously an `EXC_BAD_ACCESS` inside
+// `Inner_->OnTick(...)`/`Inner_->OnUnmount()`, only diagnosable after the fact via
+// `lldb`. `AssertAlive` turns that into an immediate, attributable `abort()` at the
+// actual call site instead.
 class UmbraLifecycleBridge : public Penumbra::IWidgetLifecycle {
 public:
-    explicit UmbraLifecycleBridge(Umbra::IWidgetLifecycle* Inner) : Inner_(Inner) {}
+    explicit UmbraLifecycleBridge(Umbra::IWidgetLifecycle* Inner)
+        : Inner_(Inner), InnerWatch_(Inner->Liveness()) {}
 
-    void OnMount() override { Inner_->OnMount(); }
-    void OnUnmount() override { Inner_->OnUnmount(); }
-    void OnTick(const Penumbra::TickInfo& Info) override { Inner_->OnTick(Umbra::TickInfo{Info.DeltaSeconds}); }
+    void OnMount() override {
+        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnMount)");
+        Inner_->OnMount();
+    }
+    void OnUnmount() override {
+        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnUnmount)");
+        Inner_->OnUnmount();
+    }
+    void OnTick(const Penumbra::TickInfo& Info) override {
+        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnTick)");
+        Inner_->OnTick(Umbra::TickInfo{Info.DeltaSeconds});
+    }
 
 private:
-    Umbra::IWidgetLifecycle* Inner_;
+    Umbra::IWidgetLifecycle*    Inner_;
+    Umbra::LivenessGuard::Watch InnerWatch_;
 };
 
 // Registers Node's own component lifecycle (if any) against Context.LifecycleHost, and
