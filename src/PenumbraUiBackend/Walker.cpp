@@ -2,6 +2,7 @@
 
 #include "PenumbraUiBackend/Lustre/StyleResolution.h"
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
+#include "PenumbraUiBackend/Portal.h"
 
 #include "Iris/ComponentInstance.h"
 #include "Iris/IrisNyxDriver.h"
@@ -181,6 +182,7 @@ std::string IrisTagToLustreTag(IrisElementTag Tag) {
         case IrisElementTag::Scroll: return "Scroll";
         case IrisElementTag::Input: return "Input";
         case IrisElementTag::Native: return "Native";
+        case IrisElementTag::Portal: return "Portal";
         case IrisElementTag::Split: return "Split";
         default: return ""; // None/Slot never reach here -- see BuildWidgetTreeInternal
     }
@@ -700,6 +702,20 @@ std::unique_ptr<WidgetBase> BuildNative(const Component& Node) {
     return nullptr;
 }
 
+std::unique_ptr<WidgetBase> BuildPortal(const Component& Node, const BuildContext& Context,
+                                         const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags,
+                                         RefMap* OutRefs, StyleMatchStats* Stats) {
+    std::unique_ptr<WidgetBase> Content;
+    if (!Node.Children.empty()) {
+        Content = BuildWidgetTreeInternal(Node.Children.front(), Context, &ThisStyleElement,
+                                          /*IsComponentRoot=*/false, OutTags, OutRefs, Stats);
+    }
+    auto Built = std::make_unique<PortalAnchorWidget>(Context.OverlayHost, std::move(Content),
+                                                       Iris::ReadPortalProperties(Node.Props));
+    ApplySharedPropsToWidget(*Built, Node.Props);
+    return Built;
+}
+
 std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const BuildContext& Context,
                                                      const WalkerStyleElement* ParentStyleElement,
                                                      bool IsComponentRoot, PrimitiveTagMap* OutTags, RefMap* OutRefs,
@@ -743,6 +759,9 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
             break;
         case IrisElementTag::Native:
             Built = BuildNative(Node);
+            break;
+        case IrisElementTag::Portal:
+            Built = BuildPortal(Node, Context, ThisStyleElement, OutTags, OutRefs, Stats);
             break;
         case IrisElementTag::Split:
             Built = BuildSplit(Node, Context, ThisStyleElement, OutTags, OutRefs, Stats);

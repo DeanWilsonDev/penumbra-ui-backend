@@ -1,6 +1,7 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
 #include "PenumbraUiBackend/Lustre/StyleResolution.h"
+#include "PenumbraUiBackend/Portal.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/ImageWidget.h"
@@ -22,6 +23,39 @@ using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
 namespace {
+
+class PortalOverlaySurface final : public WidgetBase {
+public:
+    PortalOverlaySurface(std::function<WidgetBase*()> GetContent, std::function<void()> OnDestroyed)
+        : GetContent_(std::move(GetContent)), OnDestroyed_(std::move(OnDestroyed)) {}
+    ~PortalOverlaySurface() override {
+        if (OnDestroyed_) OnDestroyed_();
+    }
+
+    Penumbra::Point Measure(Penumbra::Point AvailableSizeLogical) override {
+        WidgetBase* Content = GetContent_();
+        return Content ? Content->Measure(AvailableSizeLogical) : Penumbra::Point{};
+    }
+    void Arrange(Penumbra::Rect FinalRectLogical) override {
+        ArrangedRect = FinalRectLogical;
+        if (WidgetBase* Content = GetContent_()) Content->Arrange(FinalRectLogical);
+    }
+    bool UpdateInteractionState(const Penumbra::Platform::InputState& Input) override {
+        WidgetBase* Content = GetContent_();
+        return Content ? Content->UpdateInteractionState(Input) : false;
+    }
+    void Draw(Penumbra::Render::Renderer& Renderer) override {
+        if (WidgetBase* Content = GetContent_()) Content->Draw(Renderer);
+    }
+    std::size_t GetChildCount() const override { return GetContent_() ? 1u : 0u; }
+    WidgetBase* GetChildAt(std::size_t Index) const override {
+        return Index == 0 ? GetContent_() : nullptr;
+    }
+
+private:
+    std::function<WidgetBase*()> GetContent_;
+    std::function<void()> OnDestroyed_;
+};
 
 // Lustre::IStyleTarget over a live PenumbraWidget's ancestor chain, for
 // ApplyPropDiff's class-change re-resolution below. Kept as its own small
@@ -101,6 +135,121 @@ void ResetStyleableFields(WidgetBase& Widget) {
 }
 
 } // namespace
+
+struct PortalAnchorWidget::State : std::enable_shared_from_this<PortalAnchorWidget::State> {
+    Penumbra::Widgets::OverlayHost* Host{nullptr};
+    Penumbra::Widgets::OverlayId    Id{0};
+    PortalAnchorWidget*             Anchor{nullptr};
+    Iris::IPortalTarget*            Adapter{nullptr};
+    Iris::PortalProperties          Properties;
+    bool                            SuppressDismiss{false};
+    bool                            HostDismissInProgress{false};
+    bool                            Prepared{false};
+
+    Penumbra::Rect Placement() const {
+        return {Properties.X, Properties.Y, Properties.Width, Properties.Height};
+    }
+
+    void Show() {
+        if (Host == nullptr || Anchor == nullptr || Anchor->Children.empty()) return;
+        auto Self = shared_from_this();
+        auto Surface = std::make_unique<PortalOverlaySurface>(
+            [Self]() -> WidgetBase* {
+                return Self->Anchor != nullptr && !Self->Anchor->Children.empty()
+                    ? Self->Anchor->Children.front().get()
+                    : nullptr;
+            },
+            [Self]() { Self->OverlayDestroyed(); });
+        Id = Host->ShowOverlay(std::move(Surface), Placement(), Properties.DismissOnOutsideClick);
+    }
+
+    void OverlayDestroyed() {
+        Id = 0;
+        if (SuppressDismiss) return;
+
+        const std::function<void()> OnDismiss = Properties.OnDismiss;
+        HostDismissInProgress = true;
+        if (Adapter != nullptr) Iris::PreparePortalSubtreeForUnmount(dynamic_cast<Umbra::IWidget*>(Adapter));
+        HostDismissInProgress = false;
+        if (OnDismiss) OnDismiss();
+    }
+
+    void DismissWithoutNotification() {
+        if (Host == nullptr || Id == 0) return;
+        SuppressDismiss = true;
+        const auto CurrentId = Id;
+        Id = 0;
+        Host->DismissOverlay(CurrentId);
+        SuppressDismiss = false;
+    }
+};
+
+PortalAnchorWidget::PortalAnchorWidget(Penumbra::Widgets::OverlayHost* Host, std::unique_ptr<WidgetBase> Content,
+                                       const Iris::PortalProperties& Properties) {
+    State_ = std::make_shared<State>();
+    State_->Host = Host;
+    State_->Anchor = this;
+    State_->Properties = Properties;
+    if (Content) AddChild(std::move(Content));
+    State_->Show();
+}
+
+PortalAnchorWidget::~PortalAnchorWidget() {
+    State_->Anchor = nullptr;
+    State_->DismissWithoutNotification();
+}
+
+void PortalAnchorWidget::ApplyPortalProperties(const Iris::PortalProperties& Properties) {
+    const bool DismissModeChanged = State_->Properties.DismissOnOutsideClick != Properties.DismissOnOutsideClick;
+    State_->Properties = Properties;
+    State_->Prepared = false;
+    if (DismissModeChanged && State_->Id != 0) {
+        State_->DismissWithoutNotification();
+        State_->Show();
+    } else if (State_->Host != nullptr && State_->Id != 0) {
+        State_->Host->SetOverlayPlacement(State_->Id, State_->Placement());
+    } else {
+        State_->Show();
+    }
+}
+
+void PortalAnchorWidget::AttachAdapter(Iris::IPortalTarget* Adapter) { State_->Adapter = Adapter; }
+void PortalAnchorWidget::DetachAdapter(Iris::IPortalTarget* Adapter) {
+    if (State_->Adapter == Adapter) State_->Adapter = nullptr;
+}
+
+void PortalAnchorWidget::PreparePortalUnmount() {
+    if (State_->Prepared) return;
+    State_->Prepared = true;
+    if (!State_->HostDismissInProgress) State_->DismissWithoutNotification();
+}
+
+Penumbra::Point PortalAnchorWidget::Measure(Penumbra::Point) { return {}; }
+void PortalAnchorWidget::Arrange(Penumbra::Rect FinalRectLogical) { ArrangedRect = FinalRectLogical; }
+bool PortalAnchorWidget::UpdateInteractionState(const Penumbra::Platform::InputState&) { return false; }
+void PortalAnchorWidget::Draw(Penumbra::Render::Renderer&) {}
+
+PenumbraPortalWidget::PenumbraPortalWidget(std::unique_ptr<WidgetBase> Widget)
+    : PenumbraWidget(std::move(Widget)), Anchor_(dynamic_cast<PortalAnchorWidget*>(RawWidget())) {
+    if (Anchor_) Anchor_->AttachAdapter(this);
+}
+
+PenumbraPortalWidget::PenumbraPortalWidget(PortalAnchorWidget* Widget)
+    : PenumbraWidget(Widget), Anchor_(Widget) {
+    if (Anchor_) Anchor_->AttachAdapter(this);
+}
+
+PenumbraPortalWidget::~PenumbraPortalWidget() {
+    if (Anchor_) Anchor_->DetachAdapter(this);
+}
+
+void PenumbraPortalWidget::ApplyPortalProperties(const Iris::PortalProperties& Properties) {
+    if (Anchor_) Anchor_->ApplyPortalProperties(Properties);
+}
+
+void PenumbraPortalWidget::PreparePortalUnmount() {
+    if (Anchor_) Anchor_->PreparePortalUnmount();
+}
 
 PenumbraWidget::PenumbraWidget(std::unique_ptr<WidgetBase> Widget) : OwnedWidget_(std::move(Widget)) {}
 
@@ -297,7 +446,12 @@ void PenumbraWidget::AdoptChildrenFromRawTree(
     WidgetBase* Raw = RawWidget();
     for (std::size_t Index = 0; Index < Raw->GetChildCount(); ++Index) {
         WidgetBase*                     ChildRaw = Raw->GetChildAt(Index);
-        std::unique_ptr<PenumbraWidget> ChildWrapper(new PenumbraWidget(ChildRaw));
+        std::unique_ptr<PenumbraWidget> ChildWrapper;
+        if (auto* Portal = dynamic_cast<PortalAnchorWidget*>(ChildRaw)) {
+            ChildWrapper = std::make_unique<PenumbraPortalWidget>(Portal);
+        } else {
+            ChildWrapper = std::unique_ptr<PenumbraWidget>(new PenumbraWidget(ChildRaw));
+        }
         ChildWrapper->SetImageContext(ImageBackend, SdlRenderer);
         ChildWrapper->SetStyleContext(Sheets, StyleApplier);
         ChildWrapper->Parent_ = this;
@@ -405,7 +559,12 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>    
                                                   const PrimitiveTagMap*              Tags,
                                                   const RefMap*                       Refs) {
     WidgetBase* RawRoot = Root.get();
-    auto        Wrapper = std::make_unique<PenumbraWidget>(std::move(Root));
+    std::unique_ptr<PenumbraWidget> Wrapper;
+    if (dynamic_cast<PortalAnchorWidget*>(RawRoot) != nullptr) {
+        Wrapper = std::make_unique<PenumbraPortalWidget>(std::move(Root));
+    } else {
+        Wrapper = std::make_unique<PenumbraWidget>(std::move(Root));
+    }
     Wrapper->SetImageContext(ImageBackend, SdlRenderer);
     Wrapper->SetStyleContext(Sheets, StyleApplier);
     if (Tags != nullptr) {

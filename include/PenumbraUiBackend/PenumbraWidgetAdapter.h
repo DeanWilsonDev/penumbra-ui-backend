@@ -165,11 +165,12 @@ public:
     ReplaceRawWidget(std::unique_ptr<Penumbra::Widgets::WidgetBase> NewWidget, const PrimitiveTagMap* Tags = nullptr,
                       const RefMap* Refs = nullptr);
 
-private:
+protected:
     // Non-owning (attached) construction — used for every non-root node when wrapping
     // an already-built subtree (`WrapExistingTree`).
     explicit PenumbraWidget(Penumbra::Widgets::WidgetBase* AttachedWidget);
 
+private:
     // Recursively wraps every child already present under RawWidget() (i.e. real
     // Penumbra children `BuildWidgetTree` already built) into attached `PenumbraWidget`
     // wrappers, appended to Children_. Called once, by `WrapExistingTree`, on the root

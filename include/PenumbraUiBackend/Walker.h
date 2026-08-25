@@ -11,6 +11,7 @@
 #include "Penumbra/Platform/IClipboard.h"
 #include "Penumbra/Render/IFontBackend.h"
 #include "Penumbra/Widgets/FocusState.h"
+#include "Penumbra/Widgets/OverlayHost.h"
 #include "Penumbra/Widgets/WidgetBase.h"
 
 #include <SDL3/SDL.h>
@@ -74,6 +75,11 @@ struct BuildContext {
     // clipboard) until a caller wires these up.
     Penumbra::Widgets::FocusState*  Focus{nullptr};
     Penumbra::Platform::IClipboard* Clipboard{nullptr};
+
+    // Optional app-level portal target. A built <Portal> keeps its declarative child
+    // in the ordinary reconciled tree and presents it through this host's overlay
+    // layer. Null leaves the portal anchor mounted but unpresented.
+    Penumbra::Widgets::OverlayHost* OverlayHost{nullptr};
 
     const ::Lustre::StylesheetSet* Style{nullptr};
     const Lustre::IStyleApplier*    StyleApplier{nullptr};
