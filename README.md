@@ -16,6 +16,12 @@ props-resolved `Component` IR tree and builds a real
 fluent `Builder` API (`Box::Builder`, `Label::Builder`, etc.), and applies Lustre's resolved
 styles onto that same real widget tree.
 
+This repository also owns the Nyx-facing Penumbra integration.
+`PenumbraUiBackend::NyxApplicationBridge` keeps one Nyx runtime shared by a
+Nyx-authored `Penumbra::Application` and its `IrisNyxDriver`, while
+`PenumbraUiBackend::ScriptCanvas` exposes Nyx-driven custom drawing. Penumbra
+itself remains independent of Nyx, Iris, and Lustre.
+
 ## Why this is a separate repo
 
 Iris's core (preprocessor + IR + runtime library) and Lustre's core (parser + cascade/selector
@@ -173,4 +179,11 @@ path described above.
 
 ```sh
 ./build/demo/penumbra_ui_backend_demo
+```
+
+`demo_nyx/` separately exercises a Nyx-authored `Application` through the
+backend-owned bridge. It runs for 300 frames and exits automatically:
+
+```sh
+./build/demo_nyx/penumbra_ui_backend_nyx_demo
 ```

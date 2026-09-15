@@ -16,6 +16,15 @@ endif()
 # C++20), which is fine — CMAKE_CXX_STANDARD is directory-scoped, not
 # global, once you're inside an add_subdirectory().
 # ---------------------------------------------------------------------------
+include(FetchContent)
+# The Application bridge uses methods on inheritable host types, introduced in
+# nyx-proto 3554ab5. Declare Nyx before Iris so its floating `main` declaration
+# reuses this known-compatible revision in standalone backend builds.
+FetchContent_Declare(
+    nyx
+    GIT_REPOSITORY https://github.com/DeanWilsonDev/nyx-proto.git
+    GIT_TAG        3554ab5)
+
 add_subdirectory(vendor/iris)
 add_subdirectory(vendor/penumbra)
 add_subdirectory(vendor/lustre)
@@ -59,6 +68,8 @@ target_link_libraries(penumbra_ui_backend_lustre PUBLIC lustre penumbra)
 # that never sets them gets exactly the pre-styling behavior, unchanged.
 # ---------------------------------------------------------------------------
 add_library(penumbra_ui_backend STATIC
+    src/PenumbraUiBackend/NyxApplicationBridge.cpp
+    src/PenumbraUiBackend/ScriptCanvas.cpp
     src/PenumbraUiBackend/Walker.cpp
     src/PenumbraUiBackend/PenumbraWidgetAdapter.cpp)
 
@@ -72,6 +83,7 @@ target_link_libraries(penumbra_ui_backend PUBLIC iris penumbra penumbra_ui_backe
 # framework, isn't wired into either repo yet).
 # ---------------------------------------------------------------------------
 add_executable(penumbra_ui_backend_tests
+    tests/NyxApplicationBridgeTests.cpp
     tests/WalkerTests.cpp
     tests/PenumbraWidgetAdapterTests.cpp
     tests/SlotWiringTests.cpp
@@ -99,3 +111,12 @@ target_compile_definitions(penumbra_ui_backend_demo PRIVATE
     DEMO_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/vendor/penumbra/demo/assets")
 set_target_properties(penumbra_ui_backend_demo PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/demo")
+
+# Nyx-authored application demo. Integration belongs here rather than in the
+# language-neutral Penumbra repository.
+add_executable(penumbra_ui_backend_nyx_demo demo_nyx/main.cpp)
+target_link_libraries(penumbra_ui_backend_nyx_demo PRIVATE penumbra_ui_backend)
+target_compile_definitions(penumbra_ui_backend_nyx_demo PRIVATE
+    DEMO_NYX_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/demo_nyx/assets")
+set_target_properties(penumbra_ui_backend_nyx_demo PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/demo_nyx")

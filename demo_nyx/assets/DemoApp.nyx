@@ -1,0 +1,24 @@
+// Nyx-authored Application demo for the Penumbra UI backend. The backend owns
+// the Nyx bridge while Penumbra remains responsible for the native frame loop.
+class DemoApplication : Application {
+    bool OnStart() override {
+        Log("OnStart: DemoApplication is alive, running inside Penumbra::Application::Run()");
+        this.SetRootWidget(CreateDemoRoot());
+        auto windowSize = this.GetWindowLogicalSize();
+        InspectApplicationHandles(
+            windowSize.X(), windowSize.Y(), this.GetDpiScaleFactor(), this.GetFontBackend(),
+            this.GetLifecycleRegistry(), this.GetRootWidget());
+        return true;
+    }
+
+    void OnUpdate(float deltaTime) override {
+        if (Tick(deltaTime)) {
+            this.RequestQuit();
+        }
+    }
+
+    void OnShutdown() override {
+        this.SetRootWidget(null);
+        Log("OnShutdown: DemoApplication tearing down");
+    }
+}

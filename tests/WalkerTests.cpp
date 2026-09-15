@@ -781,8 +781,10 @@ void RunLustreStyleApplierTests();         // tests/LustreStyleApplierTests.cpp
 void RunStyleWiringTests();                // tests/StyleWiringTests.cpp
 void RunStyleMismatchDiagnosticTests();    // tests/StyleMismatchDiagnosticTests.cpp
 void RunStylesheetLoaderTests();           // tests/StylesheetLoaderTests.cpp
+void RunNyxApplicationBridgeTests();       // tests/NyxApplicationBridgeTests.cpp
 
 int main() {
+    RunNyxApplicationBridgeTests();
     RunWalkerTests();
     RunPenumbraWidgetAdapterTests();
     RunSlotWiringTests();
