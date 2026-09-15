@@ -20,6 +20,41 @@ public:
         return &WindowLogicalSize;
     }
 
+    // SetWindowTitle/SetWindowSize -- only meaningful while PendingConfig_ is live, i.e.
+    // during a call to Configure() below (Application::Run() constructs the window
+    // immediately after Configure() returns, using whatever Config holds by then).
+    void SetWindowTitle(const std::string& Title) {
+        if (PendingConfig_) PendingConfig_->Title = Title;
+    }
+    void SetWindowSize(int Width, int Height) {
+        if (PendingConfig_) {
+            PendingConfig_->WindowLogicalWidth = Width;
+            PendingConfig_->WindowLogicalHeight = Height;
+        }
+    }
+
+    // InvokeCustom -- the public seam NyxApplicationBridge::CallApplicationMethod reaches
+    // through: same dispatch Invoke() uses (NyxBridgeBase::interp_/nyxInstance_), just
+    // public and taking an already-built Value vector rather than marshalling variadic
+    // C++ args, for a caller that doesn't know MethodName's signature at compile time.
+    std::optional<runtime::Value> InvokeCustom(const std::string& MethodName,
+                                               std::vector<runtime::Value> Args) {
+        try {
+            return interp_->TryCallInstanceMethod(nyxInstance_, MethodName, std::move(Args));
+        } catch (const runtime::RuntimeError& Error) {
+            auto Obj = std::make_shared<runtime::NyxObject>();
+            Obj->typeName = "Error::Unknown";
+            Obj->adHocFields = {{"message", runtime::Value(std::string(Error.what()))}};
+            return runtime::Value(Obj);
+        }
+    }
+
+    void Configure(Penumbra::ApplicationConfig& Config) override {
+        PendingConfig_ = &Config;
+        Invoke("Configure"); // no Nyx override -> Config keeps its ApplicationConfig() defaults
+        PendingConfig_ = nullptr;
+    }
+
     bool OnStart() override {
         if (std::optional<runtime::Value> Result = Invoke("OnStart")) {
             return FromValue<bool>(*Result);
@@ -47,6 +82,7 @@ public:
 
 private:
     Penumbra::Point WindowLogicalSize;
+    Penumbra::ApplicationConfig* PendingConfig_ = nullptr;
 };
 
 } // namespace nyx::host
@@ -73,6 +109,14 @@ Penumbra::LifecycleRegistry* GetLifecycleRegistryForNyx(Penumbra::Application& S
 
 void SetRootWidgetFromNyx(Penumbra::Application& Self, Penumbra::Widgets::WidgetBase* Root) {
     Self.SetRootWidget(std::unique_ptr<Penumbra::Widgets::WidgetBase>(Root));
+}
+
+void SetWindowTitleForNyx(Penumbra::Application& Self, const std::string& Title) {
+    static_cast<nyx::host::NyxBridge<Penumbra::Application>&>(Self).SetWindowTitle(Title);
+}
+
+void SetWindowSizeForNyx(Penumbra::Application& Self, int Width, int Height) {
+    static_cast<nyx::host::NyxBridge<Penumbra::Application>&>(Self).SetWindowSize(Width, Height);
 }
 
 template <typename T>
@@ -112,6 +156,8 @@ void NyxApplicationBridge::RegisterApplicationType() {
         .PointerMethod("GetFontBackend", &GetFontBackendForNyx, FontBackendDescriptor)
         .Method("SetTextInputActive", &Penumbra::Application::SetTextInputActive)
         .Method("SetRootWidget", &SetRootWidgetFromNyx)
+        .Method("SetWindowTitle", &SetWindowTitleForNyx)
+        .Method("SetWindowSize", &SetWindowSizeForNyx)
         .PointerMethod("GetRootWidget", &Penumbra::Application::GetRootWidget, WidgetDescriptor)
         .Method("GetRootWidgetConsumedInputThisFrame",
                 &Penumbra::Application::GetRootWidgetConsumedInputThisFrame)
@@ -157,6 +203,11 @@ Penumbra::Application* NyxApplicationBridge::LoadApplicationFromFile(
     std::ostringstream Contents;
     Contents << File.rdbuf();
     return LoadApplication(Contents.str(), Path.filename().string(), ApplicationClassName);
+}
+
+std::optional<nyx::runtime::Value> NyxApplicationBridge::CallApplicationMethod(
+    Penumbra::Application& App, const std::string& MethodName, std::vector<nyx::runtime::Value> Args) {
+    return static_cast<nyx::host::NyxBridge<Penumbra::Application>&>(App).InvokeCustom(MethodName, std::move(Args));
 }
 
 } // namespace PenumbraUiBackend

@@ -10,6 +10,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,20 @@ public:
     // file cannot be opened.
     Penumbra::Application* LoadApplicationFromFile(const std::filesystem::path& Path,
                                                    const std::string& ApplicationClassName);
+
+    // Calls a method defined directly on App's own loaded Nyx class -- one that isn't
+    // one of the four lifecycle hooks (OnStart/OnUpdate/OnShutdown/OnDpiScaleChanged)
+    // already wired through Application's own virtual dispatch. This is how a native
+    // free function registered on Runtime() (e.g. a click handler another .irisx file
+    // calls by bare name) reaches custom orchestration methods a host's Nyx-authored
+    // Application subclass defines for itself -- nyx::host::NyxBridgeBase::Invoke
+    // already does exactly this dispatch, but it's protected and the concrete bridge
+    // type is private to NyxApplicationBridge.cpp; this is the one seam that reaches it.
+    // App must be a live object this same bridge returned from LoadApplication[FromFile].
+    // Returns nullopt if the Nyx class defines no method named MethodName.
+    [[nodiscard]] std::optional<nyx::runtime::Value> CallApplicationMethod(
+        Penumbra::Application& App, const std::string& MethodName,
+        std::vector<nyx::runtime::Value> Args = {});
 
 private:
     void RegisterApplicationType();

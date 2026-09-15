@@ -72,10 +72,71 @@ void TestBridgeLoadsNyxApplicationAgainstSharedRuntime() {
     }
 }
 
+// Configure() is protected on Penumbra::Application (only Run() calls it internally,
+// before window construction) -- this is the standard "using-declaration accessor" idiom
+// for reaching a protected virtual from a test: ConfigureProbe doesn't override Configure,
+// so &ConfigureProbe::Configure is a pointer-to-member of Application itself, callable on
+// any Application& (real dynamic type included) via ordinary virtual dispatch. No object
+// pointer/reference is ever reinterpreted as a different type.
+struct ConfigureProbe : Penumbra::Application {
+    using Penumbra::Application::Configure;
+};
+
+void TestBridgeAppliesNyxConfigureOverrideToApplicationConfig() {
+    PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
+
+    Penumbra::Application* Application = Bridge.LoadApplication(
+        "class TestApplication : Application {\n"
+        "    void Configure() override {\n"
+        "        this.SetWindowTitle(\"Configured Title\");\n"
+        "        this.SetWindowSize(640, 480);\n"
+        "    }\n"
+        "}\n",
+        "configure-test.nyx", "TestApplication");
+
+    ExpectBridge(Application != nullptr, "NyxApplicationBridge loads a Configure-overriding Nyx Application");
+    if (Application) {
+        Penumbra::ApplicationConfig Config;
+        (Application->*&ConfigureProbe::Configure)(Config);
+        ExpectBridge(Config.Title == "Configured Title",
+                     "a Nyx Configure() override can set the window title via SetWindowTitle");
+        ExpectBridge(Config.WindowLogicalWidth == 640 && Config.WindowLogicalHeight == 480,
+                     "a Nyx Configure() override can set the window size via SetWindowSize");
+        delete Application;
+    }
+}
+
+void TestBridgeCallApplicationMethodInvokesACustomNyxMethod() {
+    PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
+
+    Penumbra::Application* Application = Bridge.LoadApplication(
+        "class TestApplication : Application {\n"
+        "    int Double(int value) { return value * 2; }\n"
+        "}\n",
+        "custom-method-test.nyx", "TestApplication");
+
+    ExpectBridge(Application != nullptr, "NyxApplicationBridge loads a Nyx Application with a custom method");
+    if (Application) {
+        std::optional<nyx::runtime::Value> Result =
+            Bridge.CallApplicationMethod(*Application, "Double", {nyx::host::ToValue(std::int32_t{21})});
+        ExpectBridge(Result.has_value(), "CallApplicationMethod reaches a custom method not part of the lifecycle hooks");
+        if (Result) {
+            ExpectBridge(nyx::host::FromValue<std::int32_t>(*Result) == 42,
+                         "CallApplicationMethod marshals arguments and the return value correctly");
+        }
+
+        std::optional<nyx::runtime::Value> Missing = Bridge.CallApplicationMethod(*Application, "NoSuchMethod", {});
+        ExpectBridge(!Missing.has_value(), "CallApplicationMethod returns nullopt for a method the Nyx class doesn't define");
+        delete Application;
+    }
+}
+
 } // namespace
 
 void RunNyxApplicationBridgeTests() {
     TestBridgeConstructsIrisDriverAgainstItsOwnedRuntime();
     TestBridgeRuntimeIsIsolatedFromASelfOwnedIrisDriver();
     TestBridgeLoadsNyxApplicationAgainstSharedRuntime();
+    TestBridgeAppliesNyxConfigureOverrideToApplicationConfig();
+    TestBridgeCallApplicationMethodInvokesACustomNyxMethod();
 }
