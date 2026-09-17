@@ -782,9 +782,11 @@ void RunStyleWiringTests();                // tests/StyleWiringTests.cpp
 void RunStyleMismatchDiagnosticTests();    // tests/StyleMismatchDiagnosticTests.cpp
 void RunStylesheetLoaderTests();           // tests/StylesheetLoaderTests.cpp
 void RunNyxApplicationBridgeTests();       // tests/NyxApplicationBridgeTests.cpp
+void RunIrisApplicationTests();            // tests/IrisApplicationTests.cpp
 
 int main() {
     RunNyxApplicationBridgeTests();
+    RunIrisApplicationTests();
     RunWalkerTests();
     RunPenumbraWidgetAdapterTests();
     RunSlotWiringTests();

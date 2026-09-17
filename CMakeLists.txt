@@ -69,6 +69,7 @@ target_link_libraries(penumbra_ui_backend_lustre PUBLIC lustre penumbra)
 # ---------------------------------------------------------------------------
 add_library(penumbra_ui_backend STATIC
     src/PenumbraUiBackend/NyxApplicationBridge.cpp
+    src/PenumbraUiBackend/IrisApplication.cpp
     src/PenumbraUiBackend/ScriptCanvas.cpp
     src/PenumbraUiBackend/Walker.cpp
     src/PenumbraUiBackend/PenumbraWidgetAdapter.cpp)
@@ -84,6 +85,7 @@ target_link_libraries(penumbra_ui_backend PUBLIC iris penumbra penumbra_ui_backe
 # ---------------------------------------------------------------------------
 add_executable(penumbra_ui_backend_tests
     tests/NyxApplicationBridgeTests.cpp
+    tests/IrisApplicationTests.cpp
     tests/WalkerTests.cpp
     tests/PenumbraWidgetAdapterTests.cpp
     tests/SlotWiringTests.cpp

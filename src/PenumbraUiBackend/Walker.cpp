@@ -352,10 +352,22 @@ private:
 // whichever Environment a particular component's GetRef closure is later defined into; one
 // registration against the app's single NyxRuntime is visible from every HostObject this
 // walker ever hands back, regardless of which component's own RenderScope built it.
+//
+// "Already registered?" is answered by querying Runtime's own Globals() directly, not a
+// side-table keyed by `&Runtime` (a previous version of this function used exactly that --
+// a `static std::unordered_map<NyxRuntime*, const TypeDescriptor*>` -- and it was a real
+// dangling-pointer bug: a short-lived NyxRuntime (e.g. a test's own stack-local
+// Iris::IrisNyxDriver) can be destroyed and a *different*, unrelated NyxRuntime later
+// constructed at the same address, at which point the stale map entry hands back a
+// TypeDescriptor* owned by the first (now-destroyed) Runtime's own `types_` -- confirmed
+// directly: two independent NyxRuntimes each calling BuildWidgetTree with NyxHost set, back
+// to back in the same process, with the first's stack storage reused by the second,
+// reproduces exactly this). Runtime.Globals() is itself already a member of Runtime --
+// correctly scoped to its lifetime, nothing external to go stale -- so it's the only source
+// of truth this needs.
 const nyx::runtime::TypeDescriptor* EnsureWidgetRefTypeRegistered(nyx::host::NyxRuntime& Runtime) {
-    static std::unordered_map<nyx::host::NyxRuntime*, const nyx::runtime::TypeDescriptor*> Registered;
-    if (const auto Existing = Registered.find(&Runtime); Existing != Registered.end()) {
-        return Existing->second;
+    if (const auto Existing = Runtime.Globals().find("WidgetRef"); Existing != Runtime.Globals().end()) {
+        return std::get<std::shared_ptr<nyx::runtime::HostObject>>(Existing->second.data)->descriptor;
     }
     {
         auto Builder = Runtime.RegisterType<WidgetRefHandle>("WidgetRef");
@@ -364,12 +376,10 @@ const nyx::runtime::TypeDescriptor* EnsureWidgetRefTypeRegistered(nyx::host::Nyx
             .Method("SetColor", &WidgetRefHandle::SetColor)
             .Method("SetVisible", &WidgetRefHandle::SetVisible);
     } // Builder destructs here -- commits the descriptor into Runtime.
-    const nyx::runtime::TypeDescriptor* Descriptor = nullptr;
     if (const auto Global = Runtime.Globals().find("WidgetRef"); Global != Runtime.Globals().end()) {
-        Descriptor = std::get<std::shared_ptr<nyx::runtime::HostObject>>(Global->second.data)->descriptor;
+        return std::get<std::shared_ptr<nyx::runtime::HostObject>>(Global->second.data)->descriptor;
     }
-    Registered[&Runtime] = Descriptor;
-    return Descriptor;
+    return nullptr;
 }
 
 // Defines a Nyx-callable `GetRef(name: string)` directly into Node's own component
