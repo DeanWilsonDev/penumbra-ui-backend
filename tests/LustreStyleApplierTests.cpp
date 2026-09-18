@@ -457,6 +457,38 @@ void TestNoMaxWidthLeavesLabelUnconstrained() {
            "no max-width in the style leaves Label::MaxWidthLogical unset");
 }
 
+void TestWhiteSpaceNormalReachesALabelAsWrapTrue() {
+    Label                   WidgetLabel;
+    ::Lustre::ResolvedStyle Style;
+    Style.WhiteSpaceMode = ::Lustre::WhiteSpace::Normal;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetLabel, Style);
+
+    Expect(WidgetLabel.Wrap, "white-space: normal reaches Label::Wrap as true");
+}
+
+void TestWhiteSpaceNowrapReachesALabelAsWrapFalse() {
+    Label                   WidgetLabel;
+    ::Lustre::ResolvedStyle Style;
+    Style.WhiteSpaceMode = ::Lustre::WhiteSpace::Nowrap;
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetLabel, Style);
+
+    Expect(!WidgetLabel.Wrap, "white-space: nowrap reaches Label::Wrap as false");
+}
+
+void TestNoWhiteSpaceLeavesLabelWrapAtDefault() {
+    Label      WidgetLabel;
+    const auto Style = MakeStyle(); // no white-space at all
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetLabel, Style);
+
+    Expect(!WidgetLabel.Wrap, "no white-space in the style leaves Label::Wrap at its default (false)");
+}
+
 void TestCheckboxStillReceivesItsBoxStyleSlice() {
     Checkbox                 WidgetCheckbox;
     const auto                Style = MakeStyle();
@@ -500,5 +532,8 @@ void RunLustreStyleApplierTests() {
     TestMaxWidthAndEllipsisReachALabel();
     TestTextOverflowClipReachesALabelAsFalse();
     TestNoMaxWidthLeavesLabelUnconstrained();
+    TestWhiteSpaceNormalReachesALabelAsWrapTrue();
+    TestWhiteSpaceNowrapReachesALabelAsWrapFalse();
+    TestNoWhiteSpaceLeavesLabelWrapAtDefault();
     TestCheckboxStillReceivesItsBoxStyleSlice();
 }

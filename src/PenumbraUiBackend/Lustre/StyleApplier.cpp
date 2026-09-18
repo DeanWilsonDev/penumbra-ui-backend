@@ -258,6 +258,9 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         if (Style.TextOverflowMode) {
             AsLabel->TruncateWithEllipsis = (*Style.TextOverflowMode == ::Lustre::TextOverflow::Ellipsis);
         }
+        if (Style.WhiteSpaceMode) {
+            AsLabel->Wrap = (*Style.WhiteSpaceMode == ::Lustre::WhiteSpace::Normal);
+        }
     }
 
     // Checkbox's own style-specific fields (ColorCheckMark/ColorBoxChecked)
