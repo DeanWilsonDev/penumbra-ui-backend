@@ -339,6 +339,11 @@ std::optional<nyx::runtime::Value> NyxApplicationBridgeT<AppBaseT>::CallApplicat
     return static_cast<nyx::host::NyxBridge<AppBaseT>&>(App).InvokeCustom(MethodName, std::move(Args));
 }
 
+template <typename AppBaseT>
+nyx::runtime::Value NyxApplicationBridgeT<AppBaseT>::GetApplicationInstanceValue(AppBaseT& App) {
+    return static_cast<nyx::host::NyxBridge<AppBaseT>&>(App).NyxInstanceValue();
+}
+
 template class NyxApplicationBridgeT<Penumbra::Application>;
 template class NyxApplicationBridgeT<IrisApplication>;
 

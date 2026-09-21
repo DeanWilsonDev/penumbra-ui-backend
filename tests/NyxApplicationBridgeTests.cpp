@@ -131,6 +131,46 @@ void TestBridgeCallApplicationMethodInvokesACustomNyxMethod() {
     }
 }
 
+// GetApplicationInstanceValue's own real production shape: a native primitive (here,
+// "GetApp") hands the live instance back to a *different* Nyx scope than the one that
+// declared its class, which then calls a custom instance method on it directly
+// (`GetApp().Bump()`) -- no CallApplicationMethod/RegisterInstanceForwarders round trip
+// through C++ at all. Exercises nyx-proto's own cross-interpreter instance-method
+// dispatch (main-cpp-reduction's "let a Nyx script call another script's custom instance
+// methods without a native forwarder per method" gap) through this bridge's real API,
+// the same path CairnAppLib.cpp's own "App()" primitive uses.
+void TestGetApplicationInstanceValueLetsAnotherScopeCallCustomMethodsDirectly() {
+    PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
+
+    Penumbra::Application* Application = Bridge.LoadApplication(
+        "class TestApplication : Application {\n"
+        "    int counter = 0;\n"
+        "    void Bump() { this.counter = this.counter + 1; }\n"
+        "    int GetCounter() { return this.counter; }\n"
+        "}\n",
+        "instance-value-test.nyx", "TestApplication");
+
+    ExpectBridge(Application != nullptr, "NyxApplicationBridge loads a Nyx Application with custom instance methods");
+    if (!Application) return;
+
+    Bridge.Runtime().RegisterFunction("GetApp", [&Bridge, Application](std::vector<nyx::runtime::Value>) {
+        return Bridge.GetApplicationInstanceValue(*Application);
+    });
+
+    // A second scope, parsed and interpreted independently of the one TestApplication was
+    // declared in (mirrors Iris's own per-.irisx-file GetFileScope) -- it never mentions
+    // TestApplication in its own source at all.
+    nyx::host::NyxRuntime::NyxScope CallerScope = Bridge.Runtime().CreateScope("", "caller.nyx");
+    Bridge.Runtime().EvaluateInScope(CallerScope, "GetApp().Bump()");
+    Bridge.Runtime().EvaluateInScope(CallerScope, "GetApp().Bump()");
+    nyx::runtime::Value CounterResult = Bridge.Runtime().EvaluateInScope(CallerScope, "GetApp().GetCounter()");
+
+    ExpectBridge(nyx::host::FromValue<std::int32_t>(CounterResult) == 2,
+                 "a Value from GetApplicationInstanceValue is callable from a different Nyx scope "
+                 "by ordinary object.Method() syntax, with no forwarder registered for Bump/GetCounter");
+    delete Application;
+}
+
 } // namespace
 
 void RunNyxApplicationBridgeTests() {
@@ -139,4 +179,5 @@ void RunNyxApplicationBridgeTests() {
     TestBridgeLoadsNyxApplicationAgainstSharedRuntime();
     TestBridgeAppliesNyxConfigureOverrideToApplicationConfig();
     TestBridgeCallApplicationMethodInvokesACustomNyxMethod();
+    TestGetApplicationInstanceValueLetsAnotherScopeCallCustomMethodsDirectly();
 }

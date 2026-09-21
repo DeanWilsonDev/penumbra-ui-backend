@@ -84,6 +84,18 @@ public:
     [[nodiscard]] std::optional<nyx::runtime::Value> CallApplicationMethod(
         AppBaseT& App, const std::string& MethodName, std::vector<nyx::runtime::Value> Args = {});
 
+    // The live Nyx Value wrapping App -- the same NyxObject CallApplicationMethod already
+    // dispatches against via InvokeCustom, just handed back as an ordinary object reference
+    // instead of being called through immediately. Registering this behind one native
+    // primitive (e.g. a bare `App()` free function) lets any other Nyx script call App's
+    // own custom instance methods directly (`App().NavigateInto(path)`), resolved by
+    // nyx-proto's own cross-interpreter instance-method dispatch (main-cpp-reduction's
+    // "let a Nyx script call another script's custom instance methods without a native
+    // forwarder per method" gap) -- no RegisterInstanceForwarders registration needed per
+    // method name at all. App must be a live object this same bridge returned from
+    // LoadApplication[FromFile].
+    [[nodiscard]] nyx::runtime::Value GetApplicationInstanceValue(AppBaseT& App);
+
 private:
     void RegisterApplicationType();
 
