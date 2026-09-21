@@ -606,8 +606,12 @@ std::unique_ptr<WidgetBase> BuildIcon(const Component& Node, const BuildContext&
 // <Scroll> (docs/iris_core_spec.md §3.1) -- element children only, same as <Frame>, but
 // ScrollablePanel has no Builder to route them through: AddChild directly, same "plain
 // field/method, not a Builder chain" treatment ApplySharedPropsToWidget above already
-// gives its shared props. wheelStep maps onto WheelStepLogical, the one dedicated field
-// this widget has.
+// gives its shared props. wheelStep maps onto WheelStepLogical, direction (default
+// "vertical", the only other value "horizontal") onto ScrollablePanel::Direction, and
+// horizontalWheelStep onto HorizontalWheelStepLogical -- the Direction == Horizontal
+// counterpart of wheelStep/WheelStepLogical, for a <Scroll direction="horizontal"> (a
+// non-wrapping code block's own container, give-code-blocks-their-own-horizontally-
+// scrollable-non-wrapping-frame-in-the-card-modal, Cairn).
 std::unique_ptr<WidgetBase> BuildScroll(const Component& Node, const BuildContext& Context,
                                         const WalkerStyleElement& ThisStyleElement, PrimitiveTagMap* OutTags, RefMap* OutRefs,
                                         StyleMatchStats* Stats) {
@@ -615,6 +619,12 @@ std::unique_ptr<WidgetBase> BuildScroll(const Component& Node, const BuildContex
     ApplySharedPropsToWidget(*Built, Node.Props);
     if (const auto WheelStep = GetFloatProp(Node.Props, "wheelStep")) {
         Built->WheelStepLogical = *WheelStep;
+    }
+    if (const auto DirectionProp = GetStringProp(Node.Props, "direction"); DirectionProp == "horizontal") {
+        Built->Direction = ScrollablePanel::ScrollDirection::Horizontal;
+    }
+    if (const auto HorizontalWheelStep = GetFloatProp(Node.Props, "horizontalWheelStep")) {
+        Built->HorizontalWheelStepLogical = *HorizontalWheelStep;
     }
     for (const Component& Child : Node.Children) {
         if (std::unique_ptr<WidgetBase> ChildWidget = BuildWidgetTreeInternal(
