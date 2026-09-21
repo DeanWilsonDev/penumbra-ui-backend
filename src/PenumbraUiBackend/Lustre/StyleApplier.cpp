@@ -97,6 +97,16 @@ void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::Resolved
     if (Style.Margin) {
         Target.Margin = ToPenumbraEdgeInsets(*Style.Margin);
     }
+    // `width`/`height` -- BoxStyle::WidthLogical/HeightLogical's own ">= 0 is an explicit
+    // border-box override" contract (Styles.h), already honored by every Box's
+    // Measure/Arrange; this is the one copy from Lustre's resolved value onto it that was
+    // missing, for any Box (not just Label's MaxWidthLogical special case below).
+    if (Style.WidthLogical) {
+        Target.WidthLogical = *Style.WidthLogical;
+    }
+    if (Style.HeightLogical) {
+        Target.HeightLogical = *Style.HeightLogical;
+    }
     // Same pair convention as BackgroundGradientStart/End above: the resolver
     // only ever sets both halves of `box-shadow` together (or neither), so
     // checking ShadowColor alone is enough.
