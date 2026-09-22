@@ -1,8 +1,12 @@
 #include "PenumbraUiBackend/IrisApplication.h"
 
 #include "PenumbraUiBackend/Lustre/StylesheetLoader.h"
+#include "PenumbraUiBackend/Portal.h"
 
+#include "Iris/SlotResolution.h"
 #include "Iris/SlotRuntime.h"
+
+#include "Penumbra/Widgets/Box.h"
 
 #include <host/inheritable-type-builder.hpp>
 
@@ -95,9 +99,69 @@ Penumbra::Widgets::WidgetBase* IrisApplication::GetRef(const std::string& Name) 
 }
 
 void IrisApplication::TeardownRootWidget() {
+    for (auto& [Name, Mount] : ReconciledMounts_) {
+        Mount.Slots.clear();
+        Mount.Wrapper.reset();
+    }
+    ReconciledMounts_.clear();
     SetRootWidget(nullptr);
     OverlayHostPtr_ = nullptr;
     AppRootRefs_.clear();
+}
+
+void IrisApplication::ClearReconciledMount(ReconciledMount& Mount, Penumbra::Widgets::Box* Target) {
+    if (Target && Target->GetChildCount() > 0) {
+        if (auto* Anchor = dynamic_cast<PortalAnchorWidget*>(Target->GetChildAt(0))) {
+            Anchor->PreparePortalUnmount();
+        }
+    }
+    Mount.Slots.clear();
+    Mount.Wrapper.reset();
+    if (Target) Target->ClearChildren();
+    Mount.Roots.clear();
+}
+
+bool IrisApplication::MountReconciledComponent(const std::string& File, const std::string& FunctionName,
+                                                 std::vector<nyx::runtime::Value> Args,
+                                                 const std::string& StylesheetName,
+                                                 const std::string& SlotStylesheetName,
+                                                 const std::string& TargetRefName) {
+    auto* Target = dynamic_cast<Penumbra::Widgets::Box*>(GetRef(TargetRefName));
+    if (!Target) return false;
+
+    ReconciledMount& Mount = ReconciledMounts_[TargetRefName];
+    ClearReconciledMount(Mount, Target);
+
+    const std::size_t ErrorsBefore = Driver_->Errors().size();
+    MountResult Result = MountComponent(File, FunctionName, std::move(Args), StylesheetName, Mount.Roots);
+    if (Driver_->Errors().size() > ErrorsBefore) {
+        std::fprintf(stderr, "[IrisApplication] %s mount failed: %s\n", File.c_str(),
+                     Driver_->Errors().back().Message.c_str());
+        Mount.Roots.clear();
+        return false;
+    }
+
+    Mount.Wrapper =
+        WrapExistingTree(std::move(Result.Widget), nullptr, nullptr, GetStylesheet(StylesheetName), &StyleApplier());
+
+    BuildContext SlotContext;
+    SlotContext.FontBackend  = &GetFontBackend();
+    SlotContext.Font         = Font_;
+    SlotContext.Style        = GetStylesheet(SlotStylesheetName);
+    SlotContext.StyleApplier = &StyleApplier();
+
+    Mount.Slots = iris::ResolveSlots(*Mount.Wrapper, *Mount.Roots.back(), MakeMountFn(SlotContext));
+    for (std::unique_ptr<iris::SlotState>& Slot : Mount.Slots) Slot->Reconcile();
+
+    Target->AddChild(Mount.Wrapper->DetachOwnership());
+    return true;
+}
+
+void IrisApplication::TeardownReconciledComponent(const std::string& TargetRefName) {
+    auto It = ReconciledMounts_.find(TargetRefName);
+    if (It == ReconciledMounts_.end()) return;
+    ClearReconciledMount(It->second, dynamic_cast<Penumbra::Widgets::Box*>(GetRef(TargetRefName)));
+    ReconciledMounts_.erase(It);
 }
 
 void IrisApplication::TickIris() { iris::Tick(); }
@@ -115,6 +179,8 @@ void RegisterIrisApplicationMethods(nyx::host::InheritableTypeBuilder<IrisApplic
     Builder.Method("LoadStylesheet", &IrisApplication::LoadStylesheet)
         .Method("ReloadFont", &IrisApplication::ReloadFont)
         .Method("MountAppRoot", &IrisApplication::MountAppRoot)
+        .Method("MountReconciledComponent", &IrisApplication::MountReconciledComponent)
+        .Method("TeardownReconciledComponent", &IrisApplication::TeardownReconciledComponent)
         .Method("TeardownRootWidget", &IrisApplication::TeardownRootWidget)
         .Method("TickIris", &IrisApplication::TickIris)
         .PointerMethod("GetRef", &GetRefForNyx, WidgetDescriptor);

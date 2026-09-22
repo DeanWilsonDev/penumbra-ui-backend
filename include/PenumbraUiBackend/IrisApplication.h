@@ -1,10 +1,12 @@
 #pragma once
 
 #include "PenumbraUiBackend/Lustre/StyleApplier.h"
+#include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
 #include "Iris/Component.h"
 #include "Iris/IrisNyxDriver.h"
+#include "Iris/SlotRuntime.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Render/IFontBackend.h"
@@ -24,6 +26,10 @@ namespace nyx::host {
 template <typename T>
 class InheritableTypeBuilder;
 } // namespace nyx::host
+
+namespace Penumbra::Widgets {
+class Box;
+} // namespace Penumbra::Widgets
 
 namespace PenumbraUiBackend {
 
@@ -150,16 +156,14 @@ public:
     // node carried that ref (or `MountAppRoot` was never called).
     Penumbra::Widgets::WidgetBase* GetRef(const std::string& Name) const;
 
-    // The generic half of app-root teardown: clears the root widget
-    // (`SetRootWidget(nullptr)`) and this instance's own OverlayHost/ref bookkeeping. An
-    // application with its own additional mounted state (e.g. Cairn's own board `<Slot>`
-    // resolution) tears that down separately, first, before calling this.
     void TeardownRootWidget();
 
-    // -- Tick --
+    bool MountReconciledComponent(const std::string& File, const std::string& FunctionName,
+                                   std::vector<nyx::runtime::Value> Args, const std::string& StylesheetName,
+                                   const std::string& SlotStylesheetName, const std::string& TargetRefName);
 
-    // Reconciles every dirty `<Slot>` (`iris::Tick()`) -- call once per frame, typically
-    // as the first statement of `OnUpdate`.
+    void TeardownReconciledComponent(const std::string& TargetRefName);
+
     void TickIris();
 
     Iris::IrisNyxDriver& IrisDriver() { return *Driver_; }
@@ -189,6 +193,14 @@ protected:
     Iris::Component AppRoot_;
     RefMap           AppRootRefs_;
     Penumbra::Widgets::OverlayHost* OverlayHostPtr_ = nullptr;
+
+    struct ReconciledMount {
+        std::vector<std::shared_ptr<Iris::Component>> Roots;
+        std::unique_ptr<PenumbraWidget>                 Wrapper;
+        std::vector<std::unique_ptr<iris::SlotState>>   Slots;
+    };
+    void ClearReconciledMount(ReconciledMount& Mount, Penumbra::Widgets::Box* Target);
+    std::unordered_map<std::string, ReconciledMount> ReconciledMounts_;
 };
 
 // Adds IrisApplication's own methods onto Builder -- called from

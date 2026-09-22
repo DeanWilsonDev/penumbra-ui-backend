@@ -5,6 +5,7 @@
 #include "Iris/IrisNyxDriver.h"
 
 #include "Penumbra/Application.h"
+#include "Penumbra/Widgets/Box.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -136,6 +137,96 @@ void TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef() {
     Expect(App.GetRef("content") == nullptr, "TeardownRootWidget clears the ref map too");
 }
 
+void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
+    TempProject Project;
+    Project.Write("Root.irisx", "void Root() {\n"
+                                 "    render {\n"
+                                 "        <Frame ref=\"content\"></Frame>\n"
+                                 "    }\n"
+                                 "}\n");
+    Project.Write("CardListThree.irisx",
+                   "void CardListThree() {\n"
+                   "    render {\n"
+                   "        <Frame>\n"
+                   "            <Slot>\n"
+                   "                !{() -> {\n"
+                   "                    Array<string> names = [\"Ann\", \"Bo\", \"Cy\"];\n"
+                   "                    return names.Map((string item) -> <Frame class={item} />);\n"
+                   "                }}\n"
+                   "            </Slot>\n"
+                   "        </Frame>\n"
+                   "    }\n"
+                   "}\n");
+    Project.Write("CardListTwo.irisx",
+                   "void CardListTwo() {\n"
+                   "    render {\n"
+                   "        <Frame>\n"
+                   "            <Slot>\n"
+                   "                !{() -> {\n"
+                   "                    Array<string> names = [\"Dee\", \"Eff\"];\n"
+                   "                    return names.Map((string item) -> <Frame class={item} />);\n"
+                   "                }}\n"
+                   "            </Slot>\n"
+                   "        </Frame>\n"
+                   "    }\n"
+                   "}\n");
+
+    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::IrisApplication App;
+    App.Attach(Driver, Project.UiDir());
+    App.MountAppRoot("Root.irisx", "Root", "NoSuchStylesheet");
+
+    const bool MountedFirst =
+        App.MountReconciledComponent("CardListThree.irisx", "CardListThree", {}, "NoSuchStylesheet",
+                                       "NoSuchStylesheet", "content");
+    Expect(MountedFirst, "MountReconciledComponent mounts against a real fixture");
+
+    auto* Content = dynamic_cast<Penumbra::Widgets::Box*>(App.GetRef("content"));
+    Expect(Content != nullptr, "the app root's \"content\" ref resolves to a Box");
+    Expect(Content != nullptr && Content->GetChildCount() == 1,
+           "the mounted component's own root becomes content's sole child");
+    auto* Inner = Content ? dynamic_cast<Penumbra::Widgets::Box*>(Content->GetChildAt(0)) : nullptr;
+    Expect(Inner != nullptr && Inner->GetChildCount() == 3,
+           "the <Slot> .Map() over 3 names resolves into 3 real children");
+
+    const bool MountedSecond = App.MountReconciledComponent("CardListTwo.irisx", "CardListTwo", {},
+                                                              "NoSuchStylesheet", "NoSuchStylesheet", "content");
+    Expect(MountedSecond, "a second MountReconciledComponent call against the same target succeeds");
+    Expect(Content != nullptr && Content->GetChildCount() == 1,
+           "the second mount still leaves exactly one child -- the first mount's tree was cleared, not "
+           "accumulated");
+    Inner = Content ? dynamic_cast<Penumbra::Widgets::Box*>(Content->GetChildAt(0)) : nullptr;
+    Expect(Inner != nullptr && Inner->GetChildCount() == 2, "the second mount's own <Slot> .Map() resolves into 2 "
+                                                             "real children, not 3");
+
+    App.TeardownReconciledComponent("content");
+    Expect(Content != nullptr && Content->GetChildCount() == 0, "TeardownReconciledComponent clears the target with "
+                                                                 "nothing mounted in its place");
+}
+
+void TestMountReconciledComponentFailsForAnUnknownTargetRef() {
+    TempProject Project;
+    Project.Write("Root.irisx", "void Root() {\n"
+                                 "    render {\n"
+                                 "        <Frame ref=\"content\"></Frame>\n"
+                                 "    }\n"
+                                 "}\n");
+    Project.Write("Card.irisx", "void Card() {\n"
+                                 "    render {\n"
+                                 "        <Text>hello</Text>\n"
+                                 "    }\n"
+                                 "}\n");
+
+    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::IrisApplication App;
+    App.Attach(Driver, Project.UiDir());
+    App.MountAppRoot("Root.irisx", "Root", "NoSuchStylesheet");
+
+    const bool Mounted =
+        App.MountReconciledComponent("Card.irisx", "Card", {}, "NoSuchStylesheet", "NoSuchStylesheet", "no-such-ref");
+    Expect(!Mounted, "MountReconciledComponent returns false for a TargetRefName the app root never declared");
+}
+
 void TestMountAppRootFailsGracefullyOnAMalformedFixture() {
     TempProject Project;
     Project.Write("Broken.irisx", "this is not valid irisx source {{{\n");
@@ -211,6 +302,8 @@ void RunIrisApplicationTests() {
     TestLoadStylesheetOfAMissingFileStillRegistersAnEmptySheet();
     TestMountComponentBuildsAWidgetAndPopulatesRefMap();
     TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef();
+    TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount();
+    TestMountReconciledComponentFailsForAnUnknownTargetRef();
     TestMountAppRootFailsGracefullyOnAMalformedFixture();
     TestBridgedIrisApplicationExposesInheritedMethodsToNyx();
     TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName();
