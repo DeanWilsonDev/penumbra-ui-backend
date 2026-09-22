@@ -103,12 +103,18 @@ IrisApplication::MountResult IrisApplication::MountComponent(
 bool IrisApplication::MountAppRoot(const std::string& File, const std::string& FunctionName) {
     EnsureStylesheetsFor(UiDir_ + "/" + File);
 
+    AppRootSlots_.clear();
+    AppRootWrapper_.reset();
+
     AppRoot_ = Driver_->MountRoot(UiDir_ + "/" + File, FunctionName);
     if (!Driver_->Errors().empty()) {
         std::fprintf(stderr, "[IrisApplication] %s mount failed: %s\n", File.c_str(),
                      Driver_->Errors().back().Message.c_str());
         return false;
     }
+
+    auto RootOverlayHost = std::make_unique<Penumbra::Widgets::OverlayHost>();
+    OverlayHostPtr_       = RootOverlayHost.get();
 
     BuildContext Context;
     Context.FontBackend   = &GetFontBackend();
@@ -117,13 +123,16 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
     Context.StyleApplier  = &StyleApplier();
     Context.LifecycleHost = &GetLifecycleRegistry();
     Context.NyxHost       = &Driver_->Runtime();
+    Context.OverlayHost   = OverlayHostPtr_;
 
     AppRootRefs_.clear();
     std::unique_ptr<Penumbra::Widgets::WidgetBase> Built = BuildWidgetTree(AppRoot_, Context, nullptr, &AppRootRefs_);
 
-    auto RootOverlayHost = std::make_unique<Penumbra::Widgets::OverlayHost>();
-    OverlayHostPtr_       = RootOverlayHost.get();
-    RootOverlayHost->SetRoot(std::move(Built));
+    AppRootWrapper_ = WrapExistingTree(std::move(Built), nullptr, nullptr, &ComposedStyleSet_, &StyleApplier());
+    AppRootSlots_    = iris::ResolveSlots(*AppRootWrapper_, AppRoot_, MakeMountFn(Context));
+    for (std::unique_ptr<iris::SlotState>& Slot : AppRootSlots_) Slot->Reconcile();
+
+    RootOverlayHost->SetRoot(AppRootWrapper_->DetachOwnership());
     SetRootWidget(std::move(RootOverlayHost));
     return true;
 }
@@ -139,6 +148,8 @@ void IrisApplication::TeardownRootWidget() {
         Mount.Wrapper.reset();
     }
     ReconciledMounts_.clear();
+    AppRootSlots_.clear();
+    AppRootWrapper_.reset();
     SetRootWidget(nullptr);
     OverlayHostPtr_ = nullptr;
     AppRootRefs_.clear();

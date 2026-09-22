@@ -182,6 +182,9 @@ protected:
     RefMap           AppRootRefs_;
     Penumbra::Widgets::OverlayHost* OverlayHostPtr_ = nullptr;
 
+    std::unique_ptr<PenumbraWidget>               AppRootWrapper_;
+    std::vector<std::unique_ptr<iris::SlotState>> AppRootSlots_;
+
     struct ReconciledMount {
         std::vector<std::shared_ptr<Iris::Component>> Roots;
         std::unique_ptr<PenumbraWidget>                 Wrapper;
