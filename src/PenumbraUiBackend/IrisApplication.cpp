@@ -54,11 +54,16 @@ void IrisApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath)
         Worklist.pop_back();
         if (!DiscoveredStylesheetFiles_.insert(Path).second) continue;
 
-        std::filesystem::path LustrePath = std::filesystem::path(Path).replace_extension(".lustre");
-        std::error_code       Ignored;
-        if (std::filesystem::is_regular_file(LustrePath, Ignored)) {
-            ::Lustre::Stylesheet Sheet = Lustre::LoadStylesheetFromFile(LustrePath.string().c_str(), Path.c_str());
-            for (::Lustre::RulePtr& R : Sheet.Rules) ComposedSheet_.Rules.push_back(std::move(R));
+        const std::string Dir = std::filesystem::path(Path).parent_path().string();
+        if (DiscoveredStylesheetDirs_.insert(Dir).second) {
+            std::error_code Ignored;
+            for (const std::filesystem::directory_entry& Entry :
+                 std::filesystem::directory_iterator(Dir, Ignored)) {
+                if (Entry.path().extension() != ".lustre") continue;
+                ::Lustre::Stylesheet Sheet =
+                    Lustre::LoadStylesheetFromFile(Entry.path().string().c_str(), Entry.path().stem().string().c_str());
+                for (::Lustre::RulePtr& R : Sheet.Rules) ComposedSheet_.Rules.push_back(std::move(R));
+            }
         }
 
         std::optional<std::string> Source = ReadFileToString(Path);

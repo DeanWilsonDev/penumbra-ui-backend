@@ -84,14 +84,16 @@ void TestMountComponentAutoDiscoversItsOwnColocatedStylesheet() {
            "MountComponent auto-discovers Solo.irisx's own colocated Solo.lustre with no explicit call");
 }
 
-void TestMountComponentDiscoversAnImportedComponentsStylesheetTransitively() {
+void TestMountComponentDiscoversAnImportedComponentsStylesheetInASeparateDirectoryTransitively() {
     TempProject Project;
-    Project.Write("Child.lustre", ".child { background-color: #00FF00; }");
-    Project.Write("Child.irisx", "void Child() {\n"
-                                  "    render {\n"
-                                  "        <Text>child</Text>\n"
-                                  "    }\n"
-                                  "}\n");
+    const std::filesystem::path NestedDir = std::filesystem::path(Project.RootPath()) / "nested";
+    std::filesystem::create_directories(NestedDir);
+    std::ofstream(NestedDir / "Child.lustre") << ".child { background-color: #00FF00; }";
+    std::ofstream(NestedDir / "Child.irisx") << "void Child() {\n"
+                                                 "    render {\n"
+                                                 "        <Text>child</Text>\n"
+                                                 "    }\n"
+                                                 "}\n";
     Project.Write("Parent.irisx", "import Child\n"
                                    "void Parent() {\n"
                                    "    render {\n"
@@ -99,20 +101,22 @@ void TestMountComponentDiscoversAnImportedComponentsStylesheetTransitively() {
                                    "    }\n"
                                    "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    Iris::IrisConfig Config = TestConfig();
+    Config.SearchPaths      = {"demo", "nested"};
+    Iris::IrisNyxDriver Driver(Config, Project.RootPath());
     PenumbraUiBackend::IrisApplication App;
     App.Attach(Driver, Project.UiDir());
 
     std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
     App.MountComponent("Parent.irisx", "Parent", {}, KeepAlive);
 
-    Expect(Driver.Errors().empty(), "Parent.irisx (importing Child) compiles and mounts with no errors");
+    Expect(Driver.Errors().empty(), "Parent.irisx (importing Child from a separate directory) mounts with no errors");
     Expect(App.ComposedStylesheet().Component != nullptr && !App.ComposedStylesheet().Component->Rules.empty(),
-           "mounting Parent.irisx also discovers Child.irisx's own colocated Child.lustre via the import graph, "
-           "before Child is ever actually invoked as a <Slot>-mediated child");
+           "mounting Parent.irisx also discovers Child.irisx's own directory (nested/, not demo/) via the import "
+           "graph, before Child is ever actually invoked as a <Slot>-mediated child");
 }
 
-void TestStylesFromTwoIndependentMountsAccumulateRatherThanReplace() {
+void TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThanReplace() {
     TempProject Project;
     Project.Write("First.lustre", ".first { background-color: #FF0000; }");
     Project.Write("First.irisx", "void First() {\n"
@@ -120,14 +124,18 @@ void TestStylesFromTwoIndependentMountsAccumulateRatherThanReplace() {
                                   "        <Text>first</Text>\n"
                                   "    }\n"
                                   "}\n");
-    Project.Write("Second.lustre", ".second { background-color: #0000FF; }");
-    Project.Write("Second.irisx", "void Second() {\n"
-                                   "    render {\n"
-                                   "        <Text>second</Text>\n"
-                                   "    }\n"
-                                   "}\n");
+    const std::filesystem::path NestedDir = std::filesystem::path(Project.RootPath()) / "nested";
+    std::filesystem::create_directories(NestedDir);
+    std::ofstream(NestedDir / "Second.lustre") << ".second { background-color: #0000FF; }";
+    std::ofstream(NestedDir / "Second.irisx") << "void Second() {\n"
+                                                  "    render {\n"
+                                                  "        <Text>second</Text>\n"
+                                                  "    }\n"
+                                                  "}\n";
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    Iris::IrisConfig Config = TestConfig();
+    Config.SearchPaths      = {"demo", "nested"};
+    Iris::IrisNyxDriver Driver(Config, Project.RootPath());
     PenumbraUiBackend::IrisApplication App;
     App.Attach(Driver, Project.UiDir());
 
@@ -135,12 +143,14 @@ void TestStylesFromTwoIndependentMountsAccumulateRatherThanReplace() {
     App.MountComponent("First.irisx", "First", {}, KeepAlive);
     const std::size_t RuleCountAfterFirst = App.ComposedStylesheet().Component->Rules.size();
 
-    App.MountComponent("Second.irisx", "Second", {}, KeepAlive);
+    PenumbraUiBackend::IrisApplication::MountResult SecondResult =
+        App.MountComponent("../nested/Second.irisx", "Second", {}, KeepAlive);
     const std::size_t RuleCountAfterSecond = App.ComposedStylesheet().Component->Rules.size();
 
+    Expect(SecondResult.Widget != nullptr, "the second, separately-directoried fixture mounts too");
     Expect(RuleCountAfterSecond > RuleCountAfterFirst,
-           "a later, independent MountComponent call adds its own rules on top of an earlier mount's, rather than "
-           "replacing them");
+           "a later, independent MountComponent call for a component in a different directory adds its own rules "
+           "on top of an earlier mount's, rather than replacing them");
 }
 
 void TestMountComponentBuildsAWidgetAndPopulatesRefMap() {
@@ -344,8 +354,8 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
 
 void RunIrisApplicationTests() {
     TestMountComponentAutoDiscoversItsOwnColocatedStylesheet();
-    TestMountComponentDiscoversAnImportedComponentsStylesheetTransitively();
-    TestStylesFromTwoIndependentMountsAccumulateRatherThanReplace();
+    TestMountComponentDiscoversAnImportedComponentsStylesheetInASeparateDirectoryTransitively();
+    TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThanReplace();
     TestMountComponentBuildsAWidgetAndPopulatesRefMap();
     TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef();
     TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount();

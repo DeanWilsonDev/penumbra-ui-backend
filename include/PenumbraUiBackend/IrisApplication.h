@@ -166,6 +166,7 @@ protected:
     ::Lustre::Stylesheet            ComposedSheet_;
     ::Lustre::StylesheetSet         ComposedStyleSet_{nullptr, &ComposedSheet_};
     std::unordered_set<std::string> DiscoveredStylesheetFiles_;
+    std::unordered_set<std::string> DiscoveredStylesheetDirs_;
     std::optional<Lustre::LustreStyleApplier> Applier_;
 
     void EnsureStylesheetsFor(const std::string& EntryResolvedPath);
