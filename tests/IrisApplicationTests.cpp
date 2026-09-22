@@ -60,36 +60,87 @@ Iris::IrisConfig TestConfig() {
     return Config;
 }
 
-void TestLoadStylesheetPopulatesGetStylesheetByName() {
+void TestMountComponentAutoDiscoversItsOwnColocatedStylesheet() {
     TempProject Project;
-    Project.Write("Test.lustre", ".foo { background-color: #FF0000; }");
+    Project.Write("Solo.lustre", ".foo { background-color: #FF0000; }");
+    Project.Write("Solo.irisx", "void Solo() {\n"
+                                 "    render {\n"
+                                 "        <Text ref=\"label\">hello</Text>\n"
+                                 "    }\n"
+                                 "}\n");
 
     Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
     PenumbraUiBackend::IrisApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    Expect(App.GetStylesheet("Test") == nullptr, "GetStylesheet returns nullptr before LoadStylesheet is called");
+    Expect(App.ComposedStylesheet().Component == nullptr || App.ComposedStylesheet().Component->Rules.empty(),
+           "nothing composed before the first mount");
 
-    const bool Loaded = App.LoadStylesheet("Test");
-    Expect(Loaded, "LoadStylesheet returns true for a real .lustre file");
-    const ::Lustre::StylesheetSet* Set = App.GetStylesheet("Test");
-    Expect(Set != nullptr, "GetStylesheet returns a non-null set after LoadStylesheet");
-    Expect(Set != nullptr && Set->Global != nullptr && !Set->Global->Rules.empty(),
-           "the loaded stylesheet carries the real parsed rule");
+    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
+    App.MountComponent("Solo.irisx", "Solo", {}, KeepAlive);
+
+    Expect(Driver.Errors().empty(), "the Solo fixture compiles and mounts with no errors");
+    Expect(App.ComposedStylesheet().Component != nullptr && !App.ComposedStylesheet().Component->Rules.empty(),
+           "MountComponent auto-discovers Solo.irisx's own colocated Solo.lustre with no explicit call");
 }
 
-void TestLoadStylesheetOfAMissingFileStillRegistersAnEmptySheet() {
+void TestMountComponentDiscoversAnImportedComponentsStylesheetTransitively() {
     TempProject Project;
+    Project.Write("Child.lustre", ".child { background-color: #00FF00; }");
+    Project.Write("Child.irisx", "void Child() {\n"
+                                  "    render {\n"
+                                  "        <Text>child</Text>\n"
+                                  "    }\n"
+                                  "}\n");
+    Project.Write("Parent.irisx", "import Child\n"
+                                   "void Parent() {\n"
+                                   "    render {\n"
+                                   "        <Child />\n"
+                                   "    }\n"
+                                   "}\n");
+
     Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
     PenumbraUiBackend::IrisApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    const bool Loaded = App.LoadStylesheet("NoSuchSheet");
-    Expect(Loaded, "LoadStylesheet still returns true for a missing file (LoadStylesheetFromFile's own tolerant "
-                   "contract -- logs to stderr, returns an empty Stylesheet rather than failing)");
-    const ::Lustre::StylesheetSet* Set = App.GetStylesheet("NoSuchSheet");
-    Expect(Set != nullptr && Set->Global != nullptr && Set->Global->Rules.empty(),
-           "a missing sheet is registered as empty, not left absent");
+    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
+    App.MountComponent("Parent.irisx", "Parent", {}, KeepAlive);
+
+    Expect(Driver.Errors().empty(), "Parent.irisx (importing Child) compiles and mounts with no errors");
+    Expect(App.ComposedStylesheet().Component != nullptr && !App.ComposedStylesheet().Component->Rules.empty(),
+           "mounting Parent.irisx also discovers Child.irisx's own colocated Child.lustre via the import graph, "
+           "before Child is ever actually invoked as a <Slot>-mediated child");
+}
+
+void TestStylesFromTwoIndependentMountsAccumulateRatherThanReplace() {
+    TempProject Project;
+    Project.Write("First.lustre", ".first { background-color: #FF0000; }");
+    Project.Write("First.irisx", "void First() {\n"
+                                  "    render {\n"
+                                  "        <Text>first</Text>\n"
+                                  "    }\n"
+                                  "}\n");
+    Project.Write("Second.lustre", ".second { background-color: #0000FF; }");
+    Project.Write("Second.irisx", "void Second() {\n"
+                                   "    render {\n"
+                                   "        <Text>second</Text>\n"
+                                   "    }\n"
+                                   "}\n");
+
+    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::IrisApplication App;
+    App.Attach(Driver, Project.UiDir());
+
+    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
+    App.MountComponent("First.irisx", "First", {}, KeepAlive);
+    const std::size_t RuleCountAfterFirst = App.ComposedStylesheet().Component->Rules.size();
+
+    App.MountComponent("Second.irisx", "Second", {}, KeepAlive);
+    const std::size_t RuleCountAfterSecond = App.ComposedStylesheet().Component->Rules.size();
+
+    Expect(RuleCountAfterSecond > RuleCountAfterFirst,
+           "a later, independent MountComponent call adds its own rules on top of an earlier mount's, rather than "
+           "replacing them");
 }
 
 void TestMountComponentBuildsAWidgetAndPopulatesRefMap() {
@@ -105,8 +156,7 @@ void TestMountComponentBuildsAWidgetAndPopulatesRefMap() {
     App.Attach(Driver, Project.UiDir());
 
     std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
-    PenumbraUiBackend::IrisApplication::MountResult Result =
-        App.MountComponent("Card.irisx", "Card", {}, "NoSuchStylesheet", KeepAlive);
+    PenumbraUiBackend::IrisApplication::MountResult Result = App.MountComponent("Card.irisx", "Card", {}, KeepAlive);
 
     Expect(Driver.Errors().empty(), "the Card fixture compiles and mounts with no errors");
     Expect(Result.Widget != nullptr, "MountComponent returns a real built widget");
@@ -126,7 +176,7 @@ void TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef() {
     PenumbraUiBackend::IrisApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    const bool Mounted = App.MountAppRoot("Root.irisx", "Root", "NoSuchStylesheet");
+    const bool Mounted = App.MountAppRoot("Root.irisx", "Root");
     Expect(Mounted, "MountAppRoot succeeds against a real fixture");
     Expect(App.GetRootWidget() != nullptr, "MountAppRoot calls SetRootWidget with a real widget");
     Expect(App.GetRef("content") != nullptr, "MountAppRoot's ref map is queryable via GetRef");
@@ -174,11 +224,9 @@ void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
     Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
     PenumbraUiBackend::IrisApplication App;
     App.Attach(Driver, Project.UiDir());
-    App.MountAppRoot("Root.irisx", "Root", "NoSuchStylesheet");
+    App.MountAppRoot("Root.irisx", "Root");
 
-    const bool MountedFirst =
-        App.MountReconciledComponent("CardListThree.irisx", "CardListThree", {}, "NoSuchStylesheet",
-                                       "NoSuchStylesheet", "content");
+    const bool MountedFirst = App.MountReconciledComponent("CardListThree.irisx", "CardListThree", {}, "content");
     Expect(MountedFirst, "MountReconciledComponent mounts against a real fixture");
 
     auto* Content = dynamic_cast<Penumbra::Widgets::Box*>(App.GetRef("content"));
@@ -189,8 +237,7 @@ void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
     Expect(Inner != nullptr && Inner->GetChildCount() == 3,
            "the <Slot> .Map() over 3 names resolves into 3 real children");
 
-    const bool MountedSecond = App.MountReconciledComponent("CardListTwo.irisx", "CardListTwo", {},
-                                                              "NoSuchStylesheet", "NoSuchStylesheet", "content");
+    const bool MountedSecond = App.MountReconciledComponent("CardListTwo.irisx", "CardListTwo", {}, "content");
     Expect(MountedSecond, "a second MountReconciledComponent call against the same target succeeds");
     Expect(Content != nullptr && Content->GetChildCount() == 1,
            "the second mount still leaves exactly one child -- the first mount's tree was cleared, not "
@@ -220,10 +267,9 @@ void TestMountReconciledComponentFailsForAnUnknownTargetRef() {
     Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
     PenumbraUiBackend::IrisApplication App;
     App.Attach(Driver, Project.UiDir());
-    App.MountAppRoot("Root.irisx", "Root", "NoSuchStylesheet");
+    App.MountAppRoot("Root.irisx", "Root");
 
-    const bool Mounted =
-        App.MountReconciledComponent("Card.irisx", "Card", {}, "NoSuchStylesheet", "NoSuchStylesheet", "no-such-ref");
+    const bool Mounted = App.MountReconciledComponent("Card.irisx", "Card", {}, "no-such-ref");
     Expect(!Mounted, "MountReconciledComponent returns false for a TargetRefName the app root never declared");
 }
 
@@ -235,7 +281,7 @@ void TestMountAppRootFailsGracefullyOnAMalformedFixture() {
     PenumbraUiBackend::IrisApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    const bool Mounted = App.MountAppRoot("Broken.irisx", "Broken", "NoSuchStylesheet");
+    const bool Mounted = App.MountAppRoot("Broken.irisx", "Broken");
     Expect(!Mounted, "MountAppRoot returns false for a fixture that fails to compile");
     Expect(App.GetRootWidget() == nullptr, "a failed MountAppRoot never calls SetRootWidget");
 }
@@ -246,8 +292,7 @@ void TestBridgedIrisApplicationExposesInheritedMethodsToNyx() {
     PenumbraUiBackend::IrisApplication* Application = Bridge.LoadApplication(
         "class TestApplication : Application {\n"
         "    bool OnStart() override {\n"
-        "        this.LoadStylesheet(\"NoSuchSheet\");\n"
-        "        return this.MountAppRoot(\"BridgedRoot.irisx\", \"BridgedRoot\", \"NoSuchSheet\");\n"
+        "        return this.MountAppRoot(\"BridgedRoot.irisx\", \"BridgedRoot\");\n"
         "    }\n"
         "}\n",
         "bridged-iris-application-test.nyx", "TestApplication");
@@ -298,8 +343,9 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
 } // namespace
 
 void RunIrisApplicationTests() {
-    TestLoadStylesheetPopulatesGetStylesheetByName();
-    TestLoadStylesheetOfAMissingFileStillRegistersAnEmptySheet();
+    TestMountComponentAutoDiscoversItsOwnColocatedStylesheet();
+    TestMountComponentDiscoversAnImportedComponentsStylesheetTransitively();
+    TestStylesFromTwoIndependentMountsAccumulateRatherThanReplace();
     TestMountComponentBuildsAWidgetAndPopulatesRefMap();
     TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef();
     TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount();

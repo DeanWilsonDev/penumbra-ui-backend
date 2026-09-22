@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace nyx::host {
@@ -70,7 +71,7 @@ namespace PenumbraUiBackend {
 // registered functions (which already receive `vector<Value>` from Nyx through the
 // ordinary `RegisterFunction` path -- no new marshaling boundary crossed there), or
 // directly by a plain C++ subclass. Only the zero/primitive-arg entry points below
-// (`LoadStylesheet`, `ReloadFont`, `MountAppRoot`, `TeardownRootWidget`, `TickIris`,
+// (`ReloadFont`, `MountAppRoot`, `TeardownRootWidget`, `TickIris`,
 // `GetRef`) are registered onto the Nyx-visible surface (see `RegisterIrisApplicationMethods`
 // below, called from `NyxApplicationBridgeT<IrisApplication>::RegisterApplicationType()`).
 class IrisApplication : public Penumbra::Application {
@@ -100,18 +101,6 @@ public:
     bool ReloadFont(float DpiScaleFactor);
     Penumbra::Render::FontHandle CurrentFont() const { return Font_; }
 
-    // -- Stylesheets, by name --
-
-    // Loads "<UiDir>/Name.lustre" (`PenumbraUiBackend::Lustre::LoadStylesheetFromFile`)
-    // and stores it under Name, replacing anything previously loaded under that same name.
-    // Always returns true -- a missing/malformed file logs to stderr and yields an empty
-    // stylesheet, matching `LoadStylesheetFromFile`'s own tolerant contract; there is
-    // nothing narrower to report here without changing that contract.
-    bool LoadStylesheet(const std::string& Name);
-
-    // nullptr if Name was never loaded via LoadStylesheet.
-    const ::Lustre::StylesheetSet* GetStylesheet(const std::string& Name) const;
-
     // The one `LustreStyleApplier` shared by every mount this instance performs, built
     // lazily against `GetFontBackend()` on first access (matching every existing caller's
     // own former "construct once in OnStart, reuse forever" behavior -- never rebuilt on a
@@ -127,9 +116,8 @@ public:
 
     // Mounts `File`'s own `FunctionName` component (via `IrisDriver().MountRoot`) and
     // builds it into a real Penumbra widget tree (`PenumbraUiBackend::BuildWidgetTree`),
-    // styled against whatever `GetStylesheet(StylesheetName)` currently holds (nullptr if
-    // never loaded -- the build simply skips Lustre resolution then, same tolerance
-    // `BuildContext::Style` already documents). The returned `Iris::Component` is pushed
+    // styled against every `.lustre` file discovered transitively from `File`'s own
+    // `import` graph (`EnsureStylesheetsFor`). The returned `Iris::Component` is pushed
     // onto `KeepAlive` -- the caller must keep that vector alive for as long as the
     // returned widget (or anything it mounted, e.g. a `<Slot>`/`onRelease` closure) stays
     // live: those closures hold a raw reference into the `Component`'s own
@@ -137,20 +125,19 @@ public:
     // (`IrisNyxDriver::MountRoot`'s own doc comment).
     MountResult MountComponent(const std::string& File, const std::string& FunctionName,
                                 std::vector<nyx::runtime::Value>               Args,
-                                const std::string&                              StylesheetName,
                                 std::vector<std::shared_ptr<Iris::Component>>& KeepAlive);
 
     // -- App-root mount + OverlayHost/root-widget lifecycle --
 
-    // Mounts `File`'s own `FunctionName` component as this application's root: builds it
-    // (styled against `StylesheetName`), wraps the result in a fresh
+    // Mounts `File`'s own `FunctionName` component as this application's root: builds it,
+    // wraps the result in a fresh
     // `Penumbra::Widgets::OverlayHost` (so a `<Portal>` anywhere in the mounted tree has
     // somewhere to present), and calls `SetRootWidget`. Every `ref`-tagged node in the
     // mounted tree becomes retrievable via `GetRef` afterward. Returns false, logging to
     // stderr, on a mount error (`IrisDriver().Errors()` grew) -- does not touch
     // `SetRootWidget` in that case. Safe to call again later (e.g. on a DPI change) --
     // replaces the previous root and ref set outright.
-    bool MountAppRoot(const std::string& File, const std::string& FunctionName, const std::string& StylesheetName);
+    bool MountAppRoot(const std::string& File, const std::string& FunctionName);
 
     // A `ref`-tagged widget from the most recent `MountAppRoot` call, or nullptr if no
     // node carried that ref (or `MountAppRoot` was never called).
@@ -159,12 +146,13 @@ public:
     void TeardownRootWidget();
 
     bool MountReconciledComponent(const std::string& File, const std::string& FunctionName,
-                                   std::vector<nyx::runtime::Value> Args, const std::string& StylesheetName,
-                                   const std::string& SlotStylesheetName, const std::string& TargetRefName);
+                                   std::vector<nyx::runtime::Value> Args, const std::string& TargetRefName);
 
     void TeardownReconciledComponent(const std::string& TargetRefName);
 
     void TickIris();
+
+    const ::Lustre::StylesheetSet& ComposedStylesheet() const { return ComposedStyleSet_; }
 
     Iris::IrisNyxDriver& IrisDriver() { return *Driver_; }
 
@@ -175,13 +163,12 @@ protected:
     float                 FontSizeLogical_ = 14.0f;
     Penumbra::Render::FontHandle Font_{0};
 
-    // Pointer stability across insertion is an `unordered_map` guarantee (only iterators
-    // are invalidated, never references/pointers to existing elements) -- StyleSets_'s own
-    // entries hold a raw `Lustre::Stylesheet*` into Sheets_, safe to keep even as more
-    // sheets are loaded later.
-    std::unordered_map<std::string, ::Lustre::Stylesheet>    Sheets_;
-    std::unordered_map<std::string, ::Lustre::StylesheetSet> StyleSets_;
-    std::optional<Lustre::LustreStyleApplier>                 Applier_;
+    ::Lustre::Stylesheet            ComposedSheet_;
+    ::Lustre::StylesheetSet         ComposedStyleSet_{nullptr, &ComposedSheet_};
+    std::unordered_set<std::string> DiscoveredStylesheetFiles_;
+    std::optional<Lustre::LustreStyleApplier> Applier_;
+
+    void EnsureStylesheetsFor(const std::string& EntryResolvedPath);
 
     // Persistent storage, not a local -- a `<Slot>`/`onRelease` closure the mounted tree
     // captured holds a raw reference into this `Component`'s own `ComponentInstance::

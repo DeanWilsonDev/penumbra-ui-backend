@@ -3,6 +3,7 @@
 #include "PenumbraUiBackend/Lustre/StylesheetLoader.h"
 #include "PenumbraUiBackend/Portal.h"
 
+#include "Iris/ImportResolver.h"
 #include "Iris/SlotResolution.h"
 #include "Iris/SlotRuntime.h"
 
@@ -11,9 +12,24 @@
 #include <host/inheritable-type-builder.hpp>
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <utility>
 
 namespace PenumbraUiBackend {
+
+namespace {
+
+std::optional<std::string> ReadFileToString(const std::string& Path) {
+    std::ifstream File(Path);
+    if (!File) return std::nullopt;
+    std::ostringstream Buffer;
+    Buffer << File.rdbuf();
+    return Buffer.str();
+}
+
+} // namespace
 
 void IrisApplication::Attach(Iris::IrisNyxDriver& Driver, std::string UiDir) {
     Driver_ = &Driver;
@@ -31,15 +47,26 @@ bool IrisApplication::ReloadFont(float DpiScaleFactor) {
     return true;
 }
 
-bool IrisApplication::LoadStylesheet(const std::string& Name) {
-    Sheets_[Name] = Lustre::LoadStylesheetFromFile((UiDir_ + "/" + Name + ".lustre").c_str(), Name.c_str());
-    StyleSets_[Name] = ::Lustre::StylesheetSet{&Sheets_[Name], nullptr};
-    return true;
-}
+void IrisApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath) {
+    std::vector<std::string> Worklist{EntryResolvedPath};
+    while (!Worklist.empty()) {
+        std::string Path = std::move(Worklist.back());
+        Worklist.pop_back();
+        if (!DiscoveredStylesheetFiles_.insert(Path).second) continue;
 
-const ::Lustre::StylesheetSet* IrisApplication::GetStylesheet(const std::string& Name) const {
-    auto It = StyleSets_.find(Name);
-    return It == StyleSets_.end() ? nullptr : &It->second;
+        std::filesystem::path LustrePath = std::filesystem::path(Path).replace_extension(".lustre");
+        std::error_code       Ignored;
+        if (std::filesystem::is_regular_file(LustrePath, Ignored)) {
+            ::Lustre::Stylesheet Sheet = Lustre::LoadStylesheetFromFile(LustrePath.string().c_str(), Path.c_str());
+            for (::Lustre::RulePtr& R : Sheet.Rules) ComposedSheet_.Rules.push_back(std::move(R));
+        }
+
+        std::optional<std::string> Source = ReadFileToString(Path);
+        if (!Source) continue;
+        const std::vector<Iris::ImportStatement>   Imports = Iris::ScanImports(*Source, Path);
+        const Iris::ImportResolutionResult Resolved = Iris::ResolveImports(Imports, Driver_->Config(), Driver_->ProjectRoot());
+        for (const Iris::ResolvedImport& R : Resolved.Resolved) Worklist.push_back(R.ResolvedPath);
+    }
 }
 
 const Lustre::LustreStyleApplier& IrisApplication::StyleApplier() {
@@ -49,7 +76,9 @@ const Lustre::LustreStyleApplier& IrisApplication::StyleApplier() {
 
 IrisApplication::MountResult IrisApplication::MountComponent(
     const std::string& File, const std::string& FunctionName, std::vector<nyx::runtime::Value> Args,
-    const std::string& StylesheetName, std::vector<std::shared_ptr<Iris::Component>>& KeepAlive) {
+    std::vector<std::shared_ptr<Iris::Component>>& KeepAlive) {
+    EnsureStylesheetsFor(UiDir_ + "/" + File);
+
     auto Root =
         std::make_shared<Iris::Component>(Driver_->MountRoot(UiDir_ + "/" + File, FunctionName, std::move(Args)));
     KeepAlive.push_back(Root);
@@ -57,7 +86,7 @@ IrisApplication::MountResult IrisApplication::MountComponent(
     BuildContext Context;
     Context.FontBackend  = &GetFontBackend();
     Context.Font         = Font_;
-    Context.Style        = GetStylesheet(StylesheetName);
+    Context.Style        = &ComposedStyleSet_;
     Context.StyleApplier = &StyleApplier();
     Context.OverlayHost  = OverlayHostPtr_;
 
@@ -66,8 +95,9 @@ IrisApplication::MountResult IrisApplication::MountComponent(
     return Result;
 }
 
-bool IrisApplication::MountAppRoot(const std::string& File, const std::string& FunctionName,
-                                    const std::string& StylesheetName) {
+bool IrisApplication::MountAppRoot(const std::string& File, const std::string& FunctionName) {
+    EnsureStylesheetsFor(UiDir_ + "/" + File);
+
     AppRoot_ = Driver_->MountRoot(UiDir_ + "/" + File, FunctionName);
     if (!Driver_->Errors().empty()) {
         std::fprintf(stderr, "[IrisApplication] %s mount failed: %s\n", File.c_str(),
@@ -78,7 +108,7 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
     BuildContext Context;
     Context.FontBackend   = &GetFontBackend();
     Context.Font          = Font_;
-    Context.Style         = GetStylesheet(StylesheetName);
+    Context.Style         = &ComposedStyleSet_;
     Context.StyleApplier  = &StyleApplier();
     Context.LifecycleHost = &GetLifecycleRegistry();
     Context.NyxHost       = &Driver_->Runtime();
@@ -123,8 +153,6 @@ void IrisApplication::ClearReconciledMount(ReconciledMount& Mount, Penumbra::Wid
 
 bool IrisApplication::MountReconciledComponent(const std::string& File, const std::string& FunctionName,
                                                  std::vector<nyx::runtime::Value> Args,
-                                                 const std::string& StylesheetName,
-                                                 const std::string& SlotStylesheetName,
                                                  const std::string& TargetRefName) {
     auto* Target = dynamic_cast<Penumbra::Widgets::Box*>(GetRef(TargetRefName));
     if (!Target) return false;
@@ -133,7 +161,7 @@ bool IrisApplication::MountReconciledComponent(const std::string& File, const st
     ClearReconciledMount(Mount, Target);
 
     const std::size_t ErrorsBefore = Driver_->Errors().size();
-    MountResult Result = MountComponent(File, FunctionName, std::move(Args), StylesheetName, Mount.Roots);
+    MountResult Result = MountComponent(File, FunctionName, std::move(Args), Mount.Roots);
     if (Driver_->Errors().size() > ErrorsBefore) {
         std::fprintf(stderr, "[IrisApplication] %s mount failed: %s\n", File.c_str(),
                      Driver_->Errors().back().Message.c_str());
@@ -142,12 +170,12 @@ bool IrisApplication::MountReconciledComponent(const std::string& File, const st
     }
 
     Mount.Wrapper =
-        WrapExistingTree(std::move(Result.Widget), nullptr, nullptr, GetStylesheet(StylesheetName), &StyleApplier());
+        WrapExistingTree(std::move(Result.Widget), nullptr, nullptr, &ComposedStyleSet_, &StyleApplier());
 
     BuildContext SlotContext;
     SlotContext.FontBackend  = &GetFontBackend();
     SlotContext.Font         = Font_;
-    SlotContext.Style        = GetStylesheet(SlotStylesheetName);
+    SlotContext.Style        = &ComposedStyleSet_;
     SlotContext.StyleApplier = &StyleApplier();
 
     Mount.Slots = iris::ResolveSlots(*Mount.Wrapper, *Mount.Roots.back(), MakeMountFn(SlotContext));
@@ -176,8 +204,7 @@ Penumbra::Widgets::WidgetBase* GetRefForNyx(IrisApplication& Self, const std::st
 
 void RegisterIrisApplicationMethods(nyx::host::InheritableTypeBuilder<IrisApplication>& Builder,
                                      const nyx::runtime::TypeDescriptor* WidgetDescriptor) {
-    Builder.Method("LoadStylesheet", &IrisApplication::LoadStylesheet)
-        .Method("ReloadFont", &IrisApplication::ReloadFont)
+    Builder.Method("ReloadFont", &IrisApplication::ReloadFont)
         .Method("MountAppRoot", &IrisApplication::MountAppRoot)
         .Method("MountReconciledComponent", &IrisApplication::MountReconciledComponent)
         .Method("TeardownReconciledComponent", &IrisApplication::TeardownReconciledComponent)
