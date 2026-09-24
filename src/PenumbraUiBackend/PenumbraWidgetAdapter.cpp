@@ -132,6 +132,11 @@ void ResetStyleableFields(WidgetBase& Widget) {
     if (auto* AsLabel = dynamic_cast<Label*>(&Widget)) {
         AsLabel->ColorText = {};
     }
+    if (auto* AsTextInput = dynamic_cast<TextInput*>(&Widget)) {
+        AsTextInput->ColorText = {};
+        AsTextInput->ColorCaret = {};
+        AsTextInput->ColorSelection = {};
+    }
 }
 
 } // namespace

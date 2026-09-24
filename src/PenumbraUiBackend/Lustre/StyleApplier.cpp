@@ -5,6 +5,7 @@
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
 #include "Penumbra/Widgets/SplitPanel.h"
+#include "Penumbra/Widgets/TextInput.h"
 
 namespace PenumbraUiBackend::Lustre {
 
@@ -270,6 +271,22 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         }
         if (Style.WhiteSpaceMode) {
             AsLabel->Wrap = (*Style.WhiteSpaceMode == ::Lustre::WhiteSpace::Normal);
+        }
+    }
+
+    if (auto* AsTextInput = dynamic_cast<Penumbra::Widgets::TextInput*>(&Widget)) {
+        if (Style.TextColor) {
+            const Penumbra::Render::Color Text = ToPenumbraColor(*Style.TextColor);
+            AsTextInput->ColorText = Text;
+            AsTextInput->ColorCaret = Text;
+            AsTextInput->ColorSelection = {Text.R, Text.G, Text.B, 0x55};
+            if (AsTextInput->CaretWidthLogical <= 0.0f) {
+                AsTextInput->CaretWidthLogical = 1.0f;
+            }
+        }
+        if (Style.Font && FontBackend_) {
+            AsTextInput->FontBackend = FontBackend_;
+            AsTextInput->Font = ResolveFont(*Style.Font);
         }
     }
 

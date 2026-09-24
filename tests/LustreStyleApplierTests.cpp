@@ -6,6 +6,7 @@
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
 #include "Penumbra/Widgets/SplitPanel.h"
+#include "Penumbra/Widgets/TextInput.h"
 
 #include <cstdio>
 #include <string>
@@ -30,6 +31,7 @@ using Penumbra::Widgets::Checkbox;
 using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::Label;
 using Penumbra::Widgets::SplitPanel;
+using Penumbra::Widgets::TextInput;
 
 ::Lustre::ResolvedStyle MakeStyle() {
     ::Lustre::ResolvedStyle Style;
@@ -208,6 +210,46 @@ void TestTextColorReachesALabel() {
 
     Expect(WidgetLabel.ColorText.R == 0xFF && WidgetLabel.ColorText.G == 0xFF && WidgetLabel.ColorText.B == 0xFF,
            "color reaches Label::ColorText");
+}
+
+void TestTextColorReachesATextInputTextCaretAndSelection() {
+    TextInput                WidgetInput;
+    ::Lustre::ResolvedStyle  Style;
+    Style.TextColor = ::Lustre::Color{0xF5, 0xF5, 0xFA, 0xFF};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetInput, Style);
+
+    Expect(WidgetInput.ColorText.R == 0xF5 && WidgetInput.ColorText.B == 0xFA && WidgetInput.ColorText.A == 0xFF,
+           "color reaches TextInput::ColorText");
+    Expect(WidgetInput.ColorCaret.R == 0xF5 && WidgetInput.ColorCaret.A == 0xFF, "color reaches TextInput::ColorCaret");
+    Expect(WidgetInput.ColorSelection.R == 0xF5 && WidgetInput.ColorSelection.A == 0x55,
+           "color reaches TextInput::ColorSelection as a translucent tint");
+    Expect(WidgetInput.CaretWidthLogical == 1.0f, "color gives a zero-width TextInput caret a 1px default");
+}
+
+void TestTextColorKeepsAnExplicitTextInputCaretWidth() {
+    TextInput WidgetInput;
+    WidgetInput.CaretWidthLogical = 2.0f;
+    ::Lustre::ResolvedStyle Style;
+    Style.TextColor = ::Lustre::Color{0xFF, 0xFF, 0xFF, 0xFF};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetInput, Style);
+
+    Expect(WidgetInput.CaretWidthLogical == 2.0f, "color leaves an explicitly-set TextInput caret width alone");
+}
+
+void TestNoTextColorLeavesTextInputColorsUntouched() {
+    TextInput  WidgetInput;
+    const auto Style = MakeStyle();
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetInput, Style);
+
+    Expect(WidgetInput.ColorText.A == 0 && WidgetInput.ColorCaret.A == 0 && WidgetInput.CaretWidthLogical == 0.0f,
+           "no color in the style leaves TextInput's text/caret colors and caret width at their defaults");
+    Expect(WidgetInput.Style.ColorBackground.R == 0xE8, "a TextInput still receives its BoxStyle slice");
 }
 
 void TestColorReachesAnIconWidget() {
@@ -514,6 +556,9 @@ void RunLustreStyleApplierTests() {
     TestBoxShadowReachesBoxStyle();
     TestNoBoxShadowLeavesBoxStyleShadowFieldsAtDefault();
     TestTextColorReachesALabel();
+    TestTextColorReachesATextInputTextCaretAndSelection();
+    TestTextColorKeepsAnExplicitTextInputCaretWidth();
+    TestNoTextColorLeavesTextInputColorsUntouched();
     TestColorReachesAnIconWidget();
     TestHoverActiveAndDisabledColorOverlaysReachAnIconWidget();
     TestNoColorOverlayLeavesIconWidgetPerStateFieldsAtDefault();
