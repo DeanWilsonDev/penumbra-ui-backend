@@ -17,14 +17,6 @@ endif()
 # global, once you're inside an add_subdirectory().
 # ---------------------------------------------------------------------------
 include(FetchContent)
-# The Application bridge uses methods on inheritable host types, introduced in
-# nyx-proto 3554ab5. Declare Nyx before Iris so its floating `main` declaration
-# reuses this known-compatible revision in standalone backend builds.
-FetchContent_Declare(
-    nyx
-    GIT_REPOSITORY https://github.com/DeanWilsonDev/nyx-proto.git
-    GIT_TAG        3554ab5)
-
 add_subdirectory(vendor/iris)
 add_subdirectory(vendor/penumbra)
 add_subdirectory(vendor/lustre)
