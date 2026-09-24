@@ -17,14 +17,6 @@
 
 namespace nyx::host {
 
-// NyxBridge<T> has no generic body (nyx-proto's own doc comment on the primary template)
-// -- every bridged type needs its own full specialization. The two below are near-
-// identical by necessity, not oversight: `IrisApplication` introduces no lifecycle-hook
-// overrides of its own (only new named methods), so `NyxBridge<IrisApplication>` needs
-// exactly the same Configure/OnStart/OnUpdate/OnShutdown/OnDpiScaleChanged/InvokeCustom
-// bridging `NyxBridge<Penumbra::Application>` already has -- just bridging `IrisApplication`
-// instead of bare `Penumbra::Application` as its own base.
-
 template <>
 class NyxBridge<Penumbra::Application> : public Penumbra::Application, public NyxBridgeBase {
 public:
@@ -32,6 +24,10 @@ public:
         WindowLogicalSize = Penumbra::Application::GetWindowLogicalSize();
         return &WindowLogicalSize;
     }
+
+    float GetMouseXForNyx() const { return GetInput().MousePosition.X; }
+    float GetMouseYForNyx() const { return GetInput().MousePosition.Y; }
+    bool  IsMouseButtonDownForNyx() const { return GetInput().MouseButtonDown[0]; }
 
     // SetWindowTitle/SetWindowSize -- only meaningful while PendingConfig_ is live, i.e.
     // during a call to Configure() below (Application::Run() constructs the window
@@ -107,6 +103,10 @@ public:
         return &WindowLogicalSize;
     }
 
+    float GetMouseXForNyx() const { return GetInput().MousePosition.X; }
+    float GetMouseYForNyx() const { return GetInput().MousePosition.Y; }
+    bool  IsMouseButtonDownForNyx() const { return GetInput().MouseButtonDown[0]; }
+
     void SetWindowTitle(const std::string& Title) {
         if (PendingConfig_) PendingConfig_->Title = Title;
     }
@@ -174,16 +174,29 @@ namespace {
 float PointX(const Penumbra::Point& Value) { return Value.X; }
 float PointY(const Penumbra::Point& Value) { return Value.Y; }
 
-// Templated over AppBaseT so one RegisterApplicationType<AppBaseT>() body serves both
-// bridge instantiations -- each reaches through to the matching NyxBridge<AppBaseT>
-// specialization above for the bridge-only members (GetWindowLogicalSizeForNyx/
-// SetWindowTitle/SetWindowSize), and to AppBaseT's own inherited Penumbra::Application
-// surface directly for everything else (GetFontBackend/GetLifecycleRegistry/SetRootWidget
-// are public on Penumbra::Application and inherited unchanged by IrisApplication, so no
-// bridge-specific reach-through is needed for those).
 template <typename AppBaseT>
 Penumbra::Point* GetWindowLogicalSizeForNyx(AppBaseT& Self) {
     return static_cast<nyx::host::NyxBridge<AppBaseT>&>(Self).GetWindowLogicalSizeForNyx();
+}
+
+template <typename AppBaseT>
+float GetMouseXForNyx(AppBaseT& Self) {
+    return static_cast<nyx::host::NyxBridge<AppBaseT>&>(Self).GetMouseXForNyx();
+}
+
+template <typename AppBaseT>
+float GetMouseYForNyx(AppBaseT& Self) {
+    return static_cast<nyx::host::NyxBridge<AppBaseT>&>(Self).GetMouseYForNyx();
+}
+
+template <typename AppBaseT>
+bool IsMouseButtonDownForNyx(AppBaseT& Self) {
+    return static_cast<nyx::host::NyxBridge<AppBaseT>&>(Self).IsMouseButtonDownForNyx();
+}
+
+bool WidgetContainsPoint(const Penumbra::Widgets::WidgetBase& Widget, float X, float Y) {
+    const Penumbra::Rect Bounds = Widget.GetArrangedRect();
+    return X >= Bounds.X && X < Bounds.X + Bounds.W && Y >= Bounds.Y && Y < Bounds.Y + Bounds.H;
 }
 
 template <typename AppBaseT>
@@ -242,33 +255,19 @@ void NyxApplicationBridgeT<AppBaseT>::RegisterApplicationType() {
         RegisterOpaqueType<Penumbra::Render::IFontBackend>(Runtime_, "PenumbraFontBackend");
     const auto* LifecycleRegistryDescriptor =
         RegisterOpaqueType<Penumbra::LifecycleRegistry>(Runtime_, "PenumbraLifecycleRegistry");
+    Runtime_.RegisterType<Penumbra::Widgets::WidgetBase>("PenumbraWidget").Method("ContainsPoint", &WidgetContainsPoint);
     const auto* WidgetDescriptor =
-        RegisterOpaqueType<Penumbra::Widgets::WidgetBase>(Runtime_, "PenumbraWidget");
+        std::get<std::shared_ptr<nyx::runtime::HostObject>>(Runtime_.Globals().at("PenumbraWidget").data)
+            ->descriptor;
 
-    // InheritableTypeBuilder is move-only, non-copyable, and its destructor commits the
-    // accumulated descriptor unless moved-from -- the original (non-templated) version of
-    // this method never named the builder at all, just chained-and-discarded it as one
-    // statement, relying on that destructor. This version needs the same builder to reach
-    // past the chain (into RegisterIrisApplicationMethods below, for the IrisApplication
-    // case only), so it's explicitly move-constructed into a real local instead -- the
-    // chain's own temporary is destroyed at the end of this initializer statement, moved-
-    // from and so a no-op; `Builder` here is what actually commits, at the end of this
-    // function.
-    // &AppBaseT::Xxx, for a method only ever *inherited* (never redeclared) by AppBaseT,
-    // keeps the pointer-to-member's own nominal type as Penumbra::Application::* (where
-    // the member actually lives), not AppBaseT::* -- pointer-to-member types name their
-    // declaring class, not whatever lookup path found them. InheritableTypeBuilder<T>'s
-    // own Method/PointerMethod overloads deduce Ret/Args by structurally matching the
-    // parameter's T::* against the argument's own type (T already fixed to AppBaseT here,
-    // not itself being deduced) -- template deduction doesn't apply the ordinary implicit
-    // Base::* -> Derived::* conversion the way plain initialization/assignment would, so
-    // an inherited-only member's address needs an explicit static_cast to the exact
-    // AppBaseT::* type deduction needs to match structurally.
     nyx::host::InheritableTypeBuilder<AppBaseT> Builder =
         std::move(Runtime_.RegisterInheritableType<AppBaseT>("Application")
             .Method("RequestQuit", static_cast<void (AppBaseT::*)()>(&AppBaseT::RequestQuit))
             .PointerMethod("GetWindowLogicalSize", &GetWindowLogicalSizeForNyx<AppBaseT>, PointDescriptor)
             .Method("GetDpiScaleFactor", static_cast<float (AppBaseT::*)() const>(&AppBaseT::GetDpiScaleFactor))
+            .Method("GetMouseX", &GetMouseXForNyx<AppBaseT>)
+            .Method("GetMouseY", &GetMouseYForNyx<AppBaseT>)
+            .Method("IsMouseButtonDown", &IsMouseButtonDownForNyx<AppBaseT>)
             .PointerMethod("GetFontBackend", &GetFontBackendForNyx<AppBaseT>, FontBackendDescriptor)
             .Method("SetTextInputActive", static_cast<void (AppBaseT::*)(bool)>(&AppBaseT::SetTextInputActive))
             .Method("SetRootWidget", &SetRootWidgetFromNyx<AppBaseT>)

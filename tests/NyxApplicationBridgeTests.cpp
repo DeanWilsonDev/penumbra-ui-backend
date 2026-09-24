@@ -4,6 +4,7 @@
 #include "Iris/IrisNyxDriver.h"
 
 #include "Penumbra/Application.h"
+#include "Penumbra/Widgets/Box.h"
 
 #include <cstdio>
 #include <string>
@@ -171,6 +172,47 @@ void TestGetApplicationInstanceValueLetsAnotherScopeCallCustomMethodsDirectly() 
     delete Application;
 }
 
+void TestNyxApplicationCanReadPointerStateAndHitTestAWidget() {
+    PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
+
+    Penumbra::Application* Application = Bridge.LoadApplication(
+        "class TestApplication : Application {\n"
+        "    float MouseX() { return this.GetMouseX(); }\n"
+        "    float MouseY() { return this.GetMouseY(); }\n"
+        "    bool MouseDown() { return this.IsMouseButtonDown(); }\n"
+        "    bool RootContains(float x, float y) { return this.GetRootWidget().ContainsPoint(x, y); }\n"
+        "}\n",
+        "pointer-test.nyx", "TestApplication");
+
+    ExpectBridge(Application != nullptr, "NyxApplicationBridge loads a Nyx Application that reads pointer state");
+    if (!Application) return;
+
+    auto Call = [&](const std::string& Name, std::vector<nyx::runtime::Value> Args = {}) {
+        return Bridge.CallApplicationMethod(*Application, Name, std::move(Args));
+    };
+
+    std::optional<nyx::runtime::Value> X = Call("MouseX");
+    std::optional<nyx::runtime::Value> Y = Call("MouseY");
+    std::optional<nyx::runtime::Value> Down = Call("MouseDown");
+    ExpectBridge(X && Y && nyx::host::FromValue<float>(*X) == 0.0f && nyx::host::FromValue<float>(*Y) == 0.0f,
+                 "GetMouseX/GetMouseY are callable from Nyx and read the frame's InputState");
+    ExpectBridge(Down && !nyx::host::FromValue<bool>(*Down),
+                 "IsMouseButtonDown is callable from Nyx and reads the frame's InputState");
+
+    Application->SetRootWidget(std::make_unique<Penumbra::Widgets::Box>());
+    Application->GetRootWidget()->Arrange({10.0f, 20.0f, 100.0f, 50.0f});
+    auto Contains = [&](float PointX, float PointY) {
+        std::optional<nyx::runtime::Value> Result =
+            Call("RootContains", {nyx::host::ToValue(PointX), nyx::host::ToValue(PointY)});
+        return Result && nyx::host::FromValue<bool>(*Result);
+    };
+    ExpectBridge(Contains(10.0f, 20.0f) && Contains(60.0f, 45.0f) && Contains(109.0f, 69.0f),
+                 "PenumbraWidget.ContainsPoint is true inside the widget's arranged rect");
+    ExpectBridge(!Contains(9.0f, 45.0f) && !Contains(110.0f, 45.0f) && !Contains(60.0f, 70.0f),
+                 "PenumbraWidget.ContainsPoint is false outside it, with the right/bottom edges exclusive");
+    delete Application;
+}
+
 } // namespace
 
 void RunNyxApplicationBridgeTests() {
@@ -180,4 +222,5 @@ void RunNyxApplicationBridgeTests() {
     TestBridgeAppliesNyxConfigureOverrideToApplicationConfig();
     TestBridgeCallApplicationMethodInvokesACustomNyxMethod();
     TestGetApplicationInstanceValueLetsAnotherScopeCallCustomMethodsDirectly();
+    TestNyxApplicationCanReadPointerStateAndHitTestAWidget();
 }
