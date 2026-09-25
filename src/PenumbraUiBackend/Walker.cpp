@@ -14,6 +14,7 @@
 #include "Penumbra/Widgets/Label.h"
 #include "Penumbra/Widgets/ScrollablePanel.h"
 #include "Penumbra/Widgets/SplitPanel.h"
+#include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 #include "host/marshal.hpp"
@@ -44,6 +45,7 @@ using Penumbra::Widgets::Label;
 using Penumbra::Widgets::ScrollablePanel;
 using Penumbra::Widgets::SplitAxis;
 using Penumbra::Widgets::SplitPanel;
+using Penumbra::Widgets::TextArea;
 using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
@@ -61,21 +63,15 @@ struct StyleMatchStats {
     std::size_t ResolvedNodes = 0;
 };
 
-// Whether Style carries literally nothing -- every field still at its
-// default-constructed std::nullopt/empty-shared_ptr. Enumerates every
-// ResolvedStyle field by hand, same as StyleResolution.cpp's own
-// MergeInto() already does for the same struct (no built-in "is this
-// empty" predicate exists on ResolvedStyle itself -- lustre/include/Lustre/
-// ResolvedStyle.h). Pseudo-class overlays count too: a rule that only ever
-// sets e.g. `:hover { background-color: ... }` with no base declaration
-// still means *something* real matched.
 bool ResolvedStyleIsEmpty(const ::Lustre::ResolvedStyle& Style) {
     return !Style.BackgroundColor && !Style.BackgroundGradientStart && !Style.BackgroundGradientEnd &&
            !Style.BorderColor && !Style.BorderWidth && !Style.BorderRadius && !Style.Padding && !Style.Margin &&
            !Style.TextColor && !Style.Font && !Style.DisplayMode && !Style.FlexDirectionMode && !Style.Gap &&
            !Style.AlignItems && !Style.Transition && !Style.Hover && !Style.Active && !Style.Disabled &&
            !Style.WidthLogical && !Style.HeightLogical && !Style.TransformScale && !Style.MaxWidthLogical &&
-           !Style.TextOverflowMode;
+           !Style.TextOverflowMode && !Style.FlexGrow && !Style.ScrollbarThumbColor && !Style.ScrollbarTrackColor &&
+           !Style.ScrollbarWidthLogical && !Style.JustifyContent && !Style.WhiteSpaceMode && !Style.ShadowColor &&
+           !Style.ShadowBlurRadiusLogical;
 }
 
 // `Node.Ref` mirrors `Node.Key` exactly (both `std::optional<IrisPropValue>`,
@@ -167,10 +163,6 @@ void ApplySharedPropsToWidget(WidgetBase& Widget, const IrisProps& Props) {
     }
 }
 
-// docs/lustre_core_spec.md §1.1's mapping table, keyed the other direction (a Core tag
-// to the PascalCase string Lustre::IStyleTarget::PrimitiveTag() reports -- these already
-// match one-for-one, this just names the IrisElementTag values Lustre's own selector
-// resolution doesn't know about).
 std::string IrisTagToLustreTag(IrisElementTag Tag) {
     switch (Tag) {
         case IrisElementTag::Frame: return "Frame";
@@ -181,10 +173,11 @@ std::string IrisTagToLustreTag(IrisElementTag Tag) {
         case IrisElementTag::Text: return "Text";
         case IrisElementTag::Scroll: return "Scroll";
         case IrisElementTag::Input: return "Input";
+        case IrisElementTag::TextArea: return "TextArea";
         case IrisElementTag::Native: return "Native";
         case IrisElementTag::Portal: return "Portal";
         case IrisElementTag::Split: return "Split";
-        default: return ""; // None/Slot never reach here -- see BuildWidgetTreeInternal
+        default: return "";
     }
 }
 
@@ -675,12 +668,6 @@ std::unique_ptr<WidgetBase> BuildSplit(const Component& Node, const BuildContext
     return Built;
 }
 
-// <Input> (docs/iris_core_spec.md §3.1) -- a leaf, same shape as <Icon>: TextInput has
-// no Builder either. FontBackend/Font are set directly from Context, the same
-// "Label::Builder has no method for it" treatment BuildText below already uses; Focus/
-// Clipboard likewise come straight from Context (both may be null -- an inert but
-// still-built widget, same tolerance BuildImage/BuildIcon already have for their own
-// optional backend pointers).
 std::unique_ptr<WidgetBase> BuildInput(const Component& Node, const BuildContext& Context) {
     auto Built = std::make_unique<TextInput>();
     ApplySharedPropsToWidget(*Built, Node.Props);
@@ -689,6 +676,29 @@ std::unique_ptr<WidgetBase> BuildInput(const Component& Node, const BuildContext
     }
     if (const auto PreferredWidth = GetFloatProp(Node.Props, "preferredWidth")) {
         Built->PreferredWidthLogical = *PreferredWidth;
+    }
+    if (const auto OnTextChange = GetStringEventProp(Node.Props, "onTextChange")) {
+        std::function<void(std::string)> Callback = *OnTextChange;
+        Built->OnTextChanged = [Callback](const std::string& NewText) { Callback(NewText); };
+    }
+    Built->FontBackend = Context.FontBackend;
+    Built->Font = Context.Font;
+    Built->Focus = Context.Focus;
+    Built->Clipboard = Context.Clipboard;
+    return Built;
+}
+
+std::unique_ptr<WidgetBase> BuildTextArea(const Component& Node, const BuildContext& Context) {
+    auto Built = std::make_unique<TextArea>();
+    ApplySharedPropsToWidget(*Built, Node.Props);
+    if (const auto Text = GetStringProp(Node.Props, "text")) {
+        Built->Text = *Text;
+    }
+    if (const auto PreferredWidth = GetFloatProp(Node.Props, "preferredWidth")) {
+        Built->PreferredWidthLogical = *PreferredWidth;
+    }
+    if (const auto WheelStep = GetFloatProp(Node.Props, "wheelStep")) {
+        Built->WheelStepLogical = *WheelStep;
     }
     if (const auto OnTextChange = GetStringEventProp(Node.Props, "onTextChange")) {
         std::function<void(std::string)> Callback = *OnTextChange;
@@ -776,6 +786,9 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
             break;
         case IrisElementTag::Input:
             Built = BuildInput(Node, Context);
+            break;
+        case IrisElementTag::TextArea:
+            Built = BuildTextArea(Node, Context);
             break;
         case IrisElementTag::Native:
             Built = BuildNative(Node);

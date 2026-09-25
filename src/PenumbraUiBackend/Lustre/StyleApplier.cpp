@@ -4,7 +4,9 @@
 #include "Penumbra/Widgets/Checkbox.h"
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
+#include "Penumbra/Widgets/ScrollablePanel.h"
 #include "Penumbra/Widgets/SplitPanel.h"
+#include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 namespace PenumbraUiBackend::Lustre {
@@ -98,15 +100,14 @@ void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::Resolved
     if (Style.Margin) {
         Target.Margin = ToPenumbraEdgeInsets(*Style.Margin);
     }
-    // `width`/`height` -- BoxStyle::WidthLogical/HeightLogical's own ">= 0 is an explicit
-    // border-box override" contract (Styles.h), already honored by every Box's
-    // Measure/Arrange; this is the one copy from Lustre's resolved value onto it that was
-    // missing, for any Box (not just Label's MaxWidthLogical special case below).
     if (Style.WidthLogical) {
         Target.WidthLogical = *Style.WidthLogical;
     }
     if (Style.HeightLogical) {
         Target.HeightLogical = *Style.HeightLogical;
+    }
+    if (Style.FlexGrow) {
+        Target.FlexGrow = *Style.FlexGrow;
     }
     // Same pair convention as BackgroundGradientStart/End above: the resolver
     // only ever sets both halves of `box-shadow` together (or neither), so
@@ -290,10 +291,42 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         }
     }
 
-    // Checkbox's own style-specific fields (ColorCheckMark/ColorBoxChecked)
-    // have no corresponding Lustre v1 property yet (§2's property table has
-    // no check-mark-color concept) -- nothing to apply beyond the BoxStyle
-    // slice already handled above.
+    if (auto* AsTextArea = dynamic_cast<Penumbra::Widgets::TextArea*>(&Widget)) {
+        if (Style.TextColor) {
+            const Penumbra::Render::Color Text = ToPenumbraColor(*Style.TextColor);
+            AsTextArea->ColorText = Text;
+            AsTextArea->ColorCaret = Text;
+            AsTextArea->ColorSelection = {Text.R, Text.G, Text.B, 0x55};
+            if (AsTextArea->CaretWidthLogical <= 0.0f) {
+                AsTextArea->CaretWidthLogical = 1.0f;
+            }
+        }
+        if (Style.Font && FontBackend_) {
+            AsTextArea->FontBackend = FontBackend_;
+            AsTextArea->Font = ResolveFont(*Style.Font);
+        }
+        if (Style.ScrollbarWidthLogical) {
+            AsTextArea->ScrollbarWidthLogical = *Style.ScrollbarWidthLogical;
+        }
+        if (Style.ScrollbarThumbColor) {
+            AsTextArea->ColorScrollbarThumb = ToPenumbraColor(*Style.ScrollbarThumbColor);
+        }
+    }
+
+    if (auto* AsScroll = dynamic_cast<Penumbra::Widgets::ScrollablePanel*>(&Widget)) {
+        if (Style.ScrollbarWidthLogical) {
+            AsScroll->ScrollbarWidthLogical = *Style.ScrollbarWidthLogical;
+        }
+        if (Style.ScrollbarThumbColor) {
+            AsScroll->ColorScrollbarThumb = ToPenumbraColor(*Style.ScrollbarThumbColor);
+        }
+        if (Style.ScrollbarTrackColor) {
+            AsScroll->ColorScrollbarTrack = ToPenumbraColor(*Style.ScrollbarTrackColor);
+        }
+        if (Style.Hover && Style.Hover->ScrollbarThumbColor) {
+            AsScroll->ColorScrollbarThumbHovered = ToPenumbraColor(*Style.Hover->ScrollbarThumbColor);
+        }
+    }
 }
 
 } // namespace PenumbraUiBackend::Lustre

@@ -15,6 +15,7 @@
 #include "Penumbra/Widgets/Label.h"
 #include "Penumbra/Widgets/ScrollablePanel.h"
 #include "Penumbra/Widgets/SplitPanel.h"
+#include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <sys/wait.h>
@@ -54,6 +55,7 @@ using Penumbra::Widgets::LayoutMode;
 using Penumbra::Widgets::ScrollablePanel;
 using Penumbra::Widgets::SplitAxis;
 using Penumbra::Widgets::SplitPanel;
+using Penumbra::Widgets::TextArea;
 using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
@@ -285,6 +287,51 @@ void TestInputOnTextChangeReachesTextInputOnTextChanged() {
         AsInput->OnTextChanged("typed");
         Expect(LastValue == "typed", "invoking TextInput::OnTextChanged calls through to the onTextChange callback");
     }
+}
+
+void TestTextAreaBuildsATextAreaWithItsProps() {
+    Penumbra::Widgets::FocusState Focus;
+    std::string                   LastValue;
+    IrisProps                     Props;
+    Props["text"] = IrisPropValue{std::string("line one\nline two")};
+    Props["preferredWidth"] = IrisPropValue{320.0f};
+    Props["wheelStep"] = IrisPropValue{24.0f};
+    Props["onTextChange"] = IrisPropValue{std::function<void(std::string)>([&LastValue](std::string NewText) {
+        LastValue = std::move(NewText);
+    })};
+    const auto Node = MakeNode(IrisElementTag::TextArea, Props);
+
+    BuildContext Context;
+    Context.Focus = &Focus;
+    const auto Built = BuildWidgetTree(Node, Context);
+    auto* AsTextArea = dynamic_cast<TextArea*>(Built.get());
+    Expect(AsTextArea != nullptr, "<TextArea> builds a TextArea");
+    Expect(AsTextArea != nullptr && AsTextArea->Text == "line one\nline two", "the text prop reaches TextArea::Text");
+    Expect(AsTextArea != nullptr && AsTextArea->PreferredWidthLogical == 320.0f,
+           "the preferredWidth prop reaches TextArea::PreferredWidthLogical");
+    Expect(AsTextArea != nullptr && AsTextArea->WheelStepLogical == 24.0f,
+           "the wheelStep prop reaches TextArea::WheelStepLogical");
+    Expect(AsTextArea != nullptr && AsTextArea->Focus == &Focus, "TextArea::Focus is populated from BuildContext");
+    if (AsTextArea != nullptr && AsTextArea->OnTextChanged) {
+        AsTextArea->OnTextChanged("edited");
+    }
+    Expect(LastValue == "edited", "invoking TextArea::OnTextChanged calls through to the onTextChange callback");
+}
+
+void TestTextAreaOnTextChangeDiffReachesTheLiveTextArea() {
+    const auto Node = MakeNode(IrisElementTag::TextArea);
+    PenumbraWidget Wrapper(BuildWidgetTree(Node, BuildContext{}));
+    std::string    LastValue;
+
+    Umbra::IrisPropDiff Diff;
+    Diff.OnTextChange = std::function<void(std::string)>([&LastValue](std::string NewText) { LastValue = NewText; });
+    Wrapper.ApplyPropDiff(Diff);
+
+    auto* AsTextArea = dynamic_cast<TextArea*>(Wrapper.RawWidget());
+    if (AsTextArea != nullptr && AsTextArea->OnTextChanged) {
+        AsTextArea->OnTextChanged("rebound");
+    }
+    Expect(LastValue == "rebound", "an onTextChange prop diff rebinds TextArea::OnTextChanged");
 }
 
 void TestSplitBuildsASplitPanelWithBothPanesAndProps() {
@@ -756,6 +803,8 @@ void RunWalkerTests() {
     TestInputBuildsATextInputWithTextAndPreferredWidth();
     TestInputPicksUpFocusAndClipboardFromBuildContext();
     TestInputOnTextChangeReachesTextInputOnTextChanged();
+    TestTextAreaBuildsATextAreaWithItsProps();
+    TestTextAreaOnTextChangeDiffReachesTheLiveTextArea();
     TestSplitBuildsASplitPanelWithBothPanesAndProps();
     TestSplitWithNoPropsKeepsDefaults();
     TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase();
@@ -783,6 +832,7 @@ void RunStyleMismatchDiagnosticTests();    // tests/StyleMismatchDiagnosticTests
 void RunStylesheetLoaderTests();           // tests/StylesheetLoaderTests.cpp
 void RunNyxApplicationBridgeTests();       // tests/NyxApplicationBridgeTests.cpp
 void RunIrisApplicationTests();            // tests/IrisApplicationTests.cpp
+void RunStackFillAndScrollbarTests();
 
 int main() {
     RunNyxApplicationBridgeTests();
@@ -794,6 +844,7 @@ int main() {
     RunStyleWiringTests();
     RunStyleMismatchDiagnosticTests();
     RunStylesheetLoaderTests();
+    RunStackFillAndScrollbarTests();
 
     std::printf("\n%d failure(s)\n", Failures);
     return Failures == 0 ? 0 : 1;

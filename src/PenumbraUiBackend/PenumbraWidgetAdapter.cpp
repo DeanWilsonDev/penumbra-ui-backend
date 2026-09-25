@@ -7,7 +7,9 @@
 #include "Penumbra/Widgets/ImageWidget.h"
 #include "Penumbra/Widgets/InlineContainer.h"
 #include "Penumbra/Widgets/Label.h"
+#include "Penumbra/Widgets/ScrollablePanel.h"
 #include "Penumbra/Widgets/SplitPanel.h"
+#include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <algorithm>
@@ -18,7 +20,9 @@ using Penumbra::Widgets::Box;
 using Penumbra::Widgets::ImageWidget;
 using Penumbra::Widgets::InlineContainer;
 using Penumbra::Widgets::Label;
+using Penumbra::Widgets::ScrollablePanel;
 using Penumbra::Widgets::SplitPanel;
+using Penumbra::Widgets::TextArea;
 using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
@@ -83,13 +87,6 @@ private:
     const ReconcileStyleElement* Parent_{nullptr};
 };
 
-// Fallback only, for a wrapper whose GetPrimitiveTag() came back empty (built without a
-// PrimitiveTagMap -- see Walker.h's own comment on that type). Identifies what real
-// Penumbra widget type Widget IS, not what Iris tag originally built it: `Frame` and
-// `Grid` both build to a plain `Box` (Walker.cpp's own BuildGrid comment), a distinction
-// this can't recover, so it guesses "Frame" for both. When a PrimitiveTagMap *was*
-// threaded through (MakeMountFn always does this now), BuildReconcileStyleChain below
-// never reaches this function at all -- GetPrimitiveTag() already has the real answer.
 std::string InferPrimitiveTag(const WidgetBase& Widget) {
     if (dynamic_cast<const Label*>(&Widget)) {
         return "Text";
@@ -99,6 +96,9 @@ std::string InferPrimitiveTag(const WidgetBase& Widget) {
     }
     if (dynamic_cast<const ImageWidget*>(&Widget)) {
         return "Image";
+    }
+    if (dynamic_cast<const TextArea*>(&Widget)) {
+        return "TextArea";
     }
     return "Frame";
 }
@@ -120,11 +120,6 @@ std::vector<std::unique_ptr<ReconcileStyleElement>> BuildReconcileStyleChain(con
     return Chain;
 }
 
-// A class change fully replaces which rules apply, so the widget's own style
-// fields need a clean slate before re-applying -- unlike LustreStyleApplier's
-// own "leave what a style didn't set untouched" behavior (correct for
-// merging cascade layers *within* one resolve), a property the *new* class's
-// style doesn't set must not keep whatever the *old* class left behind.
 void ResetStyleableFields(WidgetBase& Widget) {
     if (auto* AsBox = dynamic_cast<Box*>(&Widget)) {
         AsBox->Style = Penumbra::Widgets::BoxStyle{};
@@ -136,6 +131,19 @@ void ResetStyleableFields(WidgetBase& Widget) {
         AsTextInput->ColorText = {};
         AsTextInput->ColorCaret = {};
         AsTextInput->ColorSelection = {};
+    }
+    if (auto* AsTextArea = dynamic_cast<TextArea*>(&Widget)) {
+        AsTextArea->ColorText = {};
+        AsTextArea->ColorCaret = {};
+        AsTextArea->ColorSelection = {};
+        AsTextArea->ColorScrollbarThumb = {};
+        AsTextArea->ScrollbarWidthLogical = 0.0f;
+    }
+    if (auto* AsScroll = dynamic_cast<ScrollablePanel*>(&Widget)) {
+        AsScroll->ScrollbarWidthLogical = 0.0f;
+        AsScroll->ColorScrollbarThumb = {};
+        AsScroll->ColorScrollbarThumbHovered = {};
+        AsScroll->ColorScrollbarTrack = {};
     }
 }
 
@@ -332,13 +340,12 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
         }
     }
 
-    // <Input>-only -- OnTextChanged lives on TextInput specifically, not WidgetBase
-    // (unlike OnPress/OnRelease/OnHover/OnFocus/OnChange above), same dynamic_cast
-    // guard the Text/Src branches around this one already use.
     if (Diff.OnTextChange) {
+        std::function<void(std::string)> Callback = *Diff.OnTextChange;
         if (auto* AsTextInput = dynamic_cast<TextInput*>(Widget)) {
-            std::function<void(std::string)> Callback = *Diff.OnTextChange;
             AsTextInput->OnTextChanged = [Callback](const std::string& NewText) { Callback(NewText); };
+        } else if (auto* AsTextArea = dynamic_cast<TextArea*>(Widget)) {
+            AsTextArea->OnTextChanged = [Callback](const std::string& NewText) { Callback(NewText); };
         }
     }
 
