@@ -13,6 +13,7 @@
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <algorithm>
+#include <optional>
 
 namespace PenumbraUiBackend {
 
@@ -159,8 +160,9 @@ struct PortalAnchorWidget::State : std::enable_shared_from_this<PortalAnchorWidg
     bool                            HostDismissInProgress{false};
     bool                            Prepared{false};
 
-    Penumbra::Rect Placement() const {
-        return {Properties.X, Properties.Y, Properties.Width, Properties.Height};
+    std::optional<Penumbra::Rect> Placement() const {
+        if (!Properties.HasPlacement) return std::nullopt;
+        return Penumbra::Rect{Properties.X, Properties.Y, Properties.Width, Properties.Height};
     }
 
     void Show() {

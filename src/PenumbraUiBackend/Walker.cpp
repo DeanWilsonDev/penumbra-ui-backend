@@ -68,7 +68,7 @@ bool ResolvedStyleIsEmpty(const ::Lustre::ResolvedStyle& Style) {
            !Style.BorderColor && !Style.BorderWidth && !Style.BorderRadius && !Style.Padding && !Style.Margin &&
            !Style.TextColor && !Style.Font && !Style.DisplayMode && !Style.FlexDirectionMode && !Style.Gap &&
            !Style.AlignItems && !Style.Transition && !Style.Hover && !Style.Active && !Style.Disabled &&
-           !Style.WidthLogical && !Style.HeightLogical && !Style.TransformScale && !Style.MaxWidthLogical &&
+           !Style.Width && !Style.Height && !Style.MinWidth && !Style.MaxWidth && !Style.TransformScale &&
            !Style.TextOverflowMode && !Style.FlexGrow && !Style.ScrollbarThumbColor && !Style.ScrollbarTrackColor &&
            !Style.ScrollbarWidthLogical && !Style.JustifyContent && !Style.WhiteSpaceMode && !Style.ShadowColor &&
            !Style.ShadowBlurRadiusLogical;

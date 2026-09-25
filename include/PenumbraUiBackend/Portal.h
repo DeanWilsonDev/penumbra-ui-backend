@@ -6,25 +6,9 @@
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/OverlayHost.h"
 
-#include <algorithm>
 #include <memory>
 
 namespace PenumbraUiBackend {
-
-// CenterWithinWindow -- "fill AvailableSizeLogical inset by MarginLogical on each side,
-// clamped to at least MinimumLogical on each axis, then center the (possibly clamped)
-// result within AvailableSizeLogical" -- the generic centered-modal-of-size-X geometry a
-// host app's own near-fullscreen dialog wants (Cairn's own CardModal.irisx sizing is the
-// first caller; pharos-proto's own modals almost certainly want the same math), not
-// specific to any one app or to Portal/OverlayHost's own mechanics -- just colocated here
-// since a centered dialog is Portal's most common use.
-inline Penumbra::Rect CenterWithinWindow(Penumbra::Point AvailableSizeLogical, float MarginLogical,
-                                          float MinimumLogical = 200.0f) {
-    const float Width  = std::max(MinimumLogical, AvailableSizeLogical.X - 2.0f * MarginLogical);
-    const float Height = std::max(MinimumLogical, AvailableSizeLogical.Y - 2.0f * MarginLogical);
-    return Penumbra::Rect{(AvailableSizeLogical.X - Width) / 2.0f, (AvailableSizeLogical.Y - Height) / 2.0f, Width,
-                           Height};
-}
 
 // Zero-layout owner for a Portal's ordinary reconciled child. The real child remains
 // here, in Iris's normal ownership tree; OverlayHost owns only a presentation surface

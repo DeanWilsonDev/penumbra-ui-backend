@@ -144,6 +144,30 @@ void TestPortalPresentsItsOrdinaryReconciledChildThroughOverlayHost() {
     Iris::PreparePortalSubtreeForUnmount(Root.get());
 }
 
+void TestPortalWithoutGeometryFillsTheOverlayHost() {
+    OverlayHost Host;
+    BuildContext Context;
+    Context.OverlayHost = &Host;
+    const iris::MountFn Mount = MakeMountFn(Context);
+
+    IrisProps Props;
+    Props["dismissOnOutsideClick"] = IrisPropValue{false};
+    Component Node(IrisElementTag::Portal, std::move(Props), {MakeText("dialog")}, nullptr);
+    std::unique_ptr<Umbra::IWidget> Root = Mount(Node);
+
+    Host.Arrange({0.0f, 0.0f, 640.0f, 480.0f});
+    auto* LabelWidget = dynamic_cast<Label*>(Host.GetChildAt(0)->GetChildAt(0));
+    Penumbra::Rect Rect = LabelWidget ? LabelWidget->GetArrangedRect() : Penumbra::Rect{};
+    Expect(Rect.X == 0.0f && Rect.Y == 0.0f && Rect.W == 640.0f && Rect.H == 480.0f,
+           "a Portal with no x/y/width/height fills the OverlayHost");
+
+    Host.Arrange({0.0f, 0.0f, 800.0f, 300.0f});
+    Rect = LabelWidget ? LabelWidget->GetArrangedRect() : Penumbra::Rect{};
+    Expect(Rect.W == 800.0f && Rect.H == 300.0f, "and follows the OverlayHost when it is resized");
+
+    Iris::PreparePortalSubtreeForUnmount(Root.get());
+}
+
 void TestMatchedPortalUpdatesPlacementAndChildInPlace() {
     OverlayHost Host;
     BuildContext Context;
@@ -231,6 +255,7 @@ void RunSlotWiringTests() {
     TestSlotWiresIntoRealStaticPenumbraTree();
     TestSignalUpdateReachesRealPenumbraTreeThroughFullStack();
     TestPortalPresentsItsOrdinaryReconciledChildThroughOverlayHost();
+    TestPortalWithoutGeometryFillsTheOverlayHost();
     TestMatchedPortalUpdatesPlacementAndChildInPlace();
     TestPortalSurfaceTracksAKeyedChildRemount();
     TestOutsideDismissCanSynchronouslyReconcilePortalWithNestedSlots();

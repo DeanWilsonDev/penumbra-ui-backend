@@ -465,7 +465,7 @@ void TestNoGradientLeavesBoxStyleGradientFieldsAtDefault() {
 void TestMaxWidthAndEllipsisReachALabel() {
     Label                   WidgetLabel;
     ::Lustre::ResolvedStyle Style;
-    Style.MaxWidthLogical = 220.0F;
+    Style.MaxWidth = ::Lustre::Length{220.0F, ::Lustre::LengthUnit::Px};
     Style.TextOverflowMode = ::Lustre::TextOverflow::Ellipsis;
 
     LustreStyleApplier Applier;
@@ -473,13 +473,49 @@ void TestMaxWidthAndEllipsisReachALabel() {
 
     Expect(WidgetLabel.MaxWidthLogical.has_value() && *WidgetLabel.MaxWidthLogical == 220.0F,
            "max-width reaches Label::MaxWidthLogical");
+    Expect(!WidgetLabel.Style.MaxWidth.IsSet(), "a px max-width on a Label stays off its BoxStyle");
     Expect(WidgetLabel.TruncateWithEllipsis, "text-overflow: ellipsis reaches Label::TruncateWithEllipsis as true");
+}
+
+void TestSizeLengthsReachBoxStyleWithTheirUnits() {
+    Box                     WidgetBox;
+    ::Lustre::ResolvedStyle Style;
+    Style.Width = ::Lustre::Length{600.0F, ::Lustre::LengthUnit::Px};
+    Style.Height = ::Lustre::Length{50.0F, ::Lustre::LengthUnit::Vh};
+    Style.MinWidth = ::Lustre::Length{20.0F, ::Lustre::LengthUnit::Vw};
+    Style.MaxWidth = ::Lustre::Length{100.0F, ::Lustre::LengthUnit::Percent};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetBox, Style);
+
+    using Penumbra::Widgets::LengthUnit;
+    Expect(WidgetBox.Style.Width.Value == 600.0F && WidgetBox.Style.Width.Unit == LengthUnit::Logical,
+           "width: 600px reaches BoxStyle::Width as a logical length");
+    Expect(WidgetBox.Style.Height.Value == 50.0F && WidgetBox.Style.Height.Unit == LengthUnit::ViewportHeight,
+           "height: 50vh reaches BoxStyle::Height as a viewport-height length");
+    Expect(WidgetBox.Style.MinWidth.Value == 20.0F && WidgetBox.Style.MinWidth.Unit == LengthUnit::ViewportWidth,
+           "min-width: 20vw reaches BoxStyle::MinWidth as a viewport-width length");
+    Expect(WidgetBox.Style.MaxWidth.Value == 100.0F && WidgetBox.Style.MaxWidth.Unit == LengthUnit::Percent,
+           "max-width: 100% reaches BoxStyle::MaxWidth as a percent length");
+}
+
+void TestRelativeMaxWidthOnALabelConstrainsItsBox() {
+    Label                   WidgetLabel;
+    ::Lustre::ResolvedStyle Style;
+    Style.MaxWidth = ::Lustre::Length{50.0F, ::Lustre::LengthUnit::Percent};
+
+    LustreStyleApplier Applier;
+    Applier.Apply(WidgetLabel, Style);
+
+    Expect(!WidgetLabel.MaxWidthLogical.has_value() &&
+               WidgetLabel.Style.MaxWidth.Unit == Penumbra::Widgets::LengthUnit::Percent,
+           "a % max-width on a Label constrains its BoxStyle, not its px truncation width");
 }
 
 void TestTextOverflowClipReachesALabelAsFalse() {
     Label                   WidgetLabel;
     ::Lustre::ResolvedStyle Style;
-    Style.MaxWidthLogical = 100.0F;
+    Style.MaxWidth = ::Lustre::Length{100.0F, ::Lustre::LengthUnit::Px};
     Style.TextOverflowMode = ::Lustre::TextOverflow::Clip;
 
     LustreStyleApplier Applier;
@@ -575,6 +611,8 @@ void RunLustreStyleApplierTests() {
     TestGradientPairReachesBoxStyle();
     TestNoGradientLeavesBoxStyleGradientFieldsAtDefault();
     TestMaxWidthAndEllipsisReachALabel();
+    TestSizeLengthsReachBoxStyleWithTheirUnits();
+    TestRelativeMaxWidthOnALabelConstrainsItsBox();
     TestTextOverflowClipReachesALabelAsFalse();
     TestNoMaxWidthLeavesLabelUnconstrained();
     TestWhiteSpaceNormalReachesALabelAsWrapTrue();

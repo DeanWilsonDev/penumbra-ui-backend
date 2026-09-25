@@ -19,6 +19,16 @@ Penumbra::Widgets::EdgeInsets ToPenumbraEdgeInsets(const ::Lustre::EdgeInsets& E
     return {E.Left, E.Top, E.Right, E.Bottom};
 }
 
+Penumbra::Widgets::Length ToPenumbraLength(const ::Lustre::Length& L) {
+    switch (L.Unit) {
+        case ::Lustre::LengthUnit::Px: return Penumbra::Widgets::Length::Logical(L.Value);
+        case ::Lustre::LengthUnit::Percent: return Penumbra::Widgets::Length::Percent(L.Value);
+        case ::Lustre::LengthUnit::Vw: return Penumbra::Widgets::Length::ViewportWidth(L.Value);
+        case ::Lustre::LengthUnit::Vh: return Penumbra::Widgets::Length::ViewportHeight(L.Value);
+    }
+    return Penumbra::Widgets::Length::Logical(L.Value);
+}
+
 Penumbra::Widgets::CrossAlign ToPenumbraCrossAlign(::Lustre::Align A) {
     switch (A) {
         case ::Lustre::Align::Start: return Penumbra::Widgets::CrossAlign::Start;
@@ -69,11 +79,6 @@ void ApplyLayout(Penumbra::Widgets::Box& Target, const ::Lustre::ResolvedStyle& 
     }
 }
 
-// Fills in the universal box-model slots every widget type shares (§2:
-// background-color, border-color/width/radius, padding, margin). Existing
-// field values are left untouched wherever Style doesn't set the
-// corresponding property, so applying a style never clobbers something the
-// widget's constructor or a previous Apply() already set intentionally.
 void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::ResolvedStyle& Style) {
     if (Style.BackgroundColor) {
         Target.ColorBackground = ToPenumbraColor(*Style.BackgroundColor);
@@ -100,11 +105,14 @@ void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::Resolved
     if (Style.Margin) {
         Target.Margin = ToPenumbraEdgeInsets(*Style.Margin);
     }
-    if (Style.WidthLogical) {
-        Target.WidthLogical = *Style.WidthLogical;
+    if (Style.Width) {
+        Target.Width = ToPenumbraLength(*Style.Width);
     }
-    if (Style.HeightLogical) {
-        Target.HeightLogical = *Style.HeightLogical;
+    if (Style.Height) {
+        Target.Height = ToPenumbraLength(*Style.Height);
+    }
+    if (Style.MinWidth) {
+        Target.MinWidth = ToPenumbraLength(*Style.MinWidth);
     }
     if (Style.FlexGrow) {
         Target.FlexGrow = *Style.FlexGrow;
@@ -165,17 +173,21 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         }
     }
 
-    // Every widget type in Penumbra's hierarchy is otherwise a Box
-    // (WidgetBase's other direct subclass, ImageWidget, has no BoxStyle at
-    // all -- a pre-existing Penumbra gap, not something this applier can
-    // paper over; background-color/border/padding/margin simply don't reach
-    // an <Image>-backed widget yet).
     auto* AsBox = dynamic_cast<Box*>(&Widget);
     if (!AsBox) {
         return;
     }
     ApplyBoxStyle(AsBox->Style, Style);
     ApplyLayout(*AsBox, Style);
+
+    if (Style.MaxWidth) {
+        auto* AsTruncatingLabel = dynamic_cast<Label*>(&Widget);
+        if (AsTruncatingLabel && Style.MaxWidth->Unit == ::Lustre::LengthUnit::Px) {
+            AsTruncatingLabel->MaxWidthLogical = Style.MaxWidth->Value;
+        } else {
+            AsBox->Style.MaxWidth = ToPenumbraLength(*Style.MaxWidth);
+        }
+    }
 
     // §2's "Pseudo-class-scoped variants": background-color is universal
     // (BoxStyle::ColorBackgroundHovered/Pressed/Disabled, not Button-only --
@@ -263,9 +275,6 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         if (Style.Font && FontBackend_) {
             AsLabel->FontBackend = FontBackend_;
             AsLabel->Font = ResolveFont(*Style.Font);
-        }
-        if (Style.MaxWidthLogical) {
-            AsLabel->MaxWidthLogical = *Style.MaxWidthLogical;
         }
         if (Style.TextOverflowMode) {
             AsLabel->TruncateWithEllipsis = (*Style.TextOverflowMode == ::Lustre::TextOverflow::Ellipsis);
