@@ -79,6 +79,18 @@ const Lustre::LustreStyleApplier& IrisApplication::StyleApplier() {
     return *Applier_;
 }
 
+BuildContext IrisApplication::MakeBuildContext() {
+    BuildContext Context;
+    Context.FontBackend  = &GetFontBackend();
+    Context.Font         = Font_;
+    Context.Style        = &ComposedStyleSet_;
+    Context.StyleApplier = &StyleApplier();
+    Context.OverlayHost  = OverlayHostPtr_;
+    Context.Focus        = &Focus_;
+    Context.Clipboard    = &GetWindow();
+    return Context;
+}
+
 IrisApplication::MountResult IrisApplication::MountComponent(
     const std::string& File, const std::string& FunctionName, std::vector<nyx::runtime::Value> Args,
     std::vector<std::shared_ptr<Iris::Component>>& KeepAlive) {
@@ -88,12 +100,7 @@ IrisApplication::MountResult IrisApplication::MountComponent(
         std::make_shared<Iris::Component>(Driver_->MountRoot(UiDir_ + "/" + File, FunctionName, std::move(Args)));
     KeepAlive.push_back(Root);
 
-    BuildContext Context;
-    Context.FontBackend  = &GetFontBackend();
-    Context.Font         = Font_;
-    Context.Style        = &ComposedStyleSet_;
-    Context.StyleApplier = &StyleApplier();
-    Context.OverlayHost  = OverlayHostPtr_;
+    BuildContext Context = MakeBuildContext();
 
     MountResult Result;
     Result.Widget = BuildWidgetTree(*Root, Context, nullptr, &Result.Refs);
@@ -116,14 +123,9 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
     auto RootOverlayHost = std::make_unique<Penumbra::Widgets::OverlayHost>();
     OverlayHostPtr_       = RootOverlayHost.get();
 
-    BuildContext Context;
-    Context.FontBackend   = &GetFontBackend();
-    Context.Font          = Font_;
-    Context.Style         = &ComposedStyleSet_;
-    Context.StyleApplier  = &StyleApplier();
+    BuildContext Context  = MakeBuildContext();
     Context.LifecycleHost = &GetLifecycleRegistry();
     Context.NyxHost       = &Driver_->Runtime();
-    Context.OverlayHost   = OverlayHostPtr_;
 
     AppRootRefs_.clear();
     std::unique_ptr<Penumbra::Widgets::WidgetBase> Built = BuildWidgetTree(AppRoot_, Context, nullptr, &AppRootRefs_);
@@ -188,11 +190,8 @@ bool IrisApplication::MountReconciledComponent(const std::string& File, const st
     Mount.Wrapper =
         WrapExistingTree(std::move(Result.Widget), nullptr, nullptr, &ComposedStyleSet_, &StyleApplier());
 
-    BuildContext SlotContext;
-    SlotContext.FontBackend  = &GetFontBackend();
-    SlotContext.Font         = Font_;
-    SlotContext.Style        = &ComposedStyleSet_;
-    SlotContext.StyleApplier = &StyleApplier();
+    BuildContext SlotContext = MakeBuildContext();
+    SlotContext.OverlayHost  = nullptr;
 
     Mount.Slots = iris::ResolveSlots(*Mount.Wrapper, *Mount.Roots.back(), MakeMountFn(SlotContext));
     for (std::unique_ptr<iris::SlotState>& Slot : Mount.Slots) Slot->Reconcile();

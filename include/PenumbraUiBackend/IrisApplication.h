@@ -10,6 +10,7 @@
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Render/IFontBackend.h"
+#include "Penumbra/Widgets/FocusState.h"
 #include "Penumbra/Widgets/OverlayHost.h"
 #include "Penumbra/Widgets/WidgetBase.h"
 
@@ -171,16 +172,12 @@ protected:
 
     void EnsureStylesheetsFor(const std::string& EntryResolvedPath);
 
-    // Persistent storage, not a local -- a `<Slot>`/`onRelease` closure the mounted tree
-    // captured holds a raw reference into this `Component`'s own `ComponentInstance::
-    // DriverState` (`IrisNyxDriver::MountRoot`'s own doc comment); a local that goes out
-    // of scope at the end of `MountAppRoot` destroys that instance immediately, leaving
-    // every such closure dangling from the very first frame -- ASan-confirmed
-    // (heap-use-after-free in `NyxRuntime::EvaluateInScope`) the hard way in Cairn's own
-    // former hand-rolled `MountAppRoot`, the reason this field exists here instead.
+    BuildContext MakeBuildContext();
+
     Iris::Component AppRoot_;
     RefMap           AppRootRefs_;
     Penumbra::Widgets::OverlayHost* OverlayHostPtr_ = nullptr;
+    Penumbra::Widgets::FocusState   Focus_;
 
     std::unique_ptr<PenumbraWidget>               AppRootWrapper_;
     std::vector<std::unique_ptr<iris::SlotState>> AppRootSlots_;

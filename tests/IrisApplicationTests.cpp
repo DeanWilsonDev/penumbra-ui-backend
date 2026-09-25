@@ -6,6 +6,8 @@
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Widgets/Box.h"
+#include "Penumbra/Widgets/TextArea.h"
+#include "Penumbra/Widgets/TextInput.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -197,6 +199,55 @@ void TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef() {
     Expect(App.GetRef("content") == nullptr, "TeardownRootWidget clears the ref map too");
 }
 
+void TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard() {
+    TempProject Project;
+    Project.Write("Fields.lustre", ".fields { display: stack; flex-direction: column; }\n"
+                                    ".editor { width: 200px; height: 100px; }\n");
+    Project.Write("Fields.irisx", "void Fields() {\n"
+                                   "    render {\n"
+                                   "        <Frame class=\"fields\">\n"
+                                   "            <Input ref=\"field\" />\n"
+                                   "            <TextArea ref=\"editor\" class=\"editor\" />\n"
+                                   "        </Frame>\n"
+                                   "    }\n"
+                                   "}\n");
+
+    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::IrisApplication App;
+    App.Attach(Driver, Project.UiDir());
+    Expect(App.MountAppRoot("Fields.irisx", "Fields"), "MountAppRoot mounts a root holding an <Input> and a <TextArea>");
+
+    const auto* Field = dynamic_cast<Penumbra::Widgets::TextInput*>(App.GetRef("field"));
+    auto* Editor = dynamic_cast<Penumbra::Widgets::TextArea*>(App.GetRef("editor"));
+    Expect(Field != nullptr && Field->Focus != nullptr && Field->Clipboard != nullptr,
+           "a mounted <Input> gets a FocusState and a clipboard, so it can be clicked into and typed in");
+    Expect(Editor != nullptr && Editor->Focus != nullptr && Editor->Clipboard != nullptr,
+           "a mounted <TextArea> gets a FocusState and a clipboard, so it can be clicked into and typed in");
+    Expect(Field != nullptr && Editor != nullptr && Field->Focus == Editor->Focus,
+           "every text field in one application shares a single FocusState");
+
+    if (Editor != nullptr) {
+        Penumbra::Widgets::WidgetBase* Root = App.GetRootWidget();
+        Root->Measure({800.0f, 600.0f});
+        Root->Arrange({0.0f, 0.0f, 800.0f, 600.0f});
+        const Penumbra::Rect Rect = Editor->GetArrangedRect();
+        const Penumbra::Point Inside{Rect.X + Rect.W / 2.0f, Rect.Y + Rect.H / 2.0f};
+
+        Penumbra::Platform::InputState Click;
+        Click.MousePosition = Inside;
+        Click.MouseButtonPressedThisFrame[0] = true;
+        Click.MouseButtonDown[0] = true;
+        Root->UpdateInteractionState(Click);
+
+        Penumbra::Platform::InputState Typing;
+        Typing.MousePosition = Inside;
+        Typing.TextInputThisFrame = "typed";
+        Root->UpdateInteractionState(Typing);
+        Expect(Editor->Text == "typed", "clicking a mounted <TextArea> focuses it, and typed text lands in it");
+    }
+    App.TeardownRootWidget();
+}
+
 void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
     TempProject Project;
     Project.Write("Root.irisx", "void Root() {\n"
@@ -358,6 +409,7 @@ void RunIrisApplicationTests() {
     TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThanReplace();
     TestMountComponentBuildsAWidgetAndPopulatesRefMap();
     TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef();
+    TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard();
     TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount();
     TestMountReconciledComponentFailsForAnUnknownTargetRef();
     TestMountAppRootFailsGracefullyOnAMalformedFixture();
