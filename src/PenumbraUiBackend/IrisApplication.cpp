@@ -40,6 +40,7 @@ void IrisApplication::Attach(Iris::IrisNyxDriver& Driver, std::string UiDir) {
 void IrisApplication::SetFontConfig(std::string FontPath, float FontSizeLogical) {
     FontPath_        = std::move(FontPath);
     FontSizeLogical_ = FontSizeLogical;
+    if (Applier_) Applier_->SetDefaultFont({FontPath_, FontSizeLogical_});
 }
 
 bool IrisApplication::ReloadFont(float DpiScaleFactor) {
@@ -78,7 +79,10 @@ void IrisApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath)
 }
 
 const Lustre::LustreStyleApplier& IrisApplication::StyleApplier() {
-    if (!Applier_) Applier_.emplace(&GetFontBackend(), DpiScaleFactor_);
+    if (!Applier_) {
+        Applier_.emplace(&GetFontBackend(), DpiScaleFactor_);
+        if (!FontPath_.empty()) Applier_->SetDefaultFont({FontPath_, FontSizeLogical_});
+    }
     return *Applier_;
 }
 

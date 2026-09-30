@@ -148,6 +148,13 @@ Penumbra::Render::FontHandle LustreStyleApplier::ResolveFont(const ::Lustre::Fon
     return Handle;
 }
 
+std::optional<::Lustre::FontRequest> LustreStyleApplier::EffectiveFont(const ::Lustre::ResolvedStyle& Style) const {
+    if (Style.Font) return Style.Font;
+    if (!DefaultFont_ || (!Style.FontFamily && !Style.FontSizeLogical)) return std::nullopt;
+    return ::Lustre::FontRequest{Style.FontFamily.value_or(DefaultFont_->Path),
+                                 Style.FontSizeLogical.value_or(DefaultFont_->SizeLogical)};
+}
+
 void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lustre::ResolvedStyle& Style) const {
     using Penumbra::Widgets::Box;
     using Penumbra::Widgets::Checkbox;
@@ -278,9 +285,9 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         if (Style.TextColor) {
             AsLabel->ColorText = ToPenumbraColor(*Style.TextColor);
         }
-        if (Style.Font && FontBackend_) {
+        if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
             AsLabel->FontBackend = FontBackend_;
-            AsLabel->Font = ResolveFont(*Style.Font);
+            AsLabel->Font = ResolveFont(*Font);
         }
         if (Style.TextOverflowMode) {
             AsLabel->TruncateWithEllipsis = (*Style.TextOverflowMode == ::Lustre::TextOverflow::Ellipsis);
@@ -300,9 +307,9 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
                 AsTextInput->CaretWidthLogical = 1.0f;
             }
         }
-        if (Style.Font && FontBackend_) {
+        if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
             AsTextInput->FontBackend = FontBackend_;
-            AsTextInput->Font = ResolveFont(*Style.Font);
+            AsTextInput->Font = ResolveFont(*Font);
         }
     }
 
@@ -316,9 +323,9 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
                 AsTextArea->CaretWidthLogical = 1.0f;
             }
         }
-        if (Style.Font && FontBackend_) {
+        if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
             AsTextArea->FontBackend = FontBackend_;
-            AsTextArea->Font = ResolveFont(*Style.Font);
+            AsTextArea->Font = ResolveFont(*Font);
         }
         if (Style.ScrollbarWidthLogical) {
             AsTextArea->ScrollbarWidthLogical = *Style.ScrollbarWidthLogical;

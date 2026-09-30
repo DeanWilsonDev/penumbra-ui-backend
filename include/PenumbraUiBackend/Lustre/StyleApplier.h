@@ -5,6 +5,7 @@
 #include "Penumbra/Render/IFontBackend.h"
 #include "Penumbra/Widgets/WidgetBase.h"
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -39,11 +40,16 @@ public:
     void  SetDpiScaleFactor(float DpiScaleFactor);
     float DpiScaleFactor() const { return DpiScaleFactor_; }
 
-private:
-    Penumbra::Render::FontHandle ResolveFont(const ::Lustre::FontRequest& Request) const;
+    void SetDefaultFont(::Lustre::FontRequest Font) { DefaultFont_ = std::move(Font); }
+    const std::optional<::Lustre::FontRequest>& DefaultFont() const { return DefaultFont_; }
 
-    Penumbra::Render::IFontBackend* FontBackend_;
-    float                            DpiScaleFactor_;
+private:
+    std::optional<::Lustre::FontRequest> EffectiveFont(const ::Lustre::ResolvedStyle& Style) const;
+    Penumbra::Render::FontHandle         ResolveFont(const ::Lustre::FontRequest& Request) const;
+
+    Penumbra::Render::IFontBackend*      FontBackend_;
+    float                                DpiScaleFactor_;
+    std::optional<::Lustre::FontRequest> DefaultFont_;
 
     mutable std::unordered_map<std::string, Penumbra::Render::FontHandle> FontCache_;
 };

@@ -360,6 +360,21 @@ void TestStyleApplierFollowsTheDpiScaleGivenToReloadFont() {
            "ReloadFont moves an already built style applier to the new DPI scale");
 }
 
+void TestStyleApplierDefaultsToTheFontGivenToSetFontConfig() {
+    PenumbraUiBackend::IrisApplication BuiltAfter;
+    BuiltAfter.SetFontConfig("/fonts/Body.ttf", 14.0F);
+    const auto& AfterDefault = BuiltAfter.StyleApplier().DefaultFont();
+    Expect(AfterDefault && AfterDefault->Path == "/fonts/Body.ttf" && AfterDefault->SizeLogical == 14.0F,
+           "a style applier built after SetFontConfig defaults to that font");
+
+    PenumbraUiBackend::IrisApplication BuiltBefore;
+    Expect(!BuiltBefore.StyleApplier().DefaultFont(), "a style applier has no default font before SetFontConfig");
+    BuiltBefore.SetFontConfig("/fonts/Body.ttf", 16.0F);
+    const auto& BeforeDefault = BuiltBefore.StyleApplier().DefaultFont();
+    Expect(BeforeDefault && BeforeDefault->SizeLogical == 16.0F,
+           "SetFontConfig gives an already built style applier its default font");
+}
+
 void TestBridgedIrisApplicationExposesInheritedMethodsToNyx() {
     PenumbraUiBackend::IrisApplicationBridge Bridge(TestConfig(), ".");
 
@@ -427,6 +442,7 @@ void RunIrisApplicationTests() {
     TestMountReconciledComponentFailsForAnUnknownTargetRef();
     TestMountAppRootFailsGracefullyOnAMalformedFixture();
     TestStyleApplierFollowsTheDpiScaleGivenToReloadFont();
+    TestStyleApplierDefaultsToTheFontGivenToSetFontConfig();
     TestBridgedIrisApplicationExposesInheritedMethodsToNyx();
     TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName();
 }

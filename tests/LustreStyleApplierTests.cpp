@@ -581,9 +581,13 @@ void TestCheckboxStillReceivesItsBoxStyleSlice() {
 
 class RecordingFontBackend : public Penumbra::Render::IFontBackend {
 public:
-    std::vector<float> LoadedDpiScaleFactors;
+    std::vector<std::string> LoadedPaths;
+    std::vector<float>       LoadedSizes;
+    std::vector<float>       LoadedDpiScaleFactors;
 
-    Penumbra::Render::FontHandle LoadFont(const char*, float, float DpiScaleFactor) override {
+    Penumbra::Render::FontHandle LoadFont(const char* Path, float PointSizeLogical, float DpiScaleFactor) override {
+        LoadedPaths.emplace_back(Path);
+        LoadedSizes.push_back(PointSizeLogical);
         LoadedDpiScaleFactors.push_back(DpiScaleFactor);
         return static_cast<Penumbra::Render::FontHandle>(LoadedDpiScaleFactors.size());
     }
@@ -618,6 +622,41 @@ void TestFontLoadsAtTheApplierDpiScaleAndReloadsWhenItChanges() {
     Expect(Backend.LoadedDpiScaleFactors == std::vector<float>{2.0F, 1.5F},
            "changing the DPI scale reloads the same font request at the new scale");
     Expect(Third.Font != First.Font, "the reloaded font is a new handle");
+}
+
+void TestAFontSizeOrFamilyAloneFillsTheRestFromTheDefaultFont() {
+    RecordingFontBackend Backend;
+    LustreStyleApplier   Applier(&Backend, 2.0F);
+    Applier.SetDefaultFont({"/fonts/Body.ttf", 14.0F});
+
+    ::Lustre::ResolvedStyle SizeOnly;
+    SizeOnly.FontSizeLogical = 20.0F;
+    ::Lustre::ResolvedStyle FamilyOnly;
+    FamilyOnly.FontFamily = "/fonts/Code.ttf";
+
+    Label     Title;
+    TextInput Field;
+    Applier.Apply(Title, SizeOnly);
+    Applier.Apply(Field, FamilyOnly);
+
+    Expect(Backend.LoadedPaths == std::vector<std::string>{"/fonts/Body.ttf", "/fonts/Code.ttf"} &&
+               Backend.LoadedSizes == std::vector<float>{20.0F, 14.0F},
+           "a font-size alone uses the default font's path, and a font-family alone its size");
+    Expect(Title.Font != 0 && Field.Font != 0 && Title.Font != Field.Font, "each widget gets its own loaded font");
+}
+
+void TestWithoutADefaultFontAFontSizeAloneLeavesTheFontAlone() {
+    RecordingFontBackend    Backend;
+    LustreStyleApplier      Applier(&Backend);
+    ::Lustre::ResolvedStyle SizeOnly;
+    SizeOnly.FontSizeLogical = 20.0F;
+
+    Label Title;
+    Title.Font = 7;
+    Applier.Apply(Title, SizeOnly);
+
+    Expect(Backend.LoadedPaths.empty() && Title.Font == 7,
+           "with no default font, a font-size alone loads nothing and keeps the label's font");
 }
 
 } // namespace
@@ -662,4 +701,6 @@ void RunLustreStyleApplierTests() {
     TestNoWhiteSpaceLeavesLabelWrapAtDefault();
     TestCheckboxStillReceivesItsBoxStyleSlice();
     TestFontLoadsAtTheApplierDpiScaleAndReloadsWhenItChanges();
+    TestAFontSizeOrFamilyAloneFillsTheRestFromTheDefaultFont();
+    TestWithoutADefaultFontAFontSizeAloneLeavesTheFontAlone();
 }
