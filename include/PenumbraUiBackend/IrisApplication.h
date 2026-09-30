@@ -150,8 +150,9 @@ protected:
     float                 DpiScaleFactor_  = 1.0f;
     Penumbra::Render::FontHandle Font_{0};
 
+    ::Lustre::Stylesheet            GlobalSheet_;
     ::Lustre::Stylesheet            ComposedSheet_;
-    ::Lustre::StylesheetSet         ComposedStyleSet_{nullptr, &ComposedSheet_};
+    ::Lustre::StylesheetSet         ComposedStyleSet_{&GlobalSheet_, &ComposedSheet_};
     std::unordered_set<std::string> DiscoveredStylesheetFiles_;
     std::unordered_set<std::string> DiscoveredStylesheetDirs_;
     std::optional<Lustre::LustreStyleApplier> Applier_;

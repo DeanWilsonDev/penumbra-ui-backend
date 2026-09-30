@@ -155,6 +155,71 @@ void TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThan
            "on top of an earlier mount's, rather than replacing them");
 }
 
+void TestGlobalLustreLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponent() {
+    TempProject Project;
+    Project.Write("global.lustre", ":root {\n"
+                                   "    --accent: #CEFF00FF;\n"
+                                   "}\n"
+                                   ".shared { border-radius: 4px; }\n");
+    Project.Write("Solo.lustre", ".foo { background-color: var(--accent); }");
+    Project.Write("Solo.irisx", "void Solo() {\n"
+                                 "    render {\n"
+                                 "        <Frame class=\"foo\" ref=\"box\">\n"
+                                 "            <Text>hello</Text>\n"
+                                 "        </Frame>\n"
+                                 "    }\n"
+                                 "}\n");
+
+    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::IrisApplication App;
+    App.Attach(Driver, Project.UiDir());
+
+    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
+    PenumbraUiBackend::IrisApplication::MountResult Result = App.MountComponent("Solo.irisx", "Solo", {}, KeepAlive);
+
+    const ::Lustre::StylesheetSet& Sheets = App.ComposedStylesheet();
+    Expect(Driver.Errors().empty(), "the global.lustre fixture compiles and mounts with no errors");
+    Expect(Sheets.Global != nullptr && Sheets.Global->Root.has_value() && Sheets.Global->Root->Variables.size() == 1,
+           "global.lustre's :root variables land in the Global slot");
+    Expect(Sheets.Global != nullptr && Sheets.Global->Rules.size() == 1 && Sheets.Component->Rules.size() == 1,
+           "global.lustre's rules land in the Global slot, not the component sheet");
+    const auto* AsBox = dynamic_cast<Penumbra::Widgets::Box*>(Result.Refs.count("box") ? Result.Refs.at("box") : nullptr);
+    Expect(AsBox != nullptr && AsBox->Style.ColorBackground.R == 0xCE && AsBox->Style.ColorBackground.G == 0xFF &&
+               AsBox->Style.ColorBackground.B == 0x00,
+           "a component rule's var(--accent) resolves to global.lustre's value");
+}
+
+void TestRootVariablesInAComponentStylesheetAreKept() {
+    TempProject Project;
+    Project.Write("Solo.lustre", ":root {\n"
+                                 "    --tint: #123456FF;\n"
+                                 "}\n"
+                                 ".foo { background-color: var(--tint); }\n");
+    Project.Write("Solo.irisx", "void Solo() {\n"
+                                 "    render {\n"
+                                 "        <Frame class=\"foo\" ref=\"box\">\n"
+                                 "            <Text>hello</Text>\n"
+                                 "        </Frame>\n"
+                                 "    }\n"
+                                 "}\n");
+
+    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::IrisApplication App;
+    App.Attach(Driver, Project.UiDir());
+
+    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
+    PenumbraUiBackend::IrisApplication::MountResult Result = App.MountComponent("Solo.irisx", "Solo", {}, KeepAlive);
+
+    const ::Lustre::StylesheetSet& Sheets = App.ComposedStylesheet();
+    Expect(Sheets.Component != nullptr && Sheets.Component->Root.has_value() &&
+               Sheets.Component->Root->Variables.size() == 1,
+           "a :root block in a component stylesheet is kept in the composed sheet, not dropped");
+    const auto* AsBox = dynamic_cast<Penumbra::Widgets::Box*>(Result.Refs.count("box") ? Result.Refs.at("box") : nullptr);
+    Expect(AsBox != nullptr && AsBox->Style.ColorBackground.R == 0x12 && AsBox->Style.ColorBackground.G == 0x34 &&
+               AsBox->Style.ColorBackground.B == 0x56,
+           "var(--tint) from a component stylesheet's own :root resolves");
+}
+
 void TestMountComponentBuildsAWidgetAndPopulatesRefMap() {
     TempProject Project;
     Project.Write("Card.irisx", "void Card() {\n"
@@ -435,6 +500,8 @@ void RunIrisApplicationTests() {
     TestMountComponentAutoDiscoversItsOwnColocatedStylesheet();
     TestMountComponentDiscoversAnImportedComponentsStylesheetInASeparateDirectoryTransitively();
     TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThanReplace();
+    TestGlobalLustreLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponent();
+    TestRootVariablesInAComponentStylesheetAreKept();
     TestMountComponentBuildsAWidgetAndPopulatesRefMap();
     TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef();
     TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard();

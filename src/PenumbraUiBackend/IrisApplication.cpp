@@ -66,7 +66,12 @@ void IrisApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath)
                 if (Entry.path().extension() != ".lustre") continue;
                 ::Lustre::Stylesheet Sheet =
                     Lustre::LoadStylesheetFromFile(Entry.path().string().c_str(), Entry.path().stem().string().c_str());
-                for (::Lustre::RulePtr& R : Sheet.Rules) ComposedSheet_.Rules.push_back(std::move(R));
+                ::Lustre::Stylesheet& Target = Entry.path().filename() == "global.lustre" ? GlobalSheet_ : ComposedSheet_;
+                if (Sheet.Root) {
+                    if (!Target.Root) Target.Root.emplace();
+                    for (::Lustre::VariableDeclaration& V : Sheet.Root->Variables) Target.Root->Variables.push_back(std::move(V));
+                }
+                for (::Lustre::RulePtr& R : Sheet.Rules) Target.Rules.push_back(std::move(R));
             }
         }
 
