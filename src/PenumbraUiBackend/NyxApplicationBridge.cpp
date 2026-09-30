@@ -17,6 +17,20 @@
 
 namespace nyx::host {
 
+namespace {
+
+void ReportHookError(const std::string& Hook, const runtime::Value& Error, std::string& LastReported) {
+    const auto&           Object  = std::get<std::shared_ptr<runtime::NyxObject>>(Error.data);
+    const runtime::Value* Message = Object->FindFieldByName("message");
+    std::string Line = "[NyxApplicationBridge] " + Hook + " raised " + Object->typeName;
+    if (Message && Message->Kind() == runtime::ValueKind::String) Line += ": " + std::get<std::string>(Message->data);
+    if (Line == LastReported) return;
+    LastReported = Line;
+    std::fprintf(stderr, "%s\n", Line.c_str());
+}
+
+} // namespace
+
 template <>
 class NyxBridge<Penumbra::Application> : public Penumbra::Application, public NyxBridgeBase {
 public:
@@ -61,38 +75,46 @@ public:
 
     void Configure(Penumbra::ApplicationConfig& Config) override {
         PendingConfig_ = &Config;
-        Invoke("Configure"); // no Nyx override -> Config keeps its ApplicationConfig() defaults
+        InvokeHook("Configure");
         PendingConfig_ = nullptr;
     }
 
     bool OnStart() override {
-        if (std::optional<runtime::Value> Result = Invoke("OnStart")) {
-            return FromValue<bool>(*Result);
+        if (std::optional<runtime::Value> Result = InvokeHook("OnStart")) {
+            return !interp_->IsErrorValue(*Result) && FromValue<bool>(*Result);
         }
         return Penumbra::Application::OnStart();
     }
 
     void OnUpdate(float DeltaSeconds) override {
-        if (!Invoke("OnUpdate", DeltaSeconds)) {
+        if (!InvokeHook("OnUpdate", DeltaSeconds)) {
             Penumbra::Application::OnUpdate(DeltaSeconds);
         }
     }
 
     void OnShutdown() override {
-        if (!Invoke("OnShutdown")) {
+        if (!InvokeHook("OnShutdown")) {
             Penumbra::Application::OnShutdown();
         }
     }
 
     void OnDpiScaleChanged(float NewDpiScaleFactor) override {
-        if (!Invoke("OnDpiScaleChanged", NewDpiScaleFactor)) {
+        if (!InvokeHook("OnDpiScaleChanged", NewDpiScaleFactor)) {
             Penumbra::Application::OnDpiScaleChanged(NewDpiScaleFactor);
         }
     }
 
 private:
+    template <typename... Args>
+    std::optional<runtime::Value> InvokeHook(const std::string& Hook, Args&&... HookArgs) {
+        std::optional<runtime::Value> Result = Invoke(Hook, std::forward<Args>(HookArgs)...);
+        if (Result && interp_->IsErrorValue(*Result)) ReportHookError(Hook, *Result, LastHookError_);
+        return Result;
+    }
+
     Penumbra::Point WindowLogicalSize;
     Penumbra::ApplicationConfig* PendingConfig_ = nullptr;
+    std::string LastHookError_;
 };
 
 template <>
@@ -131,38 +153,46 @@ public:
 
     void Configure(Penumbra::ApplicationConfig& Config) override {
         PendingConfig_ = &Config;
-        Invoke("Configure");
+        InvokeHook("Configure");
         PendingConfig_ = nullptr;
     }
 
     bool OnStart() override {
-        if (std::optional<runtime::Value> Result = Invoke("OnStart")) {
-            return FromValue<bool>(*Result);
+        if (std::optional<runtime::Value> Result = InvokeHook("OnStart")) {
+            return !interp_->IsErrorValue(*Result) && FromValue<bool>(*Result);
         }
         return PenumbraUiBackend::IrisApplication::OnStart();
     }
 
     void OnUpdate(float DeltaSeconds) override {
-        if (!Invoke("OnUpdate", DeltaSeconds)) {
+        if (!InvokeHook("OnUpdate", DeltaSeconds)) {
             PenumbraUiBackend::IrisApplication::OnUpdate(DeltaSeconds);
         }
     }
 
     void OnShutdown() override {
-        if (!Invoke("OnShutdown")) {
+        if (!InvokeHook("OnShutdown")) {
             PenumbraUiBackend::IrisApplication::OnShutdown();
         }
     }
 
     void OnDpiScaleChanged(float NewDpiScaleFactor) override {
-        if (!Invoke("OnDpiScaleChanged", NewDpiScaleFactor)) {
+        if (!InvokeHook("OnDpiScaleChanged", NewDpiScaleFactor)) {
             PenumbraUiBackend::IrisApplication::OnDpiScaleChanged(NewDpiScaleFactor);
         }
     }
 
 private:
+    template <typename... Args>
+    std::optional<runtime::Value> InvokeHook(const std::string& Hook, Args&&... HookArgs) {
+        std::optional<runtime::Value> Result = Invoke(Hook, std::forward<Args>(HookArgs)...);
+        if (Result && interp_->IsErrorValue(*Result)) ReportHookError(Hook, *Result, LastHookError_);
+        return Result;
+    }
+
     Penumbra::Point WindowLogicalSize;
     Penumbra::ApplicationConfig* PendingConfig_ = nullptr;
+    std::string LastHookError_;
 };
 
 } // namespace nyx::host

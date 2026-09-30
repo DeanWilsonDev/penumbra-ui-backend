@@ -32,8 +32,9 @@ std::optional<std::string> ReadFileToString(const std::string& Path) {
 } // namespace
 
 void IrisApplication::Attach(Iris::IrisNyxDriver& Driver, std::string UiDir) {
-    Driver_ = &Driver;
-    UiDir_  = std::move(UiDir);
+    Driver_             = &Driver;
+    ReportedErrorCount_ = 0;
+    UiDir_              = std::move(UiDir);
 }
 
 void IrisApplication::SetFontConfig(std::string FontPath, float FontSizeLogical) {
@@ -113,10 +114,11 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
     AppRootSlots_.clear();
     AppRootWrapper_.reset();
 
+    const std::size_t ErrorsBefore = Driver_->Errors().size();
     AppRoot_ = Driver_->MountRoot(UiDir_ + "/" + File, FunctionName);
-    if (!Driver_->Errors().empty()) {
-        std::fprintf(stderr, "[IrisApplication] %s mount failed: %s\n", File.c_str(),
-                     Driver_->Errors().back().Message.c_str());
+    if (Driver_->Errors().size() > ErrorsBefore) {
+        std::fprintf(stderr, "[IrisApplication] %s mount failed\n", File.c_str());
+        ReportNewErrors();
         return false;
     }
 
@@ -136,6 +138,7 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
 
     RootOverlayHost->SetRoot(AppRootWrapper_->DetachOwnership());
     SetRootWidget(std::move(RootOverlayHost));
+    ReportNewErrors();
     return true;
 }
 
@@ -181,8 +184,8 @@ bool IrisApplication::MountReconciledComponent(const std::string& File, const st
     const std::size_t ErrorsBefore = Driver_->Errors().size();
     MountResult Result = MountComponent(File, FunctionName, std::move(Args), Mount.Roots);
     if (Driver_->Errors().size() > ErrorsBefore) {
-        std::fprintf(stderr, "[IrisApplication] %s mount failed: %s\n", File.c_str(),
-                     Driver_->Errors().back().Message.c_str());
+        std::fprintf(stderr, "[IrisApplication] %s mount failed\n", File.c_str());
+        ReportNewErrors();
         Mount.Roots.clear();
         return false;
     }
@@ -197,6 +200,7 @@ bool IrisApplication::MountReconciledComponent(const std::string& File, const st
     for (std::unique_ptr<iris::SlotState>& Slot : Mount.Slots) Slot->Reconcile();
 
     Target->AddChild(Mount.Wrapper->DetachOwnership());
+    ReportNewErrors();
     return true;
 }
 
@@ -207,7 +211,21 @@ void IrisApplication::TeardownReconciledComponent(const std::string& TargetRefNa
     ReconciledMounts_.erase(It);
 }
 
-void IrisApplication::TickIris() { iris::Tick(); }
+void IrisApplication::TickIris() {
+    iris::Tick();
+    ReportNewErrors();
+}
+
+void IrisApplication::ReportNewErrors() {
+    if (!Driver_) return;
+    const std::vector<Iris::IrisIrRuntimeError>& Errors = Driver_->Errors();
+    for (; ReportedErrorCount_ < Errors.size(); ++ReportedErrorCount_) {
+        const Iris::IrisIrRuntimeError& Error = Errors[ReportedErrorCount_];
+        std::fprintf(stderr, "[IrisApplication] %s:%u:%u: %s\n", Error.Location.FilePath.c_str(),
+                     static_cast<unsigned>(Error.Location.Line), static_cast<unsigned>(Error.Location.Column),
+                     Error.Message.c_str());
+    }
+}
 
 namespace {
 

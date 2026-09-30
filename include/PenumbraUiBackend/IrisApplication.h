@@ -130,14 +130,6 @@ public:
 
     // -- App-root mount + OverlayHost/root-widget lifecycle --
 
-    // Mounts `File`'s own `FunctionName` component as this application's root: builds it,
-    // wraps the result in a fresh
-    // `Penumbra::Widgets::OverlayHost` (so a `<Portal>` anywhere in the mounted tree has
-    // somewhere to present), and calls `SetRootWidget`. Every `ref`-tagged node in the
-    // mounted tree becomes retrievable via `GetRef` afterward. Returns false, logging to
-    // stderr, on a mount error (`IrisDriver().Errors()` grew) -- does not touch
-    // `SetRootWidget` in that case. Safe to call again later (e.g. on a DPI change) --
-    // replaces the previous root and ref set outright.
     bool MountAppRoot(const std::string& File, const std::string& FunctionName);
 
     // A `ref`-tagged widget from the most recent `MountAppRoot` call, or nullptr if no
@@ -153,12 +145,15 @@ public:
 
     void TickIris();
 
+    void ReportNewErrors();
+
     const ::Lustre::StylesheetSet& ComposedStylesheet() const { return ComposedStyleSet_; }
 
     Iris::IrisNyxDriver& IrisDriver() { return *Driver_; }
 
 protected:
     Iris::IrisNyxDriver* Driver_ = nullptr;
+    std::size_t           ReportedErrorCount_ = 0;
     std::string           UiDir_;
     std::string           FontPath_;
     float                 FontSizeLogical_ = 14.0f;

@@ -834,6 +834,7 @@ void RunNyxApplicationBridgeTests();       // tests/NyxApplicationBridgeTests.cp
 void RunIrisApplicationTests();            // tests/IrisApplicationTests.cpp
 void RunStackFillAndScrollbarTests();
 void RunRelativeSizingTests();
+void RunErrorReportingTests();
 
 int main() {
     RunNyxApplicationBridgeTests();
@@ -847,6 +848,7 @@ int main() {
     RunStylesheetLoaderTests();
     RunStackFillAndScrollbarTests();
     RunRelativeSizingTests();
+    RunErrorReportingTests();
 
     std::printf("\n%d failure(s)\n", Failures);
     return Failures == 0 ? 0 : 1;
