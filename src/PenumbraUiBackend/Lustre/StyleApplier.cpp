@@ -131,6 +131,12 @@ void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::Resolved
 LustreStyleApplier::LustreStyleApplier(Penumbra::Render::IFontBackend* FontBackend, float DpiScaleFactor)
     : FontBackend_(FontBackend), DpiScaleFactor_(DpiScaleFactor) {}
 
+void LustreStyleApplier::SetDpiScaleFactor(float DpiScaleFactor) {
+    if (DpiScaleFactor == DpiScaleFactor_) return;
+    DpiScaleFactor_ = DpiScaleFactor;
+    FontCache_.clear();
+}
+
 Penumbra::Render::FontHandle LustreStyleApplier::ResolveFont(const ::Lustre::FontRequest& Request) const {
     const std::string CacheKey = Request.Path + "@" + std::to_string(Request.SizeLogical);
     if (auto It = FontCache_.find(CacheKey); It != FontCache_.end()) {

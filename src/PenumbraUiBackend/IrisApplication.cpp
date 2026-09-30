@@ -43,6 +43,8 @@ void IrisApplication::SetFontConfig(std::string FontPath, float FontSizeLogical)
 }
 
 bool IrisApplication::ReloadFont(float DpiScaleFactor) {
+    DpiScaleFactor_ = DpiScaleFactor;
+    if (Applier_) Applier_->SetDpiScaleFactor(DpiScaleFactor);
     if (FontPath_.empty()) return false;
     Font_ = GetFontBackend().LoadFont(FontPath_.c_str(), FontSizeLogical_, DpiScaleFactor);
     return true;
@@ -76,7 +78,7 @@ void IrisApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath)
 }
 
 const Lustre::LustreStyleApplier& IrisApplication::StyleApplier() {
-    if (!Applier_) Applier_.emplace(&GetFontBackend());
+    if (!Applier_) Applier_.emplace(&GetFontBackend(), DpiScaleFactor_);
     return *Applier_;
 }
 

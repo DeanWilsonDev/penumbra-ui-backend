@@ -3,11 +3,31 @@
 #include "Lustre/Parser.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace PenumbraUiBackend::Lustre {
+
+namespace {
+
+void ResolveRelativeFontPaths(std::vector<::Lustre::RulePtr>& Rules, const std::filesystem::path& SheetDir) {
+    for (::Lustre::RulePtr& R : Rules) {
+        for (::Lustre::Declaration& Decl : R->Declarations) {
+            if (Decl.Property != "font-family") continue;
+            for (::Lustre::ValuePart& Value : Decl.Values) {
+                if (!Value.StringValue) continue;
+                const std::filesystem::path FontPath(*Value.StringValue);
+                if (FontPath.is_relative()) Value.StringValue = (SheetDir / FontPath).lexically_normal().string();
+            }
+        }
+        ResolveRelativeFontPaths(R->NestedRules, SheetDir);
+    }
+}
+
+} // namespace
 
 ::Lustre::Stylesheet LoadStylesheetFromFile(const char* Path, const char* LabelForErrors) {
     std::ifstream file(Path);
@@ -18,11 +38,6 @@ namespace PenumbraUiBackend::Lustre {
 
     std::ostringstream buffer;
     buffer << file.rdbuf();
-    // Parser only stores a non-owning std::string_view over Source
-    // (Lustre/Parser.h) -- binding it directly to buffer.str()'s temporary
-    // would leave the parser holding a dangling view the instant this
-    // constructor call's full-expression ends, before Parse() runs. `source`
-    // outlives both.
     const std::string     source = buffer.str();
     ::Lustre::Parser      parser(source, Path);
     ::Lustre::ParseResult result = parser.Parse();
@@ -33,12 +48,9 @@ namespace PenumbraUiBackend::Lustre {
         }
     }
 
-    // Parser::Parse() always sets Sheet -- even a file with errors gets the
-    // (possibly partial) tree back rather than nullopt, so a caller can see
-    // every error at once. has_value() is only false if Parser's contract
-    // ever changes; Stylesheet{} is the same fallback the no-Sheet-value
-    // and can't-open-file paths above already use.
-    return result.Sheet.has_value() ? std::move(*result.Sheet) : ::Lustre::Stylesheet{};
+    if (!result.Sheet.has_value()) return ::Lustre::Stylesheet{};
+    ResolveRelativeFontPaths(result.Sheet->Rules, std::filesystem::path(Path).parent_path());
+    return std::move(*result.Sheet);
 }
 
 } // namespace PenumbraUiBackend::Lustre

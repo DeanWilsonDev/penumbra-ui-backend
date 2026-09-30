@@ -347,6 +347,19 @@ void TestMountAppRootFailsGracefullyOnAMalformedFixture() {
     Expect(App.GetRootWidget() == nullptr, "a failed MountAppRoot never calls SetRootWidget");
 }
 
+void TestStyleApplierFollowsTheDpiScaleGivenToReloadFont() {
+    PenumbraUiBackend::IrisApplication BuiltAfter;
+    BuiltAfter.ReloadFont(2.0F);
+    Expect(BuiltAfter.StyleApplier().DpiScaleFactor() == 2.0F,
+           "a style applier built after ReloadFont uses the DPI scale it was given");
+
+    PenumbraUiBackend::IrisApplication BuiltBefore;
+    BuiltBefore.StyleApplier();
+    BuiltBefore.ReloadFont(2.0F);
+    Expect(BuiltBefore.StyleApplier().DpiScaleFactor() == 2.0F,
+           "ReloadFont moves an already built style applier to the new DPI scale");
+}
+
 void TestBridgedIrisApplicationExposesInheritedMethodsToNyx() {
     PenumbraUiBackend::IrisApplicationBridge Bridge(TestConfig(), ".");
 
@@ -413,6 +426,7 @@ void RunIrisApplicationTests() {
     TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount();
     TestMountReconciledComponentFailsForAnUnknownTargetRef();
     TestMountAppRootFailsGracefullyOnAMalformedFixture();
+    TestStyleApplierFollowsTheDpiScaleGivenToReloadFont();
     TestBridgedIrisApplicationExposesInheritedMethodsToNyx();
     TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName();
 }

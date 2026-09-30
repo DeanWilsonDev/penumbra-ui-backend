@@ -10,6 +10,7 @@
 
 #include <cstdio>
 #include <string>
+#include <vector>
 
 extern int Failures; // defined in WalkerTests.cpp
 
@@ -578,6 +579,47 @@ void TestCheckboxStillReceivesItsBoxStyleSlice() {
            "a Checkbox still receives the universal BoxStyle slice via its Box base");
 }
 
+class RecordingFontBackend : public Penumbra::Render::IFontBackend {
+public:
+    std::vector<float> LoadedDpiScaleFactors;
+
+    Penumbra::Render::FontHandle LoadFont(const char*, float, float DpiScaleFactor) override {
+        LoadedDpiScaleFactors.push_back(DpiScaleFactor);
+        return static_cast<Penumbra::Render::FontHandle>(LoadedDpiScaleFactors.size());
+    }
+    Penumbra::Render::TextMetrics MeasureText(Penumbra::Render::FontHandle, std::string_view) const override {
+        return {0.0F, 0.0F, 0.0F};
+    }
+    float MeasureTextWidth(Penumbra::Render::FontHandle, std::string_view) const override { return 0.0F; }
+    SDL_Texture* AcquireTextTexture(SDL_Renderer*, Penumbra::Render::FontHandle, std::string_view, SDL_Color) override {
+        return nullptr;
+    }
+};
+
+void TestFontLoadsAtTheApplierDpiScaleAndReloadsWhenItChanges() {
+    RecordingFontBackend    Backend;
+    LustreStyleApplier      Applier(&Backend, 2.0F);
+    ::Lustre::ResolvedStyle Style;
+    Style.Font = ::Lustre::FontRequest{"/fonts/Code.ttf", 13.0F};
+
+    Label First;
+    Label Second;
+    Applier.Apply(First, Style);
+    Applier.Apply(Second, Style);
+
+    Expect(Backend.LoadedDpiScaleFactors == std::vector<float>{2.0F},
+           "a font request loads once at the applier's DPI scale, then comes from the cache");
+    Expect(First.Font == Second.Font, "both labels share the cached font handle");
+
+    Applier.SetDpiScaleFactor(1.5F);
+    Label Third;
+    Applier.Apply(Third, Style);
+
+    Expect(Backend.LoadedDpiScaleFactors == std::vector<float>{2.0F, 1.5F},
+           "changing the DPI scale reloads the same font request at the new scale");
+    Expect(Third.Font != First.Font, "the reloaded font is a new handle");
+}
+
 } // namespace
 
 void RunLustreStyleApplierTests() {
@@ -619,4 +661,5 @@ void RunLustreStyleApplierTests() {
     TestWhiteSpaceNowrapReachesALabelAsWrapFalse();
     TestNoWhiteSpaceLeavesLabelWrapAtDefault();
     TestCheckboxStillReceivesItsBoxStyleSlice();
+    TestFontLoadsAtTheApplierDpiScaleAndReloadsWhenItChanges();
 }

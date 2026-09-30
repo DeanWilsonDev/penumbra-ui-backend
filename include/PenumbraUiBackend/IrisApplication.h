@@ -93,19 +93,9 @@ public:
     // `CAIRN_FONT_PATH`/`14.0f`) -- now an app-supplied value instead.
     void SetFontConfig(std::string FontPath, float FontSizeLogical);
 
-    // -- Font / DPI --
-
-    // Reloads the configured font at DpiScaleFactor (`IFontBackend::LoadFont`). Returns
-    // false (does nothing) if `SetFontConfig` was never called. Call again whenever the
-    // window's own DPI scale changes (`Penumbra::Application::OnDpiScaleChanged`) or once
-    // up front during `OnStart`.
     bool ReloadFont(float DpiScaleFactor);
     Penumbra::Render::FontHandle CurrentFont() const { return Font_; }
 
-    // The one `LustreStyleApplier` shared by every mount this instance performs, built
-    // lazily against `GetFontBackend()` on first access (matching every existing caller's
-    // own former "construct once in OnStart, reuse forever" behavior -- never rebuilt on a
-    // later DPI change, same as before this class existed).
     const Lustre::LustreStyleApplier& StyleApplier();
 
     // -- Generic single-component mount --
@@ -157,6 +147,7 @@ protected:
     std::string           UiDir_;
     std::string           FontPath_;
     float                 FontSizeLogical_ = 14.0f;
+    float                 DpiScaleFactor_  = 1.0f;
     Penumbra::Render::FontHandle Font_{0};
 
     ::Lustre::Stylesheet            ComposedSheet_;

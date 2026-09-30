@@ -1,6 +1,7 @@
 #include "PenumbraUiBackend/Lustre/StylesheetLoader.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <unistd.h>
 
@@ -63,10 +64,45 @@ void TestFileWithParseErrorsStillReturnsWithoutCrashing() {
     std::remove(path.c_str());
 }
 
+std::string FontFamilyOf(const ::Lustre::Rule& Rule) {
+    for (const ::Lustre::Declaration& Decl : Rule.Declarations) {
+        if (Decl.Property == "font-family" && !Decl.Values.empty() && Decl.Values[0].StringValue) {
+            return *Decl.Values[0].StringValue;
+        }
+    }
+    return {};
+}
+
+void TestRelativeFontFamilyPathsResolveAgainstTheStylesheetsDirectory() {
+    const std::string path = WriteTempLustreFile(".body { font-family: \"fonts/Body.ttf\"; font-size: 14px; }\n"
+                                                 ".code { font-family: \"/opt/fonts/Code.ttf\"; font-size: 13px; }\n"
+                                                 ".card {\n"
+                                                 "    .card-title { font-family: \"../shared/Title.ttf\"; font-size: 20px; }\n"
+                                                 "}\n");
+    const std::filesystem::path sheetDir = std::filesystem::path(path).parent_path();
+
+    const ::Lustre::Stylesheet sheet =
+        LoadStylesheetFromFile(path.c_str(), "TestRelativeFontFamilyPathsResolveAgainstTheStylesheetsDirectory");
+
+    Expect(sheet.Rules.size() == 3 && sheet.Rules[2]->NestedRules.size() == 1,
+           "the font-family fixture parses into three rules, one with a nested rule");
+    if (sheet.Rules.size() == 3 && sheet.Rules[2]->NestedRules.size() == 1) {
+        Expect(FontFamilyOf(*sheet.Rules[0]) == (sheetDir / "fonts/Body.ttf").string(),
+               "a relative font-family path resolves against the stylesheet's own directory");
+        Expect(FontFamilyOf(*sheet.Rules[1]) == "/opt/fonts/Code.ttf", "an absolute font-family path is left as written");
+        Expect(FontFamilyOf(*sheet.Rules[2]->NestedRules[0]) ==
+                   (sheetDir / "../shared/Title.ttf").lexically_normal().string(),
+               "a relative font-family path in a nested rule resolves too, normalised");
+    }
+
+    std::remove(path.c_str());
+}
+
 } // namespace
 
 void RunStylesheetLoaderTests() {
     TestValidFileParsesIntoAPopulatedStylesheet();
     TestMissingFileReturnsAnEmptyStylesheet();
     TestFileWithParseErrorsStillReturnsWithoutCrashing();
+    TestRelativeFontFamilyPathsResolveAgainstTheStylesheetsDirectory();
 }
