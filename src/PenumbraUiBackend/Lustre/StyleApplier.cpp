@@ -29,6 +29,16 @@ Penumbra::Widgets::Length ToPenumbraLength(const ::Lustre::Length& L) {
     return Penumbra::Widgets::Length::Logical(L.Value);
 }
 
+Penumbra::Render::FontStyle ToPenumbraFontStyle(const ::Lustre::ResolvedStyle& Style) {
+    Penumbra::Render::FontStyle Out;
+    Out.Italic = Style.FontStyleMode == ::Lustre::FontStyle::Italic;
+    if (Style.TextDecorationLine) {
+        Out.Underline = Style.TextDecorationLine->Underline;
+        Out.Strikethrough = Style.TextDecorationLine->LineThrough;
+    }
+    return Out;
+}
+
 Penumbra::Widgets::CrossAlign ToPenumbraCrossAlign(::Lustre::Align A) {
     switch (A) {
         case ::Lustre::Align::Start: return Penumbra::Widgets::CrossAlign::Start;
@@ -137,20 +147,24 @@ void LustreStyleApplier::SetDpiScaleFactor(float DpiScaleFactor) {
     FontCache_.clear();
 }
 
-Penumbra::Render::FontHandle LustreStyleApplier::ResolveFont(const ::Lustre::FontRequest& Request) const {
-    const std::string CacheKey = Request.Path + "@" + std::to_string(Request.SizeLogical);
+Penumbra::Render::FontHandle LustreStyleApplier::ResolveFont(const ::Lustre::FontRequest& Request,
+                                                             Penumbra::Render::FontStyle   FontStyle) const {
+    std::string CacheKey = Request.Path + "@" + std::to_string(Request.SizeLogical);
+    if (FontStyle.Italic) CacheKey += "#i";
+    if (FontStyle.Underline) CacheKey += "#u";
+    if (FontStyle.Strikethrough) CacheKey += "#s";
     if (auto It = FontCache_.find(CacheKey); It != FontCache_.end()) {
         return It->second;
     }
     const Penumbra::Render::FontHandle Handle =
-        FontBackend_->LoadFont(Request.Path.c_str(), Request.SizeLogical, DpiScaleFactor_);
+        FontBackend_->LoadStyledFont(Request.Path.c_str(), Request.SizeLogical, DpiScaleFactor_, FontStyle);
     FontCache_.emplace(CacheKey, Handle);
     return Handle;
 }
 
 std::optional<::Lustre::FontRequest> LustreStyleApplier::EffectiveFont(const ::Lustre::ResolvedStyle& Style) const {
     if (Style.Font) return Style.Font;
-    if (!DefaultFont_ || (!Style.FontFamily && !Style.FontSizeLogical)) return std::nullopt;
+    if (!DefaultFont_) return std::nullopt;
     return ::Lustre::FontRequest{Style.FontFamily.value_or(DefaultFont_->Path),
                                  Style.FontSizeLogical.value_or(DefaultFont_->SizeLogical)};
 }
@@ -287,7 +301,7 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         }
         if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
             AsLabel->FontBackend = FontBackend_;
-            AsLabel->Font = ResolveFont(*Font);
+            AsLabel->Font = ResolveFont(*Font, ToPenumbraFontStyle(Style));
         }
         if (Style.TextOverflowMode) {
             AsLabel->TruncateWithEllipsis = (*Style.TextOverflowMode == ::Lustre::TextOverflow::Ellipsis);
@@ -309,7 +323,7 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         }
         if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
             AsTextInput->FontBackend = FontBackend_;
-            AsTextInput->Font = ResolveFont(*Font);
+            AsTextInput->Font = ResolveFont(*Font, ToPenumbraFontStyle(Style));
         }
     }
 
@@ -325,7 +339,7 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         }
         if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
             AsTextArea->FontBackend = FontBackend_;
-            AsTextArea->Font = ResolveFont(*Font);
+            AsTextArea->Font = ResolveFont(*Font, ToPenumbraFontStyle(Style));
         }
         if (Style.ScrollbarWidthLogical) {
             AsTextArea->ScrollbarWidthLogical = *Style.ScrollbarWidthLogical;

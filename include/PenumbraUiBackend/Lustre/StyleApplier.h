@@ -45,7 +45,8 @@ public:
 
 private:
     std::optional<::Lustre::FontRequest> EffectiveFont(const ::Lustre::ResolvedStyle& Style) const;
-    Penumbra::Render::FontHandle         ResolveFont(const ::Lustre::FontRequest& Request) const;
+    Penumbra::Render::FontHandle         ResolveFont(const ::Lustre::FontRequest& Request,
+                                                     Penumbra::Render::FontStyle   FontStyle) const;
 
     Penumbra::Render::IFontBackend*      FontBackend_;
     float                                DpiScaleFactor_;

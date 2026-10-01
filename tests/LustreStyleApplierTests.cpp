@@ -584,11 +584,17 @@ public:
     std::vector<std::string> LoadedPaths;
     std::vector<float>       LoadedSizes;
     std::vector<float>       LoadedDpiScaleFactors;
+    std::vector<Penumbra::Render::FontStyle> LoadedStyles;
 
     Penumbra::Render::FontHandle LoadFont(const char* Path, float PointSizeLogical, float DpiScaleFactor) override {
+        return LoadStyledFont(Path, PointSizeLogical, DpiScaleFactor, {});
+    }
+    Penumbra::Render::FontHandle LoadStyledFont(const char* Path, float PointSizeLogical, float DpiScaleFactor,
+                                                Penumbra::Render::FontStyle Style) override {
         LoadedPaths.emplace_back(Path);
         LoadedSizes.push_back(PointSizeLogical);
         LoadedDpiScaleFactors.push_back(DpiScaleFactor);
+        LoadedStyles.push_back(Style);
         return static_cast<Penumbra::Render::FontHandle>(LoadedDpiScaleFactors.size());
     }
     Penumbra::Render::TextMetrics MeasureText(Penumbra::Render::FontHandle, std::string_view) const override {
@@ -659,6 +665,69 @@ void TestWithoutADefaultFontAFontSizeAloneLeavesTheFontAlone() {
            "with no default font, a font-size alone loads nothing and keeps the label's font");
 }
 
+void TestFontStyleAndTextDecorationLoadAStyledFont() {
+    RecordingFontBackend Backend;
+    LustreStyleApplier   Applier(&Backend);
+    Applier.SetDefaultFont({"/fonts/Body.ttf", 14.0F});
+
+    ::Lustre::ResolvedStyle Italic;
+    Italic.FontStyleMode = ::Lustre::FontStyle::Italic;
+    ::Lustre::ResolvedStyle UnderlinedAndStruck;
+    UnderlinedAndStruck.Font = ::Lustre::FontRequest{"/fonts/Body.ttf", 14.0F};
+    UnderlinedAndStruck.TextDecorationLine = ::Lustre::TextDecoration{.Underline = true, .LineThrough = true};
+
+    Label Slanted;
+    Label Decorated;
+    Applier.Apply(Slanted, Italic);
+    Applier.Apply(Decorated, UnderlinedAndStruck);
+
+    Expect(Backend.LoadedStyles.size() == 2 &&
+               Backend.LoadedStyles[0] == Penumbra::Render::FontStyle{.Italic = true} &&
+               Backend.LoadedStyles[1] ==
+                   Penumbra::Render::FontStyle{.Italic = false, .Underline = true, .Strikethrough = true},
+           "font-style and text-decoration reach the backend as a FontStyle on the loaded font");
+    Expect(Backend.LoadedPaths == std::vector<std::string>{"/fonts/Body.ttf", "/fonts/Body.ttf"},
+           "a style alone styles the default font");
+    Expect(Slanted.Font != Decorated.Font, "each style is its own font handle");
+}
+
+void TestTheSameFontInTwoStylesLoadsTwiceAndCachesEach() {
+    RecordingFontBackend    Backend;
+    LustreStyleApplier      Applier(&Backend);
+    ::Lustre::ResolvedStyle Plain;
+    Plain.Font = ::Lustre::FontRequest{"/fonts/Body.ttf", 14.0F};
+    ::Lustre::ResolvedStyle Italic = Plain;
+    Italic.FontStyleMode = ::Lustre::FontStyle::Italic;
+
+    Label First;
+    Label Second;
+    Label Third;
+    Applier.Apply(First, Plain);
+    Applier.Apply(Second, Italic);
+    Applier.Apply(Third, Italic);
+
+    Expect(Backend.LoadedStyles.size() == 2, "the plain and italic fonts load once each");
+    Expect(First.Font != Second.Font && Second.Font == Third.Font, "the italic font comes from the cache the second time");
+}
+
+void TestAPlainStyleAfterAStyledOneRestoresTheDefaultFont() {
+    RecordingFontBackend Backend;
+    LustreStyleApplier   Applier(&Backend);
+    Applier.SetDefaultFont({"/fonts/Body.ttf", 14.0F});
+
+    ::Lustre::ResolvedStyle Underlined;
+    Underlined.TextDecorationLine = ::Lustre::TextDecoration{.Underline = true};
+    ::Lustre::ResolvedStyle Plain;
+
+    Label Reused;
+    Applier.Apply(Reused, Underlined);
+    const Penumbra::Render::FontHandle UnderlinedFont = Reused.Font;
+    Applier.Apply(Reused, Plain);
+
+    Expect(Reused.Font != UnderlinedFont && Backend.LoadedStyles.back() == Penumbra::Render::FontStyle{},
+           "re-applying a style with no font properties puts the plain default font back");
+}
+
 } // namespace
 
 void RunLustreStyleApplierTests() {
@@ -703,4 +772,7 @@ void RunLustreStyleApplierTests() {
     TestFontLoadsAtTheApplierDpiScaleAndReloadsWhenItChanges();
     TestAFontSizeOrFamilyAloneFillsTheRestFromTheDefaultFont();
     TestWithoutADefaultFontAFontSizeAloneLeavesTheFontAlone();
+    TestFontStyleAndTextDecorationLoadAStyledFont();
+    TestTheSameFontInTwoStylesLoadsTwiceAndCachesEach();
+    TestAPlainStyleAfterAStyledOneRestoresTheDefaultFont();
 }
