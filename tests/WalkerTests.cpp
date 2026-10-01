@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
 
 int Failures = 0; // shared across all test files in this executable
@@ -187,6 +188,40 @@ void TestIconPicksUpIconBackendFromBuildContext() {
     const auto* AsIcon = dynamic_cast<IconWidget*>(Built.get());
     Expect(AsIcon != nullptr && AsIcon->IconBackend == &Backend,
            "IconWidget::IconBackend is populated from BuildContext.IconBackend");
+}
+
+void TestClickOnAnIconReachesTheFrameAroundIt() {
+    int Releases = 0;
+    IrisProps IconProps;
+    IconProps["icon"] = IrisPropValue{std::string("close")};
+    IrisProps FrameProps;
+    FrameProps["onRelease"] = IrisPropValue{std::function<void()>([&Releases]() { ++Releases; })};
+    std::vector<Component> Children;
+    Children.push_back(MakeNode(IrisElementTag::Icon, IconProps));
+    const auto Node = MakeNode(IrisElementTag::Frame, FrameProps, std::move(Children));
+
+    const auto Built = BuildWidgetTree(Node, BuildContext{});
+    auto* Frame = dynamic_cast<Penumbra::Widgets::Box*>(Built.get());
+    Expect(Frame != nullptr, "<Frame> builds a Box");
+    if (Frame == nullptr) return;
+    Frame->Layout = Penumbra::Widgets::LayoutMode::VerticalStack;
+    Frame->Measure({200.0f, 200.0f});
+    Frame->Arrange({0.0f, 0.0f, 200.0f, 200.0f});
+    const Penumbra::Rect IconRect = Frame->GetChildAt(0)->GetArrangedRect();
+    Expect(IconRect.W > 0.0f && IconRect.H > 0.0f, "the <Icon> is laid out inside its <Frame>");
+
+    Penumbra::Platform::InputState Press;
+    Press.MousePosition                  = {IconRect.X + IconRect.W / 2.0f, IconRect.Y + IconRect.H / 2.0f};
+    Press.MouseButtonPressedThisFrame[0] = true;
+    Press.MouseButtonDown[0]             = true;
+    Frame->UpdateInteractionState(Press);
+
+    Penumbra::Platform::InputState Release;
+    Release.MousePosition                   = Press.MousePosition;
+    Release.MouseButtonReleasedThisFrame[0] = true;
+    Frame->UpdateInteractionState(Release);
+
+    Expect(Releases == 1, "a click on an <Icon> with no handlers of its own reaches the onRelease of the <Frame> around it");
 }
 
 void TestIconSizeOverridesTheDefault() {
@@ -797,6 +832,7 @@ void RunWalkerTests() {
     TestIconBuildsWithIconNameEvenWithoutBackendProvided();
     TestIconPicksUpIconBackendFromBuildContext();
     TestIconSizeOverridesTheDefault();
+    TestClickOnAnIconReachesTheFrameAroundIt();
     TestIconWithNoSizePropKeepsTheDefault();
     TestScrollBuildsAScrollablePanelWithChildrenAndWheelStep();
     TestScrollWithNoWheelStepKeepsTheDefault();
