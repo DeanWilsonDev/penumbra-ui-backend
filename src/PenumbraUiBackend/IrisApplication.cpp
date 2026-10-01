@@ -95,6 +95,7 @@ BuildContext IrisApplication::MakeBuildContext() {
     BuildContext Context;
     Context.FontBackend  = &GetFontBackend();
     Context.Font         = Font_;
+    Context.IconBackend  = IconBackend_;
     Context.Style        = &ComposedStyleSet_;
     Context.StyleApplier = &StyleApplier();
     Context.OverlayHost  = OverlayHostPtr_;

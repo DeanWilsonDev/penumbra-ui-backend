@@ -9,6 +9,7 @@
 #include "Iris/SlotRuntime.h"
 
 #include "Penumbra/Application.h"
+#include "Penumbra/Backends/IIconBackend.h"
 #include "Penumbra/Render/IFontBackend.h"
 #include "Penumbra/Widgets/FocusState.h"
 #include "Penumbra/Widgets/OverlayHost.h"
@@ -87,11 +88,8 @@ public:
     // relative to.
     void Attach(Iris::IrisNyxDriver& Driver, std::string UiDir);
 
-    // Called once, any time before the first `ReloadFont` call (typically right after
-    // `Attach`). `FontPath`/`FontSizeLogical` replace what used to be a compile-time
-    // `#define` baked directly into a hand-rolled `ReloadFont` (e.g. Cairn's own former
-    // `CAIRN_FONT_PATH`/`14.0f`) -- now an app-supplied value instead.
     void SetFontConfig(std::string FontPath, float FontSizeLogical);
+    void SetIconBackend(Penumbra::Backends::IIconBackend* Backend) { IconBackend_ = Backend; }
 
     bool ReloadFont(float DpiScaleFactor);
     Penumbra::Render::FontHandle CurrentFont() const { return Font_; }
@@ -149,6 +147,7 @@ protected:
     float                 FontSizeLogical_ = 14.0f;
     float                 DpiScaleFactor_  = 1.0f;
     Penumbra::Render::FontHandle Font_{0};
+    Penumbra::Backends::IIconBackend* IconBackend_ = nullptr;
 
     ::Lustre::Stylesheet            GlobalSheet_;
     ::Lustre::Stylesheet            ComposedSheet_;

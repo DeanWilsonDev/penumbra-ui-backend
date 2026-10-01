@@ -5,7 +5,9 @@
 #include "Iris/IrisNyxDriver.h"
 
 #include "Penumbra/Application.h"
+#include "Penumbra/Backends/IIconBackend.h"
 #include "Penumbra/Widgets/Box.h"
+#include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
 
@@ -239,6 +241,31 @@ void TestMountComponentBuildsAWidgetAndPopulatesRefMap() {
     Expect(Result.Widget != nullptr, "MountComponent returns a real built widget");
     Expect(Result.Refs.count("label") == 1, "MountComponent's RefMap captures the ref=\"label\" node");
     Expect(KeepAlive.size() == 1, "MountComponent pushes exactly one Component onto the caller's KeepAlive vector");
+}
+
+void TestMountedIconsGetTheBackendGivenToSetIconBackend() {
+    struct FakeIconBackend : Penumbra::Backends::IIconBackend {
+        void DrawIcon(Penumbra::Render::Renderer&, std::string_view, Penumbra::Rect, Penumbra::Render::Color) override {}
+    } Backend;
+
+    TempProject Project;
+    Project.Write("Glyph.irisx", "void Glyph() {\n"
+                                  "    render {\n"
+                                  "        <Frame>\n"
+                                  "            <Icon ref=\"glyph\" icon=\"close\" />\n"
+                                  "        </Frame>\n"
+                                  "    }\n"
+                                  "}\n");
+
+    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::IrisApplication App;
+    App.Attach(Driver, Project.UiDir());
+    App.SetIconBackend(&Backend);
+    Expect(App.MountAppRoot("Glyph.irisx", "Glyph"), "MountAppRoot mounts a root holding an <Icon>");
+
+    const auto* Glyph = dynamic_cast<Penumbra::Widgets::IconWidget*>(App.GetRef("glyph"));
+    Expect(Glyph != nullptr && Glyph->IconBackend == &Backend,
+           "a mounted <Icon> draws through the backend given to SetIconBackend");
 }
 
 void TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef() {
@@ -504,6 +531,7 @@ void RunIrisApplicationTests() {
     TestRootVariablesInAComponentStylesheetAreKept();
     TestMountComponentBuildsAWidgetAndPopulatesRefMap();
     TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef();
+    TestMountedIconsGetTheBackendGivenToSetIconBackend();
     TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard();
     TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount();
     TestMountReconciledComponentFailsForAnUnknownTargetRef();
