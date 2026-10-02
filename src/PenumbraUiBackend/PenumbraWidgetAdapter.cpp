@@ -4,6 +4,7 @@
 #include "PenumbraUiBackend/Portal.h"
 
 #include "Penumbra/Widgets/Box.h"
+#include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/ImageWidget.h"
 #include "Penumbra/Widgets/InlineContainer.h"
 #include "Penumbra/Widgets/Label.h"
@@ -18,6 +19,7 @@
 namespace PenumbraUiBackend {
 
 using Penumbra::Widgets::Box;
+using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::ImageWidget;
 using Penumbra::Widgets::InlineContainer;
 using Penumbra::Widgets::Label;
@@ -302,16 +304,9 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
         return;
     }
 
-    // The shared set every Core primitive's own Builder exposes identically
-    // (docs/iris_core_spec.md §3.1) maps straight onto WidgetBase's own public fields.
     if (Diff.ClassName) {
         Widget->ClassName = *Diff.ClassName;
 
-        // A class change means Lustre's own resolved style for this element may have
-        // changed entirely -- re-resolve and re-apply it now, the same way a browser
-        // recomputes an element's style the instant its `class` attribute changes.
-        // Skipped whenever no style context is configured (SetStyleContext never
-        // called, or explicitly given nullptrs) -- exactly the pre-wiring behavior.
         if (Sheets_ != nullptr && StyleApplier_ != nullptr) {
             ResetStyleableFields(*Widget);
             const std::vector<std::unique_ptr<ReconcileStyleElement>> Chain = BuildReconcileStyleChain(*this);
@@ -335,7 +330,6 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
         Widget->OnChanged = *Diff.OnChange;
     }
 
-    // <Text>-only.
     if (Diff.Text) {
         if (auto* AsLabel = dynamic_cast<Label*>(Widget)) {
             AsLabel->Text = *Diff.Text;
@@ -351,10 +345,12 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
         }
     }
 
-    // <Image>-only — src re-decodes synchronously through the real image backend/
-    // renderer (docs/iris_core_spec.md §3.1, docs/iris_stage3_decision_doc.md §5's
-    // accepted cost). A null ImageBackend_/SdlRenderer_ (no real backend wired up, e.g.
-    // a structural test) just skips the reload — FilePath still updates.
+    if (Diff.Icon) {
+        if (auto* AsIcon = dynamic_cast<IconWidget*>(Widget)) {
+            AsIcon->IconName = *Diff.Icon;
+        }
+    }
+
     if (Diff.Src) {
         if (auto* AsImage = dynamic_cast<ImageWidget*>(Widget)) {
             AsImage->FilePath = *Diff.Src;
@@ -363,11 +359,6 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
             }
         }
     }
-
-    // Diff.Handle and Diff.Checked are deliberately no-ops here: no Core primitive
-    // reaches either path today (Umbra::TextureHandle is currently a data-less stub —
-    // nothing to swap; <Checkbox> isn't a Core primitive, docs/iris_core_spec.md §3.1)
-    // — see docs/penumbra_ui_backend_adapter_decision.md.
 }
 
 std::size_t PenumbraWidget::GetChildCount() const { return Children_.size(); }

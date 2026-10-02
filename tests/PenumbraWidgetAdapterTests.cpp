@@ -4,6 +4,7 @@
 #include "Iris/Signal.h"
 
 #include "Penumbra/Widgets/Box.h"
+#include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
 #include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextInput.h"
@@ -33,6 +34,7 @@ using PenumbraUiBackend::MakeMountFn;
 using PenumbraUiBackend::PenumbraWidget;
 using PenumbraUiBackend::WrapExistingTree;
 using Penumbra::Widgets::Box;
+using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::Label;
 using Penumbra::Widgets::SplitPanel;
 using Penumbra::Widgets::TextInput;
@@ -104,6 +106,28 @@ void TestApplyPropDiffOnTextChangeReachesRealTextInput() {
         AsTextInput->OnTextChanged("typed");
         Expect(LastValue == "typed", "and invoking it calls back into the original handler");
     }
+}
+
+void TestReconcilerChangesAReusedIconsGlyph() {
+    const iris::MountFn Mount = MakeMountFn(BuildContext{});
+    auto MakeIcon = [](const std::string& Name) {
+        IrisProps Props;
+        Props["icon"] = IrisPropValue{Name};
+        return Component(IrisElementTag::Icon, Props, {}, nullptr);
+    };
+
+    const Component Old = MakeIcon("bolt");
+    std::unique_ptr<Umbra::IWidget> Widget = Mount(Old);
+    auto* AsIcon = dynamic_cast<IconWidget*>(dynamic_cast<PenumbraWidget*>(Widget.get())->RawWidget());
+    const IconWidget* OriginalIconAddress = AsIcon;
+    Expect(AsIcon != nullptr && AsIcon->IconName == "bolt", "a mounted <Icon> starts with its icon prop's name");
+
+    const Component New = MakeIcon("layers");
+    iris::ReconcileWidget(Widget, Old, New, Mount);
+
+    AsIcon = dynamic_cast<IconWidget*>(dynamic_cast<PenumbraWidget*>(Widget.get())->RawWidget());
+    Expect(AsIcon == OriginalIconAddress, "reconciling an <Icon> to a new icon name reuses the real IconWidget");
+    Expect(AsIcon != nullptr && AsIcon->IconName == "layers", "and the reused IconWidget draws the new icon name");
 }
 
 void TestReconcilerUpdatesRealWidgetTreeInPlace() {
@@ -387,6 +411,7 @@ void RunPenumbraWidgetAdapterTests() {
     TestWrapExistingTreeMirrorsRealTreeStructure();
     TestApplyPropDiffReachesRealWidgetBaseFields();
     TestApplyPropDiffOnTextChangeReachesRealTextInput();
+    TestReconcilerChangesAReusedIconsGlyph();
     TestReconcilerUpdatesRealWidgetTreeInPlace();
     TestReconcilerAddsRealChildToRealParentBox();
     TestSignalDrivesRealPenumbraTreeThroughFullStack();
