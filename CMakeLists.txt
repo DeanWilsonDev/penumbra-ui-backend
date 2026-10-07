@@ -1,9 +1,17 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.30)
 
 project(PenumbraUiBackend
     VERSION 0.1.0
     DESCRIPTION "The Penumbra backend for Iris and Lustre — maps IrisComponent IR onto a real Penumbra widget tree and applies Lustre::ResolvedStyle to it"
     LANGUAGES CXX)
+
+if((CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+   OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 18))
+  message(FATAL_ERROR "Penumbra UI Backend needs GCC 14 or later or Clang 18 or later; found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
+
+set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
@@ -12,9 +20,9 @@ endif()
 # ---------------------------------------------------------------------------
 # Iris, Penumbra, and Lustre are independent projects that don't know about
 # each other — each is vendored here as its own pinned git submodule, and
-# each subdirectory sets its own C++ standard (Iris/Lustre: C++23, Penumbra:
-# C++20), which is fine — CMAKE_CXX_STANDARD is directory-scoped, not
-# global, once you're inside an add_subdirectory().
+# each subdirectory sets its own C++ standard (all three: C++26), which is
+# fine — CMAKE_CXX_STANDARD is directory-scoped, not global, once you're
+# inside an add_subdirectory().
 # ---------------------------------------------------------------------------
 include(FetchContent)
 add_subdirectory(vendor/iris)
@@ -45,7 +53,7 @@ add_library(penumbra_ui_backend_lustre STATIC
     src/PenumbraUiBackend/Lustre/StylesheetLoader.cpp)
 
 target_include_directories(penumbra_ui_backend_lustre PUBLIC include)
-target_compile_features(penumbra_ui_backend_lustre PUBLIC cxx_std_23)
+target_compile_features(penumbra_ui_backend_lustre PUBLIC cxx_std_26)
 target_link_libraries(penumbra_ui_backend_lustre PUBLIC lustre penumbra)
 
 # ---------------------------------------------------------------------------
@@ -67,7 +75,7 @@ add_library(penumbra_ui_backend STATIC
     src/PenumbraUiBackend/PenumbraWidgetAdapter.cpp)
 
 target_include_directories(penumbra_ui_backend PUBLIC include)
-target_compile_features(penumbra_ui_backend PUBLIC cxx_std_23)
+target_compile_features(penumbra_ui_backend PUBLIC cxx_std_26)
 target_link_libraries(penumbra_ui_backend PUBLIC iris penumbra penumbra_ui_backend_lustre)
 
 # ---------------------------------------------------------------------------

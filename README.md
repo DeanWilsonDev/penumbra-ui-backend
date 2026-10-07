@@ -161,6 +161,10 @@ decision doc's "What's implemented" section for the fix and why the tests didn't
 
 ## Build
 
+Requires GCC 14 or later or Clang 18 or later (or a recent AppleClang), CMake 3.30 or later,
+and C++26. On Windows, use clang-cl from Clang 18 or later; MSVC's cl.exe isn't supported.
+Configure stops with an error on an older GCC or Clang.
+
 ```sh
 git submodule update --init --recursive
 cmake -S . -B build
