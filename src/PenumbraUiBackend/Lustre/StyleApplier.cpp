@@ -9,6 +9,8 @@
 #include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
 
+#include <vector>
+
 namespace PenumbraUiBackend::Lustre {
 
 namespace {
@@ -89,6 +91,43 @@ void ApplyLayout(Penumbra::Widgets::Box& Target, const ::Lustre::ResolvedStyle& 
     }
 }
 
+Penumbra::Anim::Easing ToPenumbraEasing(::Lustre::Easing Curve) {
+    switch (Curve) {
+        case ::Lustre::Easing::Linear: return Penumbra::Anim::Easing::Linear;
+        case ::Lustre::Easing::EaseIn: return Penumbra::Anim::Easing::EaseIn;
+        case ::Lustre::Easing::EaseInOut: return Penumbra::Anim::Easing::EaseInOut;
+        // CSS's default `ease` starts briskly and settles slowly, closest to ease-out.
+        case ::Lustre::Easing::Ease:
+        case ::Lustre::Easing::EaseOut: return Penumbra::Anim::Easing::EaseOut;
+    }
+    return Penumbra::Anim::Easing::EaseOut;
+}
+
+// The Box values a Lustre `transition` entry can ease, by CSS property name. `all`
+// covers every one; a property Box can't ease (border-radius, say) is left out.
+std::vector<Penumbra::Widgets::Transition> ToPenumbraTransitions(const std::vector<::Lustre::Transition>& Entries) {
+    using Penumbra::Widgets::TransitionProperty;
+    static const std::unordered_map<std::string, TransitionProperty> kProperties{
+        {"width", TransitionProperty::Width},
+        {"height", TransitionProperty::Height},
+        {"flex-grow", TransitionProperty::FlexGrow},
+        {"background-color", TransitionProperty::BackgroundColor},
+        {"opacity", TransitionProperty::Opacity}};
+
+    std::vector<Penumbra::Widgets::Transition> Out;
+    for (const ::Lustre::Transition& Entry : Entries) {
+        const Penumbra::Anim::Easing Curve = ToPenumbraEasing(Entry.Curve);
+        if (Entry.Property == "all") {
+            for (const auto& [Name, Property] : kProperties) {
+                Out.push_back({Property, Entry.DurationSeconds, Curve});
+            }
+        } else if (const auto It = kProperties.find(Entry.Property); It != kProperties.end()) {
+            Out.push_back({It->second, Entry.DurationSeconds, Curve});
+        }
+    }
+    return Out;
+}
+
 void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::ResolvedStyle& Style) {
     if (Style.BackgroundColor) {
         Target.ColorBackground = ToPenumbraColor(*Style.BackgroundColor);
@@ -126,6 +165,12 @@ void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::Resolved
     }
     if (Style.FlexGrow) {
         Target.FlexGrow = *Style.FlexGrow;
+    }
+    if (Style.Opacity) {
+        Target.Opacity = *Style.Opacity;
+    }
+    if (!Style.Transitions.empty()) {
+        Target.Transitions = ToPenumbraTransitions(Style.Transitions);
     }
     // Same pair convention as BackgroundGradientStart/End above: the resolver
     // only ever sets both halves of `box-shadow` together (or neither), so
@@ -206,6 +251,14 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
     }
     ApplyBoxStyle(AsBox->Style, Style);
     ApplyLayout(*AsBox, Style);
+
+    // @starting-style: the Box's own style with the starting values laid over it, which
+    // is what Box::StartingStyle wants (it reads every transitioned value from it).
+    if (Style.Starting) {
+        Penumbra::Widgets::BoxStyle Start = AsBox->Style;
+        ApplyBoxStyle(Start, *Style.Starting);
+        AsBox->StartingStyle = std::move(Start);
+    }
 
     if (Style.MaxWidth) {
         auto* AsTruncatingLabel = dynamic_cast<Label*>(&Widget);

@@ -3,9 +3,15 @@
 
 #include "Lustre/Parser.h"
 
+#include "Penumbra/Render/Renderer.h"
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
+#include "Penumbra/Widgets/LayoutPass.h"
+
+#include <SDL3/SDL.h>
+
+#include <cmath>
 
 #include <cstdio>
 #include <optional>
@@ -394,6 +400,171 @@ void TestClassChangeFallsBackToFrameGuessWithoutAPrimitiveTagMap() {
 
 } // namespace
 
+// Lays out and draws Root through a software renderer, one frame of DeltaSeconds per
+// call: Box transitions advance in Draw, on the Renderer's frame clock.
+class FrameStepper {
+public:
+    FrameStepper() {
+        Surface_ = SDL_CreateSurface(200, 40, SDL_PIXELFORMAT_RGBA8888);
+        Sdl_     = Surface_ ? SDL_CreateSoftwareRenderer(Surface_) : nullptr;
+        Ready_   = Sdl_ != nullptr && Renderer_.Initialise(Sdl_, 1.0F, nullptr);
+    }
+    ~FrameStepper() {
+        if (Sdl_) SDL_DestroyRenderer(Sdl_);
+        if (Surface_) SDL_DestroySurface(Surface_);
+    }
+
+    bool Ready() const { return Ready_; }
+
+    void Step(WidgetBase& Root, float DeltaSeconds) {
+        {
+            const Penumbra::Widgets::LayoutPass Pass;
+            Root.Measure({200.0F, 40.0F});
+            Root.Arrange({0.0F, 0.0F, 200.0F, 40.0F});
+        }
+        Renderer_.BeginFrame({0, 0, 0, 255}, DeltaSeconds);
+        Root.Draw(Renderer_);
+        Renderer_.EndFrameAndPresent();
+    }
+
+private:
+    SDL_Surface*               Surface_{nullptr};
+    SDL_Renderer*              Sdl_{nullptr};
+    Penumbra::Render::Renderer Renderer_;
+    bool                       Ready_{false};
+};
+
+// docs/next_steps.md's "Animate layout and colour from Lustre" acceptance: a Frame whose
+// class goes from g-0 to g-60 under `transition: flex-grow 0.6s ease-out` eases there
+// over 0.6s, with nothing done per frame by the app.
+void TestAClassChangeEasesFlexGrowUnderALustreTransition() {
+    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+.track { display: stack; flex-direction: row; }
+.grow { transition: flex-grow 0.6s ease-out; }
+.g-0 { flex-grow: 0; }
+.g-40 { flex-grow: 40; }
+.g-60 { flex-grow: 60; }
+.g-100 { flex-grow: 100; }
+)",
+                                                            "Stats.lustre");
+    const LustreStyleApplier      Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    PrimitiveTagMap Tags;
+    const auto      Node = MakeNode(IrisElementTag::Frame, WithClass("track"),
+                                    {MakeNode(IrisElementTag::Frame, WithClass("grow g-0")),
+                                     MakeNode(IrisElementTag::Frame, WithClass("grow g-100"))});
+    auto Wrapper = WrapExistingTree(BuildWidgetTree(Node, Context, &Tags), nullptr, nullptr, &Sheets, &Applier, &Tags);
+
+    FrameStepper Frames;
+    if (!Wrapper || Wrapper->GetChildCount() != 2 || !Frames.Ready()) {
+        Expect(false, "the g-0/g-100 track mounts, and a software renderer is available to step frames");
+        return;
+    }
+    WidgetBase& Root = *Wrapper->RawWidget();
+    WidgetBase* Bar  = static_cast<PenumbraWidget*>(Wrapper->GetChildAt(0))->RawWidget();
+
+    Frames.Step(Root, 0.1F);
+    Frames.Step(Root, 0.1F);
+    Expect(Bar->GetArrangedRect().W == 0.0F, "the g-0 bar starts with no width");
+
+    Umbra::IrisPropDiff ToBar;
+    ToBar.ClassName = "grow g-60";
+    Wrapper->GetChildAt(0)->ApplyPropDiff(ToBar);
+    Umbra::IrisPropDiff ToRest;
+    ToRest.ClassName = "grow g-40";
+    Wrapper->GetChildAt(1)->ApplyPropDiff(ToRest);
+
+    Frames.Step(Root, 0.1F); // picks up the change: still where it was
+    Expect(Bar->GetArrangedRect().W == 0.0F, "on the frame the class changes, the bar hasn't jumped");
+    for (int Frame = 0; Frame < 3; ++Frame) {
+        Frames.Step(Root, 0.1F);
+    }
+    // 0.3s into 0.6s ease-out (cubic): 0.875 of the way, so the bar's share is 52.5 of 100.
+    Expect(std::abs(Bar->GetArrangedRect().W - 200.0F * 0.525F) < 0.5F,
+           "0.3s in, the bar is 0.875 of the way along its ease-out, with no per-frame work from the app");
+    for (int Frame = 0; Frame < 4; ++Frame) {
+        Frames.Step(Root, 0.1F);
+    }
+    Expect(std::abs(Bar->GetArrangedRect().W - 120.0F) < 0.5F, "after 0.6s the bar settles at g-60");
+}
+
+void TestAStartingStyleGrowsANewlyMountedBarIn() {
+    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+.track { display: stack; flex-direction: row; }
+.bar {
+    flex-grow: 1;
+    transition: flex-grow 1s linear;
+    @starting-style { flex-grow: 0; }
+}
+.rest { flex-grow: 1; }
+)",
+                                                            "Bars.lustre");
+    const LustreStyleApplier      Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    const auto Node  = MakeNode(IrisElementTag::Frame, WithClass("track"),
+                                {MakeNode(IrisElementTag::Frame, WithClass("bar")),
+                                 MakeNode(IrisElementTag::Frame, WithClass("rest"))});
+    auto       Built = BuildWidgetTree(Node, Context);
+    auto*      Track = dynamic_cast<Box*>(Built.get());
+    FrameStepper Frames;
+    if (Track == nullptr || Track->GetChildCount() != 2 || !Frames.Ready()) {
+        Expect(false, "the bar/rest track mounts, and a software renderer is available to step frames");
+        return;
+    }
+    auto* Bar = dynamic_cast<Box*>(Track->GetChildAt(0));
+    Expect(Bar != nullptr && Bar->StartingStyle.has_value() && Bar->StartingStyle->FlexGrow == 0.0F &&
+               Bar->StartingStyle->Transitions.size() == 1,
+           "@starting-style reaches Box::StartingStyle: the bar's own style with flex-grow 0 laid over it");
+
+    Frames.Step(*Track, 0.1F);
+    Expect(Bar != nullptr && Bar->GetArrangedRect().W == 0.0F, "the newly mounted bar appears at its starting flex-grow");
+    for (int Frame = 0; Frame < 5; ++Frame) {
+        Frames.Step(*Track, 0.1F); // the frame clock caps a frame at 0.1s
+    }
+    // 0.5s into a 1s linear ease from 0 to 1, beside a rest of 1: 0.5 / 1.5 of the width.
+    Expect(Bar != nullptr && std::abs(Bar->GetArrangedRect().W - 200.0F / 3.0F) < 0.5F,
+           "and grows in toward its own flex-grow");
+}
+
+void TestLustreOpacityAndTransitionsReachBoxStyle() {
+    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+.faded {
+    opacity: 0.5;
+    transition: opacity 0.3s ease-in, all 0.2s linear, border-radius 1s;
+}
+)",
+                                                            "Faded.lustre");
+    const LustreStyleApplier      Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    const auto  Built = BuildWidgetTree(MakeNode(IrisElementTag::Frame, WithClass("faded")), Context);
+    const auto* AsBox = dynamic_cast<const Box*>(Built.get());
+    if (AsBox == nullptr) {
+        Expect(false, "<Frame class=\"faded\"> builds a Box");
+        return;
+    }
+    using Penumbra::Widgets::TransitionProperty;
+    const auto& Transitions = AsBox->Style.Transitions;
+    Expect(AsBox->Style.Opacity == 0.5F, "opacity reaches BoxStyle::Opacity");
+    Expect(Transitions.size() == 6, "an opacity entry plus `all` expanded to Box's five easable values; border-radius, "
+                                    "which Box can't ease, is left out");
+    Expect(!Transitions.empty() && Transitions[0].Property == TransitionProperty::Opacity &&
+               Transitions[0].DurationSeconds == 0.3F && Transitions[0].Curve == Penumbra::Anim::Easing::EaseIn,
+           "a transition entry keeps its duration and easing");
+    Expect(!AsBox->StartingStyle.has_value(), "no @starting-style leaves Box::StartingStyle unset");
+}
+
 void RunStyleWiringTests() {
     TestMountAppliesResolvedStyleToABuiltWidget();
     TestMountLeavesStyleUntouchedWhenNoContextIsSupplied();
@@ -407,4 +578,7 @@ void RunStyleWiringTests() {
     TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree();
     TestClassChangeStillResolvesAGridPrimitiveSelectorCorrectly();
     TestClassChangeFallsBackToFrameGuessWithoutAPrimitiveTagMap();
+    TestLustreOpacityAndTransitionsReachBoxStyle();
+    TestAClassChangeEasesFlexGrowUnderALustreTransition();
+    TestAStartingStyleGrowsANewlyMountedBarIn();
 }

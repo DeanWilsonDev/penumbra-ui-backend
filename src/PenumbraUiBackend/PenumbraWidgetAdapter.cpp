@@ -126,6 +126,7 @@ std::vector<std::unique_ptr<ReconcileStyleElement>> BuildReconcileStyleChain(con
 void ResetStyleableFields(WidgetBase& Widget) {
     if (auto* AsBox = dynamic_cast<Box*>(&Widget)) {
         AsBox->Style = Penumbra::Widgets::BoxStyle{};
+        AsBox->StartingStyle.reset();
     }
     if (auto* AsLabel = dynamic_cast<Label*>(&Widget)) {
         AsLabel->ColorText = {};
