@@ -317,15 +317,16 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
         return;
     }
 
+    for (const auto& [Name, Value] : Diff.Numbers) {
+        NumberProps_[Name] = Value;
+    }
     if (Diff.ClassName) {
         Widget->ClassName = *Diff.ClassName;
-
-        if (Sheets_ != nullptr && StyleApplier_ != nullptr) {
-            ResetStyleableFields(*Widget);
-            const std::vector<std::unique_ptr<ReconcileStyleElement>> Chain = BuildReconcileStyleChain(*this);
-            const ::Lustre::ResolvedStyle Resolved = Lustre::ResolveStyle(*Chain.front(), *Sheets_);
-            StyleApplier_->Apply(*Widget, Resolved);
-        }
+    }
+    // A changed number prop may be one an attr() binding reads; re-resolving is cheap
+    // enough not to track which.
+    if (Diff.ClassName || !Diff.Numbers.empty()) {
+        Restyle(*Widget);
     }
     if (Diff.OnPress) {
         Widget->OnPressed = *Diff.OnPress;
@@ -372,6 +373,20 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
             }
         }
     }
+}
+
+void PenumbraWidget::Restyle(WidgetBase& Widget) {
+    if (Sheets_ == nullptr || StyleApplier_ == nullptr) {
+        return;
+    }
+    ResetStyleableFields(Widget);
+    const std::vector<std::unique_ptr<ReconcileStyleElement>> Chain = BuildReconcileStyleChain(*this);
+    ::Lustre::ResolvedStyle Resolved = Lustre::ResolveStyle(*Chain.front(), *Sheets_);
+    Lustre::BindAttributes(Resolved, [this](std::string_view Name) -> std::optional<float> {
+        const auto It = NumberProps_.find(std::string(Name));
+        return It == NumberProps_.end() ? std::nullopt : std::optional<float>(It->second);
+    });
+    StyleApplier_->Apply(Widget, Resolved);
 }
 
 std::size_t PenumbraWidget::GetChildCount() const { return Children_.size(); }
@@ -460,7 +475,8 @@ std::unique_ptr<Umbra::IWidget> PenumbraWidget::RemoveChildAt(std::size_t Index)
 void PenumbraWidget::AdoptChildrenFromRawTree(
     Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer, const ::Lustre::StylesheetSet* Sheets,
     const Lustre::IStyleApplier* StyleApplier, const PrimitiveTagMap* Tags,
-    const std::unordered_map<const WidgetBase*, std::string>* ReverseRefs, PenumbraWidget* RegistryRoot) {
+    const std::unordered_map<const WidgetBase*, std::string>* ReverseRefs, PenumbraWidget* RegistryRoot,
+    const NumberPropMap* Numbers) {
     WidgetBase* Raw = RawWidget();
     for (std::size_t Index = 0; Index < Raw->GetChildCount(); ++Index) {
         WidgetBase*                     ChildRaw = Raw->GetChildAt(Index);
@@ -484,14 +500,20 @@ void PenumbraWidget::AdoptChildrenFromRawTree(
                 ChildWrapper->RefName_                  = It->second;
             }
         }
+        if (Numbers != nullptr) {
+            if (auto It = Numbers->find(ChildRaw); It != Numbers->end()) {
+                ChildWrapper->NumberProps_ = It->second;
+            }
+        }
         ChildWrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier, Tags, ReverseRefs,
-                                                RegistryRoot);
+                                                RegistryRoot, Numbers);
         Children_.push_back(std::move(ChildWrapper));
     }
 }
 
 std::unique_ptr<WidgetBase> PenumbraWidget::ReplaceRawWidget(std::unique_ptr<WidgetBase> NewWidget,
-                                                               const PrimitiveTagMap* Tags, const RefMap* Refs) {
+                                                               const PrimitiveTagMap* Tags, const RefMap* Refs,
+                                                               const NumberPropMap* Numbers) {
     WidgetBase* OldRaw = RawWidget();
     WidgetBase* NewRaw = NewWidget.get();
 
@@ -543,6 +565,12 @@ std::unique_ptr<WidgetBase> PenumbraWidget::ReplaceRawWidget(std::unique_ptr<Wid
             SetPrimitiveTag(It->second);
         }
     }
+    NumberProps_.clear();
+    if (Numbers != nullptr) {
+        if (auto It = Numbers->find(NewRaw); It != Numbers->end()) {
+            NumberProps_ = It->second;
+        }
+    }
 
     // This wrapper's own Children_ pointed into the now-detached old subtree -- rebuild
     // from NewRaw's real structure, same as WrapExistingTree's own initial adoption
@@ -566,7 +594,7 @@ std::unique_ptr<WidgetBase> PenumbraWidget::ReplaceRawWidget(std::unique_ptr<Wid
         }
     }
     AdoptChildrenFromRawTree(ImageBackend_, SdlRenderer_, Sheets_, StyleApplier_, Tags,
-                              Refs != nullptr ? &ReverseRefs : nullptr, RegistryRoot);
+                              Refs != nullptr ? &ReverseRefs : nullptr, RegistryRoot, Numbers);
 
     return Old;
 }
@@ -577,7 +605,8 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>    
                                                   const ::Lustre::StylesheetSet*      Sheets,
                                                   const Lustre::IStyleApplier*        StyleApplier,
                                                   const PrimitiveTagMap*              Tags,
-                                                  const RefMap*                       Refs) {
+                                                  const RefMap*                       Refs,
+                                                  const NumberPropMap*                Numbers) {
     WidgetBase* RawRoot = Root.get();
     std::unique_ptr<PenumbraWidget> Wrapper;
     if (dynamic_cast<PortalAnchorWidget*>(RawRoot) != nullptr) {
@@ -590,6 +619,11 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>    
     if (Tags != nullptr) {
         if (auto It = Tags->find(RawRoot); It != Tags->end()) {
             Wrapper->SetPrimitiveTag(It->second);
+        }
+    }
+    if (Numbers != nullptr) {
+        if (auto It = Numbers->find(RawRoot); It != Numbers->end()) {
+            Wrapper->NumberProps_ = It->second;
         }
     }
 
@@ -612,7 +646,7 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>    
     // the component-root boundary BuildReconcileStyleChain's IsComponentRoot() reads,
     // and GetByRef()'s own "registry only lives on the root" contract.
     Wrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier, Tags,
-                                       Refs != nullptr ? &ReverseRefs : nullptr, Wrapper.get());
+                                       Refs != nullptr ? &ReverseRefs : nullptr, Wrapper.get(), Numbers);
     return Wrapper;
 }
 
@@ -620,12 +654,13 @@ iris::MountFn MakeMountFn(BuildContext Context) {
     return [Context](const Iris::Component& Node) -> std::unique_ptr<Umbra::IWidget> {
         PrimitiveTagMap             Tags;
         RefMap                      Refs;
-        std::unique_ptr<WidgetBase> Built = BuildWidgetTree(Node, Context, &Tags, &Refs);
+        NumberPropMap               Numbers;
+        std::unique_ptr<WidgetBase> Built = BuildWidgetTree(Node, Context, &Tags, &Refs, &Numbers);
         if (!Built) {
             return nullptr;
         }
         return WrapExistingTree(std::move(Built), Context.ImageBackend, Context.SdlRenderer, Context.Style,
-                                 Context.StyleApplier, &Tags, &Refs);
+                                 Context.StyleApplier, &Tags, &Refs, &Numbers);
     };
 }
 

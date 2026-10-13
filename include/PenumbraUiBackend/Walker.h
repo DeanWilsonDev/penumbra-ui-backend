@@ -46,6 +46,13 @@ using PrimitiveTagMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*,
 // same ref name.
 using RefMap = std::unordered_map<std::string, Penumbra::Widgets::WidgetBase*>;
 
+// Each built widget's number props (int or float, as float), by name -- only widgets
+// that have any. Same optional out-parameter convention as PrimitiveTagMap/RefMap. A
+// Lustre `attr()` binding reads these: BuildWidgetTree fills bindings in from the
+// Component directly, but a PenumbraWidget re-resolving a widget's style later (a class
+// change) has only the widget, so WrapExistingTree seeds each wrapper from this.
+using NumberPropMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::unordered_map<std::string, float>>;
+
 // Resources BuildWidgetTree needs beyond what an Component tree itself carries.
 // Penumbra's own primitives don't take these through their fluent Builder: `Label`'s
 // `FontBackend`/`Font` are plain public fields set after construction (there's no
@@ -182,9 +189,13 @@ struct BuildContext {
 // involved, so this check happens at the same per-node point PrimitiveTagMap/RefMap
 // above already record at, not once at Node's own root. See BuildContext::
 // LifecycleHost's own comment for what registering actually does.
+//
+// When OutNumbers is non-null, every built widget's number props are recorded there --
+// see NumberPropMap's own comment above.
 std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Iris::Component& Node,
                                                                  const BuildContext&        Context,
                                                                  PrimitiveTagMap*           OutTags = nullptr,
-                                                                 RefMap*                    OutRefs = nullptr);
+                                                                 RefMap*                    OutRefs = nullptr,
+                                                                 NumberPropMap*             OutNumbers = nullptr);
 
 } // namespace PenumbraUiBackend

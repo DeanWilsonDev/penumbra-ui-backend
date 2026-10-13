@@ -3,6 +3,9 @@
 #include "Lustre/Resolver.h"
 #include "Lustre/ResolvedStyle.h"
 
+#include <functional>
+#include <optional>
+#include <string_view>
 #include <vector>
 
 namespace PenumbraUiBackend::Lustre {
@@ -20,5 +23,14 @@ namespace PenumbraUiBackend::Lustre {
 // on.
 ::Lustre::ResolvedStyle ResolveStyle(const ::Lustre::IStyleTarget& Target, const ::Lustre::StylesheetSet& Sheets,
                                        std::vector<::Lustre::ResolveDiagnostic>* OutDiagnostics = nullptr);
+
+// The element's number prop called Name, or nullopt when it has none.
+using NumberPropLookup = std::function<std::optional<float>(std::string_view Name)>;
+
+// Fills in each `attr()` binding in Style, and in its Hover/Active/Disabled/Starting
+// overlays, from Lookup: `flex-grow: attr(fill)` sets FlexGrow to the element's `fill`
+// prop, a length in logical pixels. A binding whose prop the element lacks leaves the
+// property unset, as CSS treats an attr() with no attribute and no fallback.
+void BindAttributes(::Lustre::ResolvedStyle& Style, const NumberPropLookup& Lookup);
 
 } // namespace PenumbraUiBackend::Lustre

@@ -173,7 +173,7 @@ public:
     // its own `BuildContext` again) already owns styling its own output.
     std::unique_ptr<Penumbra::Widgets::WidgetBase>
     ReplaceRawWidget(std::unique_ptr<Penumbra::Widgets::WidgetBase> NewWidget, const PrimitiveTagMap* Tags = nullptr,
-                      const RefMap* Refs = nullptr);
+                      const RefMap* Refs = nullptr, const NumberPropMap* Numbers = nullptr);
 
 protected:
     // Non-owning (attached) construction — used for every non-root node when wrapping
@@ -190,7 +190,11 @@ private:
                                    const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier,
                                    const PrimitiveTagMap* Tags,
                                    const std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::string>* ReverseRefs,
-                                   PenumbraWidget* RegistryRoot);
+                                   PenumbraWidget* RegistryRoot, const NumberPropMap* Numbers);
+
+    // Re-resolves and re-applies this widget's Lustre style -- on a class change, or a
+    // change to a number prop an attr() binding may read.
+    void Restyle(Penumbra::Widgets::WidgetBase& Widget);
 
     std::unique_ptr<Penumbra::Widgets::WidgetBase> OwnedWidget_;
     Penumbra::Widgets::WidgetBase*                  AttachedWidget_{nullptr};
@@ -198,6 +202,10 @@ private:
     PenumbraWidget*                                 Parent_{nullptr};
     std::string                                     PrimitiveTag_;
     std::string                                     RefName_;
+
+    // The widget's number props as last built or diffed, for attr() bindings when its
+    // style is re-resolved.
+    std::unordered_map<std::string, float> NumberProps_;
 
     Penumbra::Backends::IImageBackend* ImageBackend_{nullptr};
     SDL_Renderer*                       SdlRenderer_{nullptr};
@@ -213,7 +221,7 @@ private:
                                                               Penumbra::Backends::IImageBackend*, SDL_Renderer*,
                                                               const ::Lustre::StylesheetSet*,
                                                               const Lustre::IStyleApplier*, const PrimitiveTagMap*,
-                                                              const RefMap*);
+                                                              const RefMap*, const NumberPropMap*);
 };
 
 // Wraps an already-built Penumbra widget subtree (e.g. `BuildWidgetTree`'s output) into
@@ -230,13 +238,16 @@ private:
 // parameter, seeds the returned root wrapper's `GetByRef()` registry -- inverted from
 // `Refs`' own (ref name -> raw WidgetBase*) shape to (raw WidgetBase* -> ref name) once
 // here, then matched against each wrapper as this walk constructs it.
+// `Numbers` (also optional), from `BuildWidgetTree`'s `OutNumbers`, seeds each wrapper's
+// number props, so a later class change can still fill in an attr() binding.
 std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widgets::WidgetBase> Root,
                                                   Penumbra::Backends::IImageBackend*             ImageBackend,
                                                   SDL_Renderer*                                   SdlRenderer,
                                                   const ::Lustre::StylesheetSet* Sheets = nullptr,
                                                   const Lustre::IStyleApplier*    StyleApplier = nullptr,
                                                   const PrimitiveTagMap*          Tags = nullptr,
-                                                  const RefMap*                   Refs = nullptr);
+                                                  const RefMap*                   Refs = nullptr,
+                                                  const NumberPropMap*            Numbers = nullptr);
 
 // Builds an `iris::MountFn` (`Iris/SlotRuntime.h`, in the `iris` repo) combining Stage
 // 2's `BuildWidgetTree` with `WrapExistingTree` above — what Stage 3's reconciler calls

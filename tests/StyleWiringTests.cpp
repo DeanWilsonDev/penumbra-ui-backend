@@ -1,6 +1,9 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
+#include "Iris/Reconciler.h"
+#include "Iris/Signal.h"
+#include "Iris/SlotResolution.h"
 #include "Lustre/Parser.h"
 
 #include "Penumbra/Render/Renderer.h"
@@ -565,6 +568,94 @@ void TestLustreOpacityAndTransitionsReachBoxStyle() {
     Expect(!AsBox->StartingStyle.has_value(), "no @starting-style leaves Box::StartingStyle unset");
 }
 
+IrisProps WithClassAndFill(const std::string& ClassName, float Fill) {
+    IrisProps Props = WithClass(ClassName);
+    Props["fill"]   = IrisPropValue{Fill};
+    return Props;
+}
+
+// `flex-grow: attr(fill)` follows a Frame's `fill` prop all the way through: an
+// iris::Signal changes, iris::Tick re-renders the Slot, the reconciler's prop diff
+// carries the new number, and the bar eases to it under its transition.
+void TestAnAttrBindingFollowsItsPropThroughTheReconciler() {
+    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+.track { display: stack; flex-direction: row; }
+.share { flex-grow: attr(fill); transition: flex-grow 0.6s ease-out; }
+)",
+                                                            "Share.lustre");
+    const LustreStyleApplier      Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+    const iris::MountFn Mount = PenumbraUiBackend::MakeMountFn(Context);
+
+    iris::Signal<float> Fill = 0.0F;
+    const Component     RootNode =
+        MakeNode(IrisElementTag::Frame, WithClass("track"),
+                 {Component(IrisElementTag::Slot, {}, {}, Iris::MakeSlotCallable([&]() -> Component {
+                                return MakeNode(IrisElementTag::Frame, WithClassAndFill("share", Fill.get()));
+                            })),
+                  Component(IrisElementTag::Slot, {}, {}, Iris::MakeSlotCallable([&]() -> Component {
+                                return MakeNode(IrisElementTag::Frame, WithClassAndFill("share", 100.0F - Fill.get()));
+                            }))});
+    std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
+    auto                            Slots = iris::ResolveSlots(*Root, RootNode, Mount);
+    auto* Track = dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
+
+    FrameStepper Frames;
+    if (Track == nullptr || Track->GetChildCount() != 2 || !Frames.Ready()) {
+        Expect(false, "the attr()-bound track mounts its two Slot frames, and a software renderer is available");
+        return;
+    }
+    WidgetBase* Bar = Track->GetChildAt(0);
+    Frames.Step(*Track, 0.1F);
+    Expect(Bar->GetArrangedRect().W == 0.0F, "the bar's flex-grow comes from its fill prop through attr(): 0 to start");
+
+    Fill.set(60.0F);
+    iris::Tick();
+    Frames.Step(*Track, 0.1F);
+    for (int Frame = 0; Frame < 3; ++Frame) {
+        Frames.Step(*Track, 0.1F);
+    }
+    Expect(std::abs(Bar->GetArrangedRect().W - 200.0F * 0.525F) < 0.5F,
+           "a Signal change re-renders the Slot, the diff carries fill=60, and the bar eases toward it");
+    for (int Frame = 0; Frame < 4; ++Frame) {
+        Frames.Step(*Track, 0.1F);
+    }
+    Expect(std::abs(Bar->GetArrangedRect().W - 120.0F) < 0.5F, "and settles at a 60 share");
+}
+
+void TestAClassChangeKeepsAnAttrBoundValue() {
+    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+.bar { flex-grow: attr(fill); }
+.bar-tall { height: 40px; }
+)",
+                                                            "Bar.lustre");
+    const LustreStyleApplier      Applier;
+    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    std::unique_ptr<Umbra::IWidget> Wrapper =
+        PenumbraUiBackend::MakeMountFn(Context)(MakeNode(IrisElementTag::Frame, WithClassAndFill("bar", 30.0F)));
+    auto* AsBox = Wrapper ? dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Wrapper.get())->RawWidget()) : nullptr;
+    Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 30.0F, "attr(fill) sets flex-grow from the prop at mount");
+
+    Umbra::IrisPropDiff Diff;
+    Diff.ClassName = "bar bar-tall";
+    Wrapper->ApplyPropDiff(Diff);
+    Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 30.0F && AsBox->Style.Height.IsSet(),
+           "a class change re-resolves the style and still fills attr(fill) from the prop the wrapper recorded");
+
+    Umbra::IrisPropDiff NewFill;
+    NewFill.Numbers["fill"] = 45.0F;
+    Wrapper->ApplyPropDiff(NewFill);
+    Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 45.0F && AsBox->Style.Height.IsSet(),
+           "a changed number prop alone re-resolves the style with the new value");
+}
+
 void RunStyleWiringTests() {
     TestMountAppliesResolvedStyleToABuiltWidget();
     TestMountLeavesStyleUntouchedWhenNoContextIsSupplied();
@@ -581,4 +672,6 @@ void RunStyleWiringTests() {
     TestLustreOpacityAndTransitionsReachBoxStyle();
     TestAClassChangeEasesFlexGrowUnderALustreTransition();
     TestAStartingStyleGrowsANewlyMountedBarIn();
+    TestAnAttrBindingFollowsItsPropThroughTheReconciler();
+    TestAClassChangeKeepsAnAttrBoundValue();
 }

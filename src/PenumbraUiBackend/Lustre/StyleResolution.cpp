@@ -1,5 +1,7 @@
 #include "PenumbraUiBackend/Lustre/StyleResolution.h"
 
+#include <algorithm>
+
 namespace PenumbraUiBackend::Lustre {
 
 ::Lustre::ResolvedStyle ResolveStyle(const ::Lustre::IStyleTarget& Target, const ::Lustre::StylesheetSet& Sheets,
@@ -7,6 +9,42 @@ namespace PenumbraUiBackend::Lustre {
     std::vector<::Lustre::ResolveDiagnostic> LocalDiagnostics;
     std::vector<::Lustre::ResolveDiagnostic>& Diagnostics = OutDiagnostics ? *OutDiagnostics : LocalDiagnostics;
     return ::Lustre::ResolveStyle(Target, Sheets, Diagnostics);
+}
+
+void BindAttributes(::Lustre::ResolvedStyle& Style, const NumberPropLookup& Lookup) {
+    for (const ::Lustre::AttrBinding& Binding : Style.AttrBindings) {
+        const std::optional<float> Value = Lookup(Binding.Attribute);
+        if (!Value) {
+            continue;
+        }
+        const ::Lustre::Length Pixels{*Value, ::Lustre::LengthUnit::Px};
+        const std::string&     Property = Binding.Property;
+        if (Property == "width") {
+            Style.Width = Pixels;
+        } else if (Property == "height") {
+            Style.Height = Pixels;
+        } else if (Property == "min-width") {
+            Style.MinWidth = Pixels;
+        } else if (Property == "max-width") {
+            Style.MaxWidth = Pixels;
+        } else if (Property == "flex-grow") {
+            Style.FlexGrow = std::max(0.0F, *Value);
+        } else if (Property == "opacity") {
+            Style.Opacity = std::clamp(*Value, 0.0F, 1.0F);
+        } else if (Property == "gap") {
+            Style.Gap = *Value;
+        } else if (Property == "border-width") {
+            Style.BorderWidth = *Value;
+        } else if (Property == "border-radius") {
+            Style.BorderRadius = *Value;
+        }
+    }
+    for (const std::shared_ptr<::Lustre::ResolvedStyle>& Overlay :
+         {Style.Hover, Style.Active, Style.Disabled, Style.Starting}) {
+        if (Overlay) {
+            BindAttributes(*Overlay, Lookup);
+        }
+    }
 }
 
 } // namespace PenumbraUiBackend::Lustre
