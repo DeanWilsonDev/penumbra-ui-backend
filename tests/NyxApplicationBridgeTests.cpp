@@ -213,6 +213,53 @@ void TestNyxApplicationCanReadPointerStateAndHitTestAWidget() {
     delete Application;
 }
 
+void TestNyxApplicationCanCallApplicationAccessorsAndShowOrHideAWidget() {
+    PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
+
+    Penumbra::Application* Application = Bridge.LoadApplication(
+        "class TestApplication : Application {\n"
+        "    float WindowWidth() { return this.GetWindowLogicalSize().X(); }\n"
+        "    float WindowHeight() { return this.GetWindowLogicalSize().Y(); }\n"
+        "    float Dpi() { return this.GetDpiScaleFactor(); }\n"
+        "    bool HasFontBackend() { return this.GetFontBackend() != null; }\n"
+        "    bool HasLifecycleRegistry() { return this.GetLifecycleRegistry() != null; }\n"
+        "    void HideRoot() { this.GetRootWidget().SetVisible(false); }\n"
+        "    bool RootVisible() { return this.GetRootWidget().IsVisible(); }\n"
+        "    float RootRight() { PenumbraWidget root = this.GetRootWidget(); return root.GetX() + root.GetWidth(); }\n"
+        "    float RootBottom() { PenumbraWidget root = this.GetRootWidget(); return root.GetY() + root.GetHeight(); }\n"
+        "}\n",
+        "accessor-test.nyx", "TestApplication");
+
+    ExpectBridge(Application != nullptr, "NyxApplicationBridge loads a Nyx Application that calls Application's accessors");
+    if (!Application) return;
+
+    auto Call = [&](const std::string& Name) { return Bridge.CallApplicationMethod(*Application, Name); };
+    auto Float = [&](const std::string& Name) {
+        std::optional<nyx::runtime::Value> Result = Call(Name);
+        return Result ? nyx::host::FromValue<float>(*Result) : -1.0f;
+    };
+    auto Bool = [&](const std::string& Name) {
+        std::optional<nyx::runtime::Value> Result = Call(Name);
+        return Result && nyx::host::FromValue<bool>(*Result);
+    };
+
+    ExpectBridge(Float("WindowWidth") == 0.0f && Float("WindowHeight") == 0.0f,
+                 "GetWindowLogicalSize is callable from Nyx and hands back X and Y (0 with no window open)");
+    ExpectBridge(Float("Dpi") == 1.0f, "GetDpiScaleFactor is callable from Nyx");
+    ExpectBridge(Bool("HasFontBackend"), "GetFontBackend is callable from Nyx and hands back the font backend");
+    ExpectBridge(Bool("HasLifecycleRegistry"), "GetLifecycleRegistry is callable from Nyx");
+
+    Application->SetRootWidget(std::make_unique<Penumbra::Widgets::Box>());
+    Application->GetRootWidget()->Arrange({10.0f, 20.0f, 100.0f, 50.0f});
+    ExpectBridge(Float("RootRight") == 110.0f && Float("RootBottom") == 70.0f,
+                 "PenumbraWidget.GetX/GetY/GetWidth/GetHeight read the widget's arranged rect");
+    ExpectBridge(Bool("RootVisible"), "PenumbraWidget.IsVisible is true for a shown widget");
+    Call("HideRoot");
+    ExpectBridge(!Application->GetRootWidget()->GetIsVisible() && !Bool("RootVisible"),
+                 "PenumbraWidget.SetVisible(false) hides the real widget");
+    delete Application;
+}
+
 } // namespace
 
 void RunNyxApplicationBridgeTests() {
@@ -223,4 +270,5 @@ void RunNyxApplicationBridgeTests() {
     TestBridgeCallApplicationMethodInvokesACustomNyxMethod();
     TestGetApplicationInstanceValueLetsAnotherScopeCallCustomMethodsDirectly();
     TestNyxApplicationCanReadPointerStateAndHitTestAWidget();
+    TestNyxApplicationCanCallApplicationAccessorsAndShowOrHideAWidget();
 }

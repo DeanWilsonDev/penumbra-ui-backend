@@ -105,6 +105,16 @@ public:
     // to the root via GetParent() first.
     Umbra::IWidget* GetByRef(std::string_view Ref) const;
 
+    // The `ref` this wrapper's widget was built with, if it was wrapped with a `RefMap`
+    // that named it (empty otherwise), and a search of this wrapper and everything under
+    // it, as mounted right now, for the first one carrying Ref. Unlike GetByRef's
+    // registry, the search only ever finds live wrappers: a ref'd widget a `<Slot>`
+    // re-render dropped is simply gone from the tree, never a dangling entry. This is how
+    // IrisApplication::GetRef reaches refs inside Slot-mounted content, which the static
+    // build's own RefMap never saw.
+    const std::string& GetRefName() const { return RefName_; }
+    PenumbraWidget*    FindDescendantByRef(std::string_view Ref);
+
     // docs/next_steps.md's "swap a live real widget when a reconciled `<Native>`
     // re-renders" ask. Swaps this wrapper's own live widget for NewWidget, in place at
     // the exact same tree position -- same real Penumbra parent, same slot -- without
@@ -187,6 +197,7 @@ private:
     std::vector<std::unique_ptr<PenumbraWidget>>   Children_;
     PenumbraWidget*                                 Parent_{nullptr};
     std::string                                     PrimitiveTag_;
+    std::string                                     RefName_;
 
     Penumbra::Backends::IImageBackend* ImageBackend_{nullptr};
     SDL_Renderer*                       SdlRenderer_{nullptr};

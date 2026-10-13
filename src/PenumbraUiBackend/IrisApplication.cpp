@@ -155,8 +155,25 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
 }
 
 Penumbra::Widgets::WidgetBase* IrisApplication::GetRef(const std::string& Name) const {
-    auto It = AppRootRefs_.find(Name);
-    return It == AppRootRefs_.end() ? nullptr : It->second;
+    if (auto It = AppRootRefs_.find(Name); It != AppRootRefs_.end()) {
+        return It->second;
+    }
+    // AppRootRefs_ only holds the static build's refs. Content a <Slot> mounted (through
+    // MakeMountFn, later) or MountReconciledComponent built has its own refs on its own
+    // wrappers, so search the live wrapper trees for those.
+    if (AppRootWrapper_) {
+        if (PenumbraWidget* Found = AppRootWrapper_->FindDescendantByRef(Name)) {
+            return Found->RawWidget();
+        }
+    }
+    for (const auto& [TargetName, Mount] : ReconciledMounts_) {
+        if (Mount.Wrapper) {
+            if (PenumbraWidget* Found = Mount.Wrapper->FindDescendantByRef(Name)) {
+                return Found->RawWidget();
+            }
+        }
+    }
+    return nullptr;
 }
 
 void IrisApplication::TeardownRootWidget() {
@@ -202,8 +219,8 @@ bool IrisApplication::MountReconciledComponent(const std::string& File, const st
         return false;
     }
 
-    Mount.Wrapper =
-        WrapExistingTree(std::move(Result.Widget), nullptr, nullptr, &ComposedStyleSet_, &StyleApplier());
+    Mount.Wrapper = WrapExistingTree(std::move(Result.Widget), nullptr, nullptr, &ComposedStyleSet_, &StyleApplier(),
+                                     nullptr, &Result.Refs);
 
     BuildContext SlotContext = MakeBuildContext();
     SlotContext.OverlayHost  = nullptr;

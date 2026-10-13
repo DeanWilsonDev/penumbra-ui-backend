@@ -298,6 +298,18 @@ Umbra::IWidget* PenumbraWidget::GetByRef(std::string_view Ref) const {
     return It != Root->RefRegistry_.end() ? It->second : nullptr;
 }
 
+PenumbraWidget* PenumbraWidget::FindDescendantByRef(std::string_view Ref) {
+    if (RefName_ == Ref) {
+        return this;
+    }
+    for (const std::unique_ptr<PenumbraWidget>& Child : Children_) {
+        if (PenumbraWidget* Found = Child->FindDescendantByRef(Ref)) {
+            return Found;
+        }
+    }
+    return nullptr;
+}
+
 void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
     WidgetBase* Widget = RawWidget();
     if (Widget == nullptr) {
@@ -468,6 +480,7 @@ void PenumbraWidget::AdoptChildrenFromRawTree(
         if (ReverseRefs != nullptr) {
             if (auto It = ReverseRefs->find(ChildRaw); It != ReverseRefs->end()) {
                 RegistryRoot->RefRegistry_[It->second] = ChildWrapper.get();
+                ChildWrapper->RefName_                  = It->second;
             }
         }
         ChildWrapper->AdoptChildrenFromRawTree(ImageBackend, SdlRenderer, Sheets, StyleApplier, Tags, ReverseRefs,
@@ -548,6 +561,7 @@ std::unique_ptr<WidgetBase> PenumbraWidget::ReplaceRawWidget(std::unique_ptr<Wid
         }
         if (auto It = ReverseRefs.find(NewRaw); It != ReverseRefs.end()) {
             RegistryRoot->RefRegistry_[It->second] = this;
+            RefName_                               = It->second;
         }
     }
     AdoptChildrenFromRawTree(ImageBackend_, SdlRenderer_, Sheets_, StyleApplier_, Tags,
@@ -589,6 +603,7 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>    
         }
         if (auto It = ReverseRefs.find(RawRoot); It != ReverseRefs.end()) {
             Wrapper->RefRegistry_[It->second] = Wrapper.get();
+            Wrapper->RefName_                 = It->second;
         }
     }
 

@@ -229,6 +229,17 @@ bool WidgetContainsPoint(const Penumbra::Widgets::WidgetBase& Widget, float X, f
     return X >= Bounds.X && X < Bounds.X + Bounds.W && Y >= Bounds.Y && Y < Bounds.Y + Bounds.H;
 }
 
+// Hiding a widget takes it out of layout, input and drawing (WidgetBase::SetIsVisible),
+// so an app can keep a subtree mounted, with its refs, while another one shows.
+void SetWidgetVisible(Penumbra::Widgets::WidgetBase& Widget, bool Visible) { Widget.SetIsVisible(Visible); }
+bool IsWidgetVisible(const Penumbra::Widgets::WidgetBase& Widget) { return Widget.GetIsVisible(); }
+
+// The widget's arranged rect from the last layout, in logical pixels.
+float WidgetX(const Penumbra::Widgets::WidgetBase& Widget) { return Widget.GetArrangedRect().X; }
+float WidgetY(const Penumbra::Widgets::WidgetBase& Widget) { return Widget.GetArrangedRect().Y; }
+float WidgetWidth(const Penumbra::Widgets::WidgetBase& Widget) { return Widget.GetArrangedRect().W; }
+float WidgetHeight(const Penumbra::Widgets::WidgetBase& Widget) { return Widget.GetArrangedRect().H; }
+
 template <typename AppBaseT>
 Penumbra::Render::IFontBackend* GetFontBackendForNyx(AppBaseT& Self) {
     return &Self.GetFontBackend();
@@ -285,7 +296,14 @@ void NyxApplicationBridgeT<AppBaseT>::RegisterApplicationType() {
         RegisterOpaqueType<Penumbra::Render::IFontBackend>(Runtime_, "PenumbraFontBackend");
     const auto* LifecycleRegistryDescriptor =
         RegisterOpaqueType<Penumbra::LifecycleRegistry>(Runtime_, "PenumbraLifecycleRegistry");
-    Runtime_.RegisterType<Penumbra::Widgets::WidgetBase>("PenumbraWidget").Method("ContainsPoint", &WidgetContainsPoint);
+    Runtime_.RegisterType<Penumbra::Widgets::WidgetBase>("PenumbraWidget")
+        .Method("ContainsPoint", &WidgetContainsPoint)
+        .Method("SetVisible", &SetWidgetVisible)
+        .Method("IsVisible", &IsWidgetVisible)
+        .Method("GetX", &WidgetX)
+        .Method("GetY", &WidgetY)
+        .Method("GetWidth", &WidgetWidth)
+        .Method("GetHeight", &WidgetHeight);
     const auto* WidgetDescriptor =
         std::get<std::shared_ptr<nyx::runtime::HostObject>>(Runtime_.Globals().at("PenumbraWidget").data)
             ->descriptor;

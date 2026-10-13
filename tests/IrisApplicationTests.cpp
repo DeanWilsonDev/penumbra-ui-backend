@@ -340,6 +340,49 @@ void TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard() {
     App.TeardownRootWidget();
 }
 
+void TestGetRefFindsRefsInsideSlotMountedContent() {
+    TempProject Project;
+    Project.Write("Board.irisx", "void Board() {\n"
+                                  "    render {\n"
+                                  "        <Frame ref=\"board\">\n"
+                                  "            <Slot>\n"
+                                  "                !{() -> <Frame ref=\"lane-todo\" />}\n"
+                                  "            </Slot>\n"
+                                  "            <Frame ref=\"content\"></Frame>\n"
+                                  "        </Frame>\n"
+                                  "    }\n"
+                                  "}\n");
+    Project.Write("Panel.irisx", "void Panel() {\n"
+                                  "    render {\n"
+                                  "        <Frame ref=\"panel-static\">\n"
+                                  "            <Slot>\n"
+                                  "                !{() -> <Frame ref=\"panel-slot\" />}\n"
+                                  "            </Slot>\n"
+                                  "        </Frame>\n"
+                                  "    }\n"
+                                  "}\n");
+
+    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::IrisApplication App;
+    App.Attach(Driver, Project.UiDir());
+    Expect(App.MountAppRoot("Board.irisx", "Board"), "MountAppRoot mounts a root with a ref inside a <Slot>");
+
+    auto* Board = dynamic_cast<Penumbra::Widgets::Box*>(App.GetRef("board"));
+    Penumbra::Widgets::WidgetBase* Lane = App.GetRef("lane-todo");
+    Expect(Lane != nullptr && Board != nullptr && Board->GetChildCount() > 0 && Board->GetChildAt(0) == Lane,
+           "GetRef finds a ref inside <Slot>-mounted content, and it's the widget the Slot mounted");
+
+    Expect(App.MountReconciledComponent("Panel.irisx", "Panel", {}, "content"),
+           "MountReconciledComponent mounts a component with refs in its static part and in a <Slot>");
+    Expect(App.GetRef("panel-static") != nullptr, "GetRef finds a ref in a reconciled mount's static part");
+    Expect(App.GetRef("panel-slot") != nullptr, "GetRef finds a ref inside a reconciled mount's <Slot>");
+
+    App.TeardownReconciledComponent("content");
+    Expect(App.GetRef("panel-static") == nullptr && App.GetRef("panel-slot") == nullptr,
+           "once the reconciled mount is torn down, its refs are gone rather than dangling");
+    App.TeardownRootWidget();
+}
+
 void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
     TempProject Project;
     Project.Write("Root.irisx", "void Root() {\n"
@@ -531,6 +574,7 @@ void RunIrisApplicationTests() {
     TestRootVariablesInAComponentStylesheetAreKept();
     TestMountComponentBuildsAWidgetAndPopulatesRefMap();
     TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef();
+    TestGetRefFindsRefsInsideSlotMountedContent();
     TestMountedIconsGetTheBackendGivenToSetIconBackend();
     TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard();
     TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount();
