@@ -56,6 +56,8 @@ Mapping (`docs/iris_core_spec.md` §3.1, cross-checked against the real Penumbra
 | `Image` | `ImageWidget` | leaf; `LoadFrom()` called separately via `BuildContext` |
 | `Text` | `Label` | `FontBackend`/`Font` set from `BuildContext` (no Builder method for either) |
 | `Slot` | `nullptr` during this static build | see "`<Slot>` wiring" below — resolved separately, afterward |
+| `BarChart` / `LineChart` / `DonutChart` | `BarChart` / `LineChart` / `DonutChart` | `ChartNodes.h`: each copies its data in from its children at every layout; styled by Lustre's chart properties |
+| `Series` / `Slice` | `SeriesNode` / `SliceNode` | data leaves that draw nothing; their colour is Lustre's `color` |
 | `None` | `nullptr` | the `<Slot>`-returned-`nullptr` sentinel — "no widget here" |
 
 `BuildContext` (`Walker.h`) carries the resources Penumbra's own `Builder`s don't expose: a
