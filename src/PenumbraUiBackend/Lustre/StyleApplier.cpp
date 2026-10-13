@@ -1,6 +1,9 @@
 #include "PenumbraUiBackend/Lustre/StyleApplier.h"
 
+#include "PenumbraUiBackend/ChartNodes.h"
+
 #include "Penumbra/Widgets/Box.h"
+#include "Penumbra/Widgets/Chart.h"
 #include "Penumbra/Widgets/Checkbox.h"
 #include "Penumbra/Widgets/IconWidget.h"
 #include "Penumbra/Widgets/Label.h"
@@ -128,6 +131,38 @@ std::vector<Penumbra::Widgets::Transition> ToPenumbraTransitions(const std::vect
     return Out;
 }
 
+// The chart properties, plus `color` for the labels, onto a chart's own slots. Its box
+// (background, padding, size) goes through ApplyBoxStyle like any Box's.
+void ApplyChartStyle(Penumbra::Widgets::ChartStyle& Target, const ::Lustre::ResolvedStyle& Style) {
+    const ::Lustre::ChartProperties& Chart = Style.Chart;
+    if (Style.TextColor) {
+        Target.ColorLabel = ToPenumbraColor(*Style.TextColor);
+    }
+    if (Chart.AxisColor) {
+        Target.ColorAxis = ToPenumbraColor(*Chart.AxisColor);
+    }
+    if (Chart.GridColor) {
+        Target.ColorGridLine = ToPenumbraColor(*Chart.GridColor);
+    }
+    if (Chart.HoverColor) {
+        Target.ColorHover = ToPenumbraColor(*Chart.HoverColor);
+    }
+    Target.AxisThicknessLogical     = Chart.AxisWidth.value_or(Target.AxisThicknessLogical);
+    Target.GridLineThicknessLogical = Chart.GridWidth.value_or(Target.GridLineThicknessLogical);
+    Target.TickSpacingLogical       = Chart.TickSpacing.value_or(Target.TickSpacingLogical);
+    Target.LabelGapLogical          = Chart.LabelGap.value_or(Target.LabelGapLogical);
+    Target.LineThicknessLogical     = Chart.LineWidth.value_or(Target.LineThicknessLogical);
+    Target.PointRadiusLogical       = Chart.PointRadius.value_or(Target.PointRadiusLogical);
+    Target.HoverPointRadiusLogical  = Chart.HoverPointRadius.value_or(Target.HoverPointRadiusLogical);
+    Target.AreaOpacity              = Chart.AreaOpacity.value_or(Target.AreaOpacity);
+    Target.BarGapFraction           = Chart.BarGap.value_or(Target.BarGapFraction);
+    Target.BarCornerRadiusLogical   = Chart.BarRadius.value_or(Target.BarCornerRadiusLogical);
+    Target.DonutThicknessLogical    = Chart.DonutThickness.value_or(Target.DonutThicknessLogical);
+    Target.SegmentGapDegrees        = Chart.SegmentGap.value_or(Target.SegmentGapDegrees);
+    Target.AppearSeconds            = Chart.AppearSeconds.value_or(Target.AppearSeconds);
+    Target.TransitionSeconds        = Chart.ChangeSeconds.value_or(Target.TransitionSeconds);
+}
+
 void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::ResolvedStyle& Style) {
     if (Style.BackgroundColor) {
         Target.ColorBackground = ToPenumbraColor(*Style.BackgroundColor);
@@ -245,6 +280,21 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         }
     }
 
+    // A chart's <Series>/<Slice> data nodes take their colour from `color`, the same
+    // foreground colour icons and split handles reuse.
+    if (auto* AsSeries = dynamic_cast<SeriesNode*>(&Widget)) {
+        if (Style.TextColor) {
+            AsSeries->SeriesColor = ToPenumbraColor(*Style.TextColor);
+        }
+        return;
+    }
+    if (auto* AsSlice = dynamic_cast<SliceNode*>(&Widget)) {
+        if (Style.TextColor) {
+            AsSlice->SliceColor = ToPenumbraColor(*Style.TextColor);
+        }
+        return;
+    }
+
     auto* AsBox = dynamic_cast<Box*>(&Widget);
     if (!AsBox) {
         return;
@@ -345,6 +395,14 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
         }
         if (AnyHandleColorSet) {
             AsSplit->ApplyStyle(HandleStyle);
+        }
+    }
+
+    if (auto* AsChart = dynamic_cast<Penumbra::Widgets::ChartBase*>(&Widget)) {
+        ApplyChartStyle(AsChart->ChartVisualStyle, Style);
+        if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
+            AsChart->FontBackend = FontBackend_;
+            AsChart->Font        = ResolveFont(*Font, ToPenumbraFontStyle(Style));
         }
     }
 

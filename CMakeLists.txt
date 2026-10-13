@@ -95,7 +95,8 @@ add_executable(penumbra_ui_backend_tests
     tests/StylesheetLoaderTests.cpp
     tests/StackFillAndScrollbarTests.cpp
     tests/RelativeSizingTests.cpp
-    tests/ErrorReportingTests.cpp)
+    tests/ErrorReportingTests.cpp
+    tests/ChartTests.cpp)
 
 target_link_libraries(penumbra_ui_backend_tests PRIVATE penumbra_ui_backend penumbra_ui_backend_lustre)
 set_target_properties(penumbra_ui_backend_tests PROPERTIES

@@ -1,5 +1,6 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
+#include "PenumbraUiBackend/ChartNodes.h"
 #include "PenumbraUiBackend/Lustre/StyleResolution.h"
 #include "PenumbraUiBackend/Portal.h"
 
@@ -103,6 +104,21 @@ std::string InferPrimitiveTag(const WidgetBase& Widget) {
     if (dynamic_cast<const TextArea*>(&Widget)) {
         return "TextArea";
     }
+    if (dynamic_cast<const Penumbra::Widgets::BarChart*>(&Widget)) {
+        return "BarChart";
+    }
+    if (dynamic_cast<const Penumbra::Widgets::LineChart*>(&Widget)) {
+        return "LineChart";
+    }
+    if (dynamic_cast<const Penumbra::Widgets::DonutChart*>(&Widget)) {
+        return "DonutChart";
+    }
+    if (dynamic_cast<const SeriesNode*>(&Widget)) {
+        return "Series";
+    }
+    if (dynamic_cast<const SliceNode*>(&Widget)) {
+        return "Slice";
+    }
     return "Frame";
 }
 
@@ -128,6 +144,15 @@ void ResetStyleableFields(WidgetBase& Widget) {
         AsBox->Style = Penumbra::Widgets::BoxStyle{};
         AsBox->StartingStyle.reset();
     }
+    if (auto* AsChart = dynamic_cast<Penumbra::Widgets::ChartBase*>(&Widget)) {
+        AsChart->ChartVisualStyle = Penumbra::Widgets::ChartStyle{};
+    }
+    if (auto* AsSeries = dynamic_cast<SeriesNode*>(&Widget)) {
+        AsSeries->SeriesColor = {};
+    }
+    if (auto* AsSlice = dynamic_cast<SliceNode*>(&Widget)) {
+        AsSlice->SliceColor = {};
+    }
     if (auto* AsLabel = dynamic_cast<Label*>(&Widget)) {
         AsLabel->ColorText = {};
     }
@@ -152,6 +177,57 @@ void ResetStyleableFields(WidgetBase& Widget) {
 }
 
 } // namespace
+
+void ApplyChartProps(WidgetBase& Widget, const Umbra::IrisPropDiff& Diff) {
+    const auto Find = [](const auto& Map, const char* Name) {
+        const auto It = Map.find(Name);
+        return It == Map.end() ? nullptr : &It->second;
+    };
+
+    if (auto* AsSeries = dynamic_cast<SeriesNode*>(&Widget)) {
+        if (const auto* Name = Find(Diff.Strings, "name")) {
+            AsSeries->Name = *Name;
+        }
+        if (const auto* Values = Find(Diff.NumberLists, "values")) {
+            AsSeries->Values = *Values;
+        }
+        return;
+    }
+    if (auto* AsSlice = dynamic_cast<SliceNode*>(&Widget)) {
+        if (const auto* Label = Find(Diff.Strings, "label")) {
+            AsSlice->Label = *Label;
+        }
+        if (const auto* Value = Find(Diff.Numbers, "value")) {
+            AsSlice->Value = *Value;
+        }
+        return;
+    }
+    if (auto* AsAxis = dynamic_cast<Penumbra::Widgets::AxisChartBase*>(&Widget)) {
+        if (const auto* Labels = Find(Diff.StringLists, "labels")) {
+            AsAxis->Labels = *Labels;
+        }
+        if (const auto* Min = Find(Diff.Numbers, "min")) {
+            AsAxis->MinValue = *Min;
+        }
+        if (const auto* Max = Find(Diff.Numbers, "max")) {
+            AsAxis->MaxValue = *Max;
+        }
+    }
+    if (auto* AsBar = dynamic_cast<Penumbra::Widgets::BarChart*>(&Widget)) {
+        if (const auto* Orientation = Find(Diff.Strings, "orientation")) {
+            AsBar->Orientation = *Orientation == "horizontal" ? Penumbra::Widgets::BarOrientation::Horizontal
+                                                              : Penumbra::Widgets::BarOrientation::Vertical;
+        }
+    }
+    if (auto* AsDonut = dynamic_cast<Penumbra::Widgets::DonutChart*>(&Widget)) {
+        if (const auto* Centre = Find(Diff.Strings, "centre")) {
+            AsDonut->CentreText = *Centre;
+        }
+        if (const auto* Caption = Find(Diff.Strings, "caption")) {
+            AsDonut->CentreCaption = *Caption;
+        }
+    }
+}
 
 struct PortalAnchorWidget::State : std::enable_shared_from_this<PortalAnchorWidget::State> {
     Penumbra::Widgets::OverlayHost* Host{nullptr};
@@ -317,6 +393,7 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
         return;
     }
 
+    ApplyChartProps(*Widget, Diff);
     for (const auto& [Name, Value] : Diff.Numbers) {
         NumberProps_[Name] = Value;
     }

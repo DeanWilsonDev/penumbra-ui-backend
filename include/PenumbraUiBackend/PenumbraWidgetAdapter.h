@@ -249,6 +249,14 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widge
                                                   const RefMap*                   Refs = nullptr,
                                                   const NumberPropMap*            Numbers = nullptr);
 
+// Applies a chart primitive's props from Diff onto Widget, if it's a chart or one of a
+// chart's <Series>/<Slice> data nodes (ChartNodes.h); a no-op for anything else. Used at
+// mount (with a diff of every prop, iris::ComputePropDiff({}, Props)) and on every
+// reconcile, so both read the props the same way: `labels`, `min`, `max`,
+// `orientation`, `centre`, `caption`, a series' `name` and `values`, a slice's `label`
+// and `value`. `stacked` and `showAxes` are read at mount only.
+void ApplyChartProps(Penumbra::Widgets::WidgetBase& Widget, const Umbra::IrisPropDiff& Diff);
+
 // Builds an `iris::MountFn` (`Iris/SlotRuntime.h`, in the `iris` repo) combining Stage
 // 2's `BuildWidgetTree` with `WrapExistingTree` above — what Stage 3's reconciler calls
 // whenever it needs a whole fresh subtree built from scratch (the "no old to diff

@@ -1,11 +1,13 @@
 #include "PenumbraUiBackend/Walker.h"
 
+#include "PenumbraUiBackend/ChartNodes.h"
 #include "PenumbraUiBackend/Lustre/StyleResolution.h"
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Portal.h"
 
 #include "Iris/ComponentInstance.h"
 #include "Iris/IrisNyxDriver.h"
+#include "Iris/Reconciler.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
@@ -28,6 +30,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <variant>
 
@@ -135,6 +138,17 @@ std::optional<float> GetFloatProp(const IrisProps& Props, const std::string& Nam
     return std::nullopt;
 }
 
+std::optional<bool> GetBoolProp(const IrisProps& Props, const std::string& Name) {
+    const auto It = Props.find(Name);
+    if (It == Props.end()) {
+        return std::nullopt;
+    }
+    if (const auto* Value = std::get_if<bool>(&It->second)) {
+        return *Value;
+    }
+    return std::nullopt;
+}
+
 std::optional<std::function<void()>> GetEventProp(const IrisProps& Props, const std::string& Name) {
     const auto It = Props.find(Name);
     if (It == Props.end()) {
@@ -203,6 +217,11 @@ std::string IrisTagToLustreTag(IrisElementTag Tag) {
         case IrisElementTag::Native: return "Native";
         case IrisElementTag::Portal: return "Portal";
         case IrisElementTag::Split: return "Split";
+        case IrisElementTag::BarChart: return "BarChart";
+        case IrisElementTag::LineChart: return "LineChart";
+        case IrisElementTag::DonutChart: return "DonutChart";
+        case IrisElementTag::Series: return "Series";
+        case IrisElementTag::Slice: return "Slice";
         default: return "";
     }
 }
@@ -687,6 +706,41 @@ std::unique_ptr<WidgetBase> BuildSplit(const Component& Node, const BuildContext
     return Built;
 }
 
+// <BarChart>/<LineChart>/<DonutChart> (ChartNodes.h): the chart's own props through
+// ApplyChartProps -- the same mapping a reconcile uses -- and its children, normally
+// <Series>/<Slice> data nodes, which it reads its data from at every layout.
+template <typename ChartT>
+std::unique_ptr<WidgetBase> BuildChart(const Component& Node, const BuildContext& Context,
+                                        const WalkerStyleElement& ThisStyleElement, BuildRecords& Records) {
+    auto Built = std::make_unique<ChartT>();
+    ApplySharedPropsToWidget(*Built, Node.Props);
+    Built->FontBackend = Context.FontBackend;
+    Built->Font        = Context.Font;
+    ApplyChartProps(*Built, iris::ComputePropDiff({}, Node.Props));
+    if constexpr (std::is_base_of_v<Penumbra::Widgets::AxisChartBase, ChartT>) {
+        Built->ShowAxes = GetBoolProp(Node.Props, "showAxes").value_or(true);
+    }
+    if constexpr (std::is_base_of_v<Penumbra::Widgets::BarChart, ChartT>) {
+        Built->Stacked = GetBoolProp(Node.Props, "stacked").value_or(false);
+    }
+    for (const Component& Child : Node.Children) {
+        if (std::unique_ptr<WidgetBase> ChildWidget =
+                BuildWidgetTreeInternal(Child, Context, &ThisStyleElement, /*IsComponentRoot=*/false, Records)) {
+            Built->AddChild(std::move(ChildWidget));
+        }
+    }
+    return Built;
+}
+
+// <Series>/<Slice>: a chart's data, as leaf nodes that draw nothing.
+template <typename NodeT>
+std::unique_ptr<WidgetBase> BuildChartData(const Component& Node) {
+    auto Built = std::make_unique<NodeT>();
+    ApplySharedPropsToWidget(*Built, Node.Props);
+    ApplyChartProps(*Built, iris::ComputePropDiff({}, Node.Props));
+    return Built;
+}
+
 std::unique_ptr<WidgetBase> BuildInput(const Component& Node, const BuildContext& Context) {
     auto Built = std::make_unique<TextInput>();
     ApplySharedPropsToWidget(*Built, Node.Props);
@@ -815,6 +869,21 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
             break;
         case IrisElementTag::Split:
             Built = BuildSplit(Node, Context, ThisStyleElement, Records);
+            break;
+        case IrisElementTag::BarChart:
+            Built = BuildChart<DataBarChart>(Node, Context, ThisStyleElement, Records);
+            break;
+        case IrisElementTag::LineChart:
+            Built = BuildChart<DataLineChart>(Node, Context, ThisStyleElement, Records);
+            break;
+        case IrisElementTag::DonutChart:
+            Built = BuildChart<DataDonutChart>(Node, Context, ThisStyleElement, Records);
+            break;
+        case IrisElementTag::Series:
+            Built = BuildChartData<SeriesNode>(Node);
+            break;
+        case IrisElementTag::Slice:
+            Built = BuildChartData<SliceNode>(Node);
             break;
         default:
             break; // unreachable -- None/Slot returned above, every other tag handled
