@@ -1,6 +1,6 @@
 #include "PenumbraUiBackend/NyxApplicationBridge.h"
 
-#include "PenumbraUiBackend/IrisApplication.h"
+#include "PenumbraUiBackend/ChaosApplication.h"
 
 #include "Penumbra/LifecycleRegistry.h"
 #include "Penumbra/Widgets/WidgetBase.h"
@@ -118,10 +118,10 @@ private:
 };
 
 template <>
-class NyxBridge<PenumbraUiBackend::IrisApplication> : public PenumbraUiBackend::IrisApplication, public NyxBridgeBase {
+class NyxBridge<PenumbraUiBackend::ChaosApplication> : public PenumbraUiBackend::ChaosApplication, public NyxBridgeBase {
 public:
     Penumbra::Point* GetWindowLogicalSizeForNyx() {
-        WindowLogicalSize = PenumbraUiBackend::IrisApplication::GetWindowLogicalSize();
+        WindowLogicalSize = PenumbraUiBackend::ChaosApplication::GetWindowLogicalSize();
         return &WindowLogicalSize;
     }
 
@@ -161,24 +161,24 @@ public:
         if (std::optional<runtime::Value> Result = InvokeHook("OnStart")) {
             return !interp_->IsErrorValue(*Result) && FromValue<bool>(*Result);
         }
-        return PenumbraUiBackend::IrisApplication::OnStart();
+        return PenumbraUiBackend::ChaosApplication::OnStart();
     }
 
     void OnUpdate(float DeltaSeconds) override {
         if (!InvokeHook("OnUpdate", DeltaSeconds)) {
-            PenumbraUiBackend::IrisApplication::OnUpdate(DeltaSeconds);
+            PenumbraUiBackend::ChaosApplication::OnUpdate(DeltaSeconds);
         }
     }
 
     void OnShutdown() override {
         if (!InvokeHook("OnShutdown")) {
-            PenumbraUiBackend::IrisApplication::OnShutdown();
+            PenumbraUiBackend::ChaosApplication::OnShutdown();
         }
     }
 
     void OnDpiScaleChanged(float NewDpiScaleFactor) override {
         if (!InvokeHook("OnDpiScaleChanged", NewDpiScaleFactor)) {
-            PenumbraUiBackend::IrisApplication::OnDpiScaleChanged(NewDpiScaleFactor);
+            PenumbraUiBackend::ChaosApplication::OnDpiScaleChanged(NewDpiScaleFactor);
         }
     }
 
@@ -275,14 +275,14 @@ const nyx::runtime::TypeDescriptor* RegisterOpaqueType(nyx::host::NyxRuntime& Ru
 } // namespace
 
 template <typename AppBaseT>
-NyxApplicationBridgeT<AppBaseT>::NyxApplicationBridgeT(Iris::IrisConfig Config, std::string ProjectRoot)
-    : Runtime_(), IrisDriver_(std::move(Config), ProjectRoot, Runtime_), ProjectRoot_(std::move(ProjectRoot)) {}
+NyxApplicationBridgeT<AppBaseT>::NyxApplicationBridgeT(Chaos::ChaosConfig Config, std::string ProjectRoot)
+    : Runtime_(), ChaosDriver_(std::move(Config), ProjectRoot, Runtime_), ProjectRoot_(std::move(ProjectRoot)) {}
 
 template <typename AppBaseT>
 nyx::host::NyxRuntime& NyxApplicationBridgeT<AppBaseT>::Runtime() { return Runtime_; }
 
 template <typename AppBaseT>
-Iris::IrisNyxDriver& NyxApplicationBridgeT<AppBaseT>::IrisDriver() { return IrisDriver_; }
+Chaos::ChaosNyxDriver& NyxApplicationBridgeT<AppBaseT>::ChaosDriver() { return ChaosDriver_; }
 
 template <typename AppBaseT>
 void NyxApplicationBridgeT<AppBaseT>::RegisterApplicationType() {
@@ -340,8 +340,8 @@ void NyxApplicationBridgeT<AppBaseT>::RegisterApplicationType() {
                 Self.Penumbra::Application::OnDpiScaleChanged(NewDpiScaleFactor);
             }));
 
-    if constexpr (std::is_same_v<AppBaseT, IrisApplication>) {
-        RegisterIrisApplicationMethods(Builder, WidgetDescriptor);
+    if constexpr (std::is_same_v<AppBaseT, ChaosApplication>) {
+        RegisterChaosApplicationMethods(Builder, WidgetDescriptor);
     }
     ApplicationTypeRegistered_ = true;
 }
@@ -354,8 +354,8 @@ AppBaseT* NyxApplicationBridgeT<AppBaseT>::LoadApplication(
         auto Scope = Runtime_.MountBridged<AppBaseT>(Source, Filename, ApplicationClassName);
         Interpreters_.push_back(Scope.interpreter);
         AppBaseT& App = Scope.Get();
-        if constexpr (std::is_same_v<AppBaseT, IrisApplication>) {
-            App.Attach(IrisDriver_, ProjectRoot_);
+        if constexpr (std::is_same_v<AppBaseT, ChaosApplication>) {
+            App.Attach(ChaosDriver_, ProjectRoot_);
         }
         return &App;
     } catch (const std::exception& Error) {
@@ -392,6 +392,6 @@ nyx::runtime::Value NyxApplicationBridgeT<AppBaseT>::GetApplicationInstanceValue
 }
 
 template class NyxApplicationBridgeT<Penumbra::Application>;
-template class NyxApplicationBridgeT<IrisApplication>;
+template class NyxApplicationBridgeT<ChaosApplication>;
 
 } // namespace PenumbraUiBackend

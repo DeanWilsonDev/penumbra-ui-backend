@@ -2,53 +2,53 @@
 
 > **Renamed from `iris-penumbra-backend`**, including the C++ namespace (`IrisPenumbraBackend::`
 > → `PenumbraUiBackend::`) and every CMake target (`iris_penumbra_backend*` →
-> `penumbra_ui_backend*`). The old name only mentioned Iris, but this repo now also bridges
-> [Lustre](https://github.com/DeanWilsonDev/lustre)'s resolved styles into Penumbra (see "The
-> Lustre style bridge" below) — the name is now target-first (what it builds *for*, Penumbra)
+> `penumbra_ui_backend*`). The old name only mentioned Iris (now Chaos), but this repo now also bridges
+> [Cosmos](https://github.com/DeanWilsonDev/cosmos)'s resolved styles into Penumbra (see "The
+> Cosmos style bridge" below) — the name is now target-first (what it builds *for*, Penumbra)
 > rather than source-first (what it builds *from*), so a future analogous repo for a different
-> rendering target (e.g. an Umbra Engine-backed one) doesn't need "and lustre and whatever comes
+> rendering target (e.g. an Umbra Engine-backed one) doesn't need "and cosmos and whatever comes
 > after it" bolted onto its name too. GitHub redirects the old repo URL automatically.
 
-The Penumbra backend for [Iris](https://github.com/DeanWilsonDev/iris) and
-[Lustre](https://github.com/DeanWilsonDev/lustre): the code that walks a parsed,
+The Penumbra backend for [Chaos](https://github.com/DeanWilsonDev/chaos) and
+[Cosmos](https://github.com/DeanWilsonDev/cosmos): the code that walks a parsed,
 props-resolved `Component` IR tree and builds a real
 [Penumbra](https://github.com/DeanWilsonDev/penumbra-proto) widget tree from it via Penumbra's
-fluent `Builder` API (`Box::Builder`, `Label::Builder`, etc.), and applies Lustre's resolved
+fluent `Builder` API (`Box::Builder`, `Label::Builder`, etc.), and applies Cosmos's resolved
 styles onto that same real widget tree.
 
 This repository also owns the Nyx-facing Penumbra integration.
 `PenumbraUiBackend::NyxApplicationBridge` keeps one Nyx runtime shared by a
-Nyx-authored `Penumbra::Application` and its `IrisNyxDriver`, while
+Nyx-authored `Penumbra::Application` and its `ChaosNyxDriver`, while
 `PenumbraUiBackend::ScriptCanvas` exposes Nyx-driven custom drawing. Penumbra
-itself remains independent of Nyx, Iris, and Lustre.
+itself remains independent of Nyx, Chaos, and Cosmos.
 
 ## Why this is a separate repo
 
-Iris's core (preprocessor + IR + runtime library) and Lustre's core (parser + cascade/selector
+Chaos's core (preprocessor + IR + runtime library) and Cosmos's core (parser + cascade/selector
 resolver) are both backend-agnostic by design — each is meant to support more than one backend
 over time (Penumbra now, an Umbra Engine/Nyx backend deferred), and neither knows the other
-exists: Iris doesn't know Lustre exists, and Lustre doesn't know Iris exists. Penumbra itself is
+exists: Chaos doesn't know Cosmos exists, and Cosmos doesn't know Chaos exists. Penumbra itself is
 a general-purpose retained-mode widget library with no inherent reason to know either exists.
 None of the three should have to pull in another's build just to compile on its own, so the code
-that bridges them all — this repo — is its own thing: it vendors `iris`, `lustre`, and
+that bridges them all — this repo — is its own thing: it vendors `chaos`, `cosmos`, and
 `penumbra-proto` as git submodules and depends on all three, while none of them depend on it or
-on each other. See `docs/penumbra_ui_backend_lustre_bridge_decision.md` for the fuller
-reasoning behind keeping Iris and Lustre decoupled even here, and why this stayed one repo
-instead of splitting into a separate Lustre-specific bridge.
+on each other. See `docs/penumbra_ui_backend_cosmos_bridge_decision.md` for the fuller
+reasoning behind keeping Chaos and Cosmos decoupled even here, and why this stayed one repo
+instead of splitting into a separate Cosmos-specific bridge.
 
 ## Status
 
-This is Stage 2 of Iris's roadmap (see `iris`'s `docs/iris_handoff.md` §6). The walker is
+This is Stage 2 of Chaos's roadmap (see `chaos`'s `docs/iris_handoff.md` §6). The walker is
 implemented: `PenumbraUiBackend::BuildWidgetTree()` (`include/PenumbraUiBackend/Walker.h`)
 takes a single `Component` IR node and recursively builds the equivalent real Penumbra
 widget tree via each Core primitive's own fluent `Builder`. It's a one-shot tree build only —
-no diffing, no identity tracking (`key` never reaches `Component`; it's stripped by Iris's
+no diffing, no identity tracking (`key` never reaches `Component`; it's stripped by Chaos's
 preprocessor before codegen, so there's nothing here for a `key`-based live-widget map to key
 off of — that's a Stage 3 reconciler concern layered on top of this, not part of it).
 
 Mapping (`docs/iris_core_spec.md` §3.1, cross-checked against the real Penumbra source):
 
-| `IrisElementTag` | Penumbra widget | Notes |
+| `ChaosElementTag` | Penumbra widget | Notes |
 | --- | --- | --- |
 | `Frame` | `Box` | via `Box::Builder` |
 | `Inline` | `InlineContainer` | real wrapping inline-flow, distinct from `Text`/`Label` |
@@ -56,8 +56,8 @@ Mapping (`docs/iris_core_spec.md` §3.1, cross-checked against the real Penumbra
 | `Image` | `ImageWidget` | leaf; `LoadFrom()` called separately via `BuildContext` |
 | `Text` | `Label` | `FontBackend`/`Font` set from `BuildContext` (no Builder method for either) |
 | `Slot` | `nullptr` during this static build | see "`<Slot>` wiring" below — resolved separately, afterward |
-| `BarChart` / `LineChart` / `DonutChart` | `BarChart` / `LineChart` / `DonutChart` | `ChartNodes.h`: each copies its data in from its children at every layout; styled by Lustre's chart properties |
-| `Series` / `Slice` | `SeriesNode` / `SliceNode` | data leaves that draw nothing; their colour is Lustre's `color` |
+| `BarChart` / `LineChart` / `DonutChart` | `BarChart` / `LineChart` / `DonutChart` | `ChartNodes.h`: each copies its data in from its children at every layout; styled by Cosmos's chart properties |
+| `Series` / `Slice` | `SeriesNode` / `SliceNode` | data leaves that draw nothing; their colour is Cosmos's `color` |
 | `None` | `nullptr` | the `<Slot>`-returned-`nullptr` sentinel — "no widget here" |
 
 `BuildContext` (`Walker.h`) carries the resources Penumbra's own `Builder`s don't expose: a
@@ -65,18 +65,20 @@ font backend/handle for `Label`, and an image backend/SDL renderer for `ImageWid
 Both are optional — a widget still builds successfully with either left null, useful for
 structural tests that don't need a real font/SDL context.
 
-Verified against the full pipeline, not just in isolation: a real `.iris` component
-(`HealthBar`, with a `<Frame class="...">` wrapping a `<Text>{props.label}</Text>`) compiled
-through `iris`'s own `iris_cc` CLI, `#include`d, called, and the resulting `Component` fed
-through `BuildWidgetTree` — producing a real `Box`/`Label` tree with the class name, child
-count, and interpolated text all correct. See `tests/WalkerTests.cpp` for the structural test
-suite (`IrisElementTag::None` skipping, event-prop wiring, the `<Grid>` stub, nested recursion,
+Verified against the full pipeline, not just in isolation, while Chaos (then Iris) still had a
+C++ host language: a real `.iris` component (`HealthBar`, with a `<Frame class="...">` wrapping
+a `<Text>{props.label}</Text>`) compiled to a C++ header by `iris_cc`, `#include`d, called, and
+the resulting `Component` fed through `BuildWidgetTree` — producing a real `Box`/`Label` tree
+with the class name, child count, and interpolated text all correct. Chaos has since retired
+that C++ host path: `.chaos` components are Nyx-hosted and mount through `ChaosNyxDriver`. See
+`tests/WalkerTests.cpp` for the structural test
+suite (`ChaosElementTag::None` skipping, event-prop wiring, the `<Grid>` stub, nested recursion,
 etc.).
 
 **Stage 3's `Umbra::IWidget` adapter is also implemented**: `PenumbraWidget`
 (`include/PenumbraUiBackend/PenumbraWidgetAdapter.h`) wraps a real `Penumbra::Widgets::
-WidgetBase` to satisfy Iris's backend-agnostic reconciler contract, so `iris::ReconcileWidget`/
-`ReconcileChildren` (in the `iris` repo) can update a real Penumbra widget tree in place —
+WidgetBase` to satisfy Chaos's backend-agnostic reconciler contract, so `chaos::ReconcileWidget`/
+`ReconcileChildren` (in the `chaos` repo) can update a real Penumbra widget tree in place —
 verified against real `Box`/`Label` objects, not a mock, including that a same-tag-same-key
 update reuses the literal same `Box*` object rather than rebuilding it. See
 `docs/penumbra_ui_backend_adapter_decision.md` for the ownership design (a dual owning/
@@ -84,62 +86,62 @@ attached mode was needed to reconcile "the reconciler needs a stable identity" a
 Penumbra ownership has to live in exactly one `Box::Children` vector at a time") and
 `tests/PenumbraWidgetAdapterTests.cpp`.
 
-**Resolved (in the `iris` repo, not here):** a separate, serious defect surfaced while
-verifying the adapter against real generated `.iris` output — a `<Slot>` callable capturing an
-`iris::Signal<T>` local by reference (every `docs/iris_core_spec.md` example's own pattern)
+**Resolved (in the `chaos` repo, not here):** a separate, serious defect surfaced while
+verifying the adapter against real C++ generated from `.iris` files (the since-retired C++ host
+path) — a `<Slot>` callable capturing a `chaos::Signal<T>` local by reference (every `docs/iris_core_spec.md` example's own pattern)
 read freed stack memory the instant the declaring component function returned, confirmed with
-AddressSanitizer. Fixed there via `IRIS_SIGNAL(Type, Name, InitExpr)`
-(`iris`'s `docs/iris_signal_lifetime_decision.md`) — state declarations now bind to
+AddressSanitizer. Fixed there via `CHAOS_SIGNAL(Type, Name, InitExpr)`
+(`chaos`'s `docs/iris_signal_lifetime_decision.md`) — state declarations now bind to
 heap-allocated storage instead of a stack local. Re-verified end to end against this repo's own
 real Penumbra widgets under AddressSanitizer with zero errors after the bump.
 
 **`<Slot>` is now wired in, for both callable shapes**: `BuildWidgetTree` treats a `<Slot>` child
-exactly like `None` during the static build (contributes nothing); a new `iris::ResolveSlots()`
-(`iris`'s `include/Iris/SlotResolution.h`) then walks the just-built tree and the source
+exactly like `None` during the static build (contributes nothing); a new `chaos::ResolveSlots()`
+(`chaos`'s `include/Chaos/SlotResolution.h`) then walks the just-built tree and the source
 `Component` tree in lockstep, and for each `<Slot>` found, attaches a `SlotState` to its
 exact position and performs its initial mount. A `SlotSiblingGroup` shared by every `<Slot>`
 sibling under the same static parent recomputes each slot's absolute position fresh on every
 reconcile, so a list-returning `<Slot>`'s own growth/shrinkage (and a sibling toggling to/from
-`None`) correctly shifts whatever comes after it. Every subsequent `iris::Tick()`-triggered
+`None`) correctly shifts whatever comes after it. Every subsequent `chaos::Tick()`-triggered
 reconcile updates the real position(s) in place — pure `Umbra::IWidget`, so this logic is
-entirely backend-agnostic and lives in `iris`'s own runtime; the only change needed here was
+entirely backend-agnostic and lives in `chaos`'s own runtime; the only change needed here was
 `BuildWidgetTree`'s own `Slot` case. Verified against real `Box`/`Label` objects, not a mock: a
-live `iris::Signal` update reaching a real `Box::Children` vector end to end, including under
+live `chaos::Signal` update reaching a real `Box::Children` vector end to end, including under
 AddressSanitizer + UndefinedBehaviorSanitizer with zero errors (`tests/SlotWiringTests.cpp` here;
-`iris`'s own `tests/SlotResolutionTests.cpp` and `tests/cimmerian/SlotSiblingGroupTests.cpp`
+`chaos`'s own `tests/SlotResolutionTests.cpp` and `tests/cimmerian/SlotSiblingGroupTests.cpp`
 cover the list-sibling cases directly). Still deliberately deferred: nested `<Slot>` discovery.
-Full design: `iris`'s `docs/iris_slot_stage2_wiring_decision.md` and
+Full design: `chaos`'s `docs/iris_slot_stage2_wiring_decision.md` and
 `docs/iris_slot_list_wiring_decision.md`.
 
-**The Lustre style bridge is now implemented**: `IStyleApplier`/`LustreStyleApplier`
-(`include/PenumbraUiBackend/Lustre/StyleApplier.h`, its own independent CMake target,
-`penumbra_ui_backend_lustre`) apply a `Lustre::ResolvedStyle` (from the `lustre` repo — the
-output of Lustre's parser/cascade/variable resolver, `lustre/docs/lustre_core_spec.md` §3) onto
+**The Cosmos style bridge is now implemented**: `IStyleApplier`/`CosmosStyleApplier`
+(`include/PenumbraUiBackend/Cosmos/StyleApplier.h`, its own independent CMake target,
+`penumbra_ui_backend_cosmos`) apply a `Cosmos::ResolvedStyle` (from the `cosmos` repo — the
+output of Cosmos's parser/cascade/variable resolver, `cosmos/docs/cosmos_core_spec.md` §3) onto
 a real Penumbra widget's style fields: the universal box-model slots for any `Box`-derived
 widget, `:hover`/`:active`/`:disabled` overlays onto `Button`'s real interaction-state fields
 (the one widget type with them today), and `color`/`font-family`/`font-size` onto `Label`, with
 font-handle resolution cached by `(path, size)`. Deliberately its own target and its own vendored
-submodule (`vendor/lustre`) rather than folded into `penumbra_ui_backend` — it needs nothing
-from `iris` (it operates on plain `Penumbra::Widgets::WidgetBase&`, never `Component`), so a
-consumer that doesn't use Lustre doesn't pull it in. See
-`docs/penumbra_ui_backend_lustre_bridge_decision.md` for why this lives here rather than in a
+submodule (`vendor/cosmos`) rather than folded into `penumbra_ui_backend` — it needs nothing
+from `chaos` (it operates on plain `Penumbra::Widgets::WidgetBase&`, never `Component`), so a
+consumer that doesn't use Cosmos doesn't pull it in. See
+`docs/penumbra_ui_backend_cosmos_bridge_decision.md` for why this lives here rather than in a
 fourth repo, and what the `IStyleApplier` interface does and doesn't buy in terms of swapping in
-a future, non-Lustre styling language.
+a future, non-Cosmos styling language.
 
 **Now wired into both the mount path and the reconcile-time class-change path.**
 `BuildContext` (`Walker.h`) gained nullable `Style`/`StyleApplier` fields; when both are set,
 `BuildWidgetTree` resolves and applies every built widget's style during its existing recursive
-descent (no separate tree walk — an internal `Lustre::IStyleTarget` per node, alive on the call
+descent (no separate tree walk — an internal `Cosmos::IStyleTarget` per node, alive on the call
 stack for exactly as long as its descendants are being built, gives real descendant-selector
 ancestry for free), and `PenumbraWidgetAdapter::ApplyPropDiff` re-resolves and re-applies style
 on every subsequent class change, first resetting the widget's own style fields so a property
 the old class set and the new one doesn't actually reverts rather than lingering. The two-layer
-cascade's asymmetric boundary rule (global.lustre unbounded, a component's own file bounded to
-its own root, §1.2) is handled by a new `PenumbraUiBackend::Lustre::ResolveStyle()` helper that
-composes two `Lustre::Resolver::Resolve()` calls, since `Resolve()` itself only takes one
+cascade's asymmetric boundary rule (global.cosmos unbounded, a component's own file bounded to
+its own root, §1.2) is handled by a new `PenumbraUiBackend::Cosmos::ResolveStyle()` helper that
+composes two `Cosmos::Resolver::Resolve()` calls, since `Resolve()` itself only takes one
 `Unbounded` flag for both layers at once. Both context fields default to null, so a consumer
 that never sets them gets exactly the pre-wiring behavior. Full reasoning in
-`docs/penumbra_ui_backend_lustre_bridge_decision.md`'s "Wiring into the mount and reconcile
+`docs/penumbra_ui_backend_cosmos_bridge_decision.md`'s "Wiring into the mount and reconcile
 paths" section. `tests/StyleWiringTests.cpp` covers mount-time resolution, descendant
 selectors across real `Component` ancestry, the global/component merge, and
 reconcile-time re-resolution including the stale-property-clearing behavior.
@@ -177,8 +179,8 @@ cmake --build build
 ## Demo
 
 `demo/main.cpp` is a small, real running app (real window, real click handling) that
-recreates `lustre_core_spec.md` §4's HealthBar worked example end to end — not part of the
-library, purely for visually confirming the Lustre style wiring against a real
+recreates `cosmos_core_spec.md` §4's HealthBar worked example end to end — not part of the
+library, purely for visually confirming the Cosmos style wiring against a real
 window/renderer. Click anywhere to toggle the bar's class between `.bar-normal` (green) and
 `.bar-critical` (red), driving the exact `PenumbraWidgetAdapter::ApplyPropDiff` re-resolution
 path described above.

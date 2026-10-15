@@ -1,4 +1,4 @@
-#include "PenumbraUiBackend/Lustre/StylesheetLoader.h"
+#include "PenumbraUiBackend/Cosmos/StylesheetLoader.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -18,11 +18,11 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-using PenumbraUiBackend::Lustre::LoadStylesheetFromFile;
+using PenumbraUiBackend::Cosmos::LoadStylesheetFromFile;
 
 // A real temp file rather than an in-memory stream, since
 // LoadStylesheetFromFile's whole job is the disk-reading step itself.
-std::string WriteTempLustreFile(const char* Contents) {
+std::string WriteTempCosmosFile(const char* Contents) {
     char      path[] = "/tmp/penumbra_ui_backend_stylesheet_loader_test_XXXXXX";
     const int fd = mkstemp(path);
     write(fd, Contents, std::string(Contents).size());
@@ -31,32 +31,32 @@ std::string WriteTempLustreFile(const char* Contents) {
 }
 
 void TestValidFileParsesIntoAPopulatedStylesheet() {
-    const std::string path = WriteTempLustreFile(".foo { background-color: #FF0000; }");
+    const std::string path = WriteTempCosmosFile(".foo { background-color: #FF0000; }");
 
-    const ::Lustre::Stylesheet sheet = LoadStylesheetFromFile(path.c_str(), "TestValidFileParsesIntoAPopulatedStylesheet");
+    const ::Cosmos::Stylesheet sheet = LoadStylesheetFromFile(path.c_str(), "TestValidFileParsesIntoAPopulatedStylesheet");
 
-    Expect(!sheet.Rules.empty(), "a valid .lustre file parses into a Stylesheet with at least one rule");
+    Expect(!sheet.Rules.empty(), "a valid .cosmos file parses into a Stylesheet with at least one rule");
 
     std::remove(path.c_str());
 }
 
 void TestMissingFileReturnsAnEmptyStylesheet() {
-    const ::Lustre::Stylesheet sheet =
-        LoadStylesheetFromFile("/nonexistent/path/does-not-exist.lustre", "TestMissingFileReturnsAnEmptyStylesheet");
+    const ::Cosmos::Stylesheet sheet =
+        LoadStylesheetFromFile("/nonexistent/path/does-not-exist.cosmos", "TestMissingFileReturnsAnEmptyStylesheet");
 
     Expect(sheet.Rules.empty(), "a missing file returns a default-constructed, empty Stylesheet rather than crashing");
 }
 
 void TestFileWithParseErrorsStillReturnsWithoutCrashing() {
     // Duplicate-selector rule blocks are one of Parser's own diagnosed
-    // syntax errors (Lustre/Parser.h) -- Parser::Parse() hands back the
+    // syntax errors (Cosmos/Parser.h) -- Parser::Parse() hands back the
     // (possibly partial) tree it built regardless, so a caller can report
     // every error at once; LoadStylesheetFromFile mirrors that, it doesn't
     // discard the Sheet just because Errors is non-empty.
     const std::string path =
-        WriteTempLustreFile(".foo { background-color: #FF0000; } .foo { background-color: #00FF00; }");
+        WriteTempCosmosFile(".foo { background-color: #FF0000; } .foo { background-color: #00FF00; }");
 
-    const ::Lustre::Stylesheet sheet =
+    const ::Cosmos::Stylesheet sheet =
         LoadStylesheetFromFile(path.c_str(), "TestFileWithParseErrorsStillReturnsWithoutCrashing");
 
     Expect(sheet.Rules.size() == 2, "a file with a parse error still returns the rules the parser did manage to build");
@@ -64,8 +64,8 @@ void TestFileWithParseErrorsStillReturnsWithoutCrashing() {
     std::remove(path.c_str());
 }
 
-std::string FontFamilyOf(const ::Lustre::Rule& Rule) {
-    for (const ::Lustre::Declaration& Decl : Rule.Declarations) {
+std::string FontFamilyOf(const ::Cosmos::Rule& Rule) {
+    for (const ::Cosmos::Declaration& Decl : Rule.Declarations) {
         if (Decl.Property == "font-family" && !Decl.Values.empty() && Decl.Values[0].StringValue) {
             return *Decl.Values[0].StringValue;
         }
@@ -74,14 +74,14 @@ std::string FontFamilyOf(const ::Lustre::Rule& Rule) {
 }
 
 void TestRelativeFontFamilyPathsResolveAgainstTheStylesheetsDirectory() {
-    const std::string path = WriteTempLustreFile(".body { font-family: \"fonts/Body.ttf\"; font-size: 14px; }\n"
+    const std::string path = WriteTempCosmosFile(".body { font-family: \"fonts/Body.ttf\"; font-size: 14px; }\n"
                                                  ".code { font-family: \"/opt/fonts/Code.ttf\"; font-size: 13px; }\n"
                                                  ".card {\n"
                                                  "    .card-title { font-family: \"../shared/Title.ttf\"; font-size: 20px; }\n"
                                                  "}\n");
     const std::filesystem::path sheetDir = std::filesystem::path(path).parent_path();
 
-    const ::Lustre::Stylesheet sheet =
+    const ::Cosmos::Stylesheet sheet =
         LoadStylesheetFromFile(path.c_str(), "TestRelativeFontFamilyPathsResolveAgainstTheStylesheetsDirectory");
 
     Expect(sheet.Rules.size() == 3 && sheet.Rules[2]->NestedRules.size() == 1,

@@ -1,14 +1,14 @@
 #include "PenumbraUiBackend/ChartNodes.h"
-#include "PenumbraUiBackend/IrisApplication.h"
+#include "PenumbraUiBackend/ChaosApplication.h"
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Iris/IrisConfig.h"
-#include "Iris/IrisNyxDriver.h"
-#include "Iris/Reconciler.h"
-#include "Iris/Signal.h"
-#include "Iris/SlotResolution.h"
-#include "Lustre/Parser.h"
+#include "Chaos/ChaosConfig.h"
+#include "Chaos/ChaosNyxDriver.h"
+#include "Chaos/Reconciler.h"
+#include "Chaos/Signal.h"
+#include "Chaos/SlotResolution.h"
+#include "Cosmos/Parser.h"
 
 #include "Penumbra/Render/Renderer.h"
 #include "Penumbra/Widgets/LayoutPass.h"
@@ -34,10 +34,10 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-using Iris::Component;
-using Iris::IrisElementTag;
-using Iris::IrisProps;
-using Iris::IrisPropValue;
+using Chaos::Component;
+using Chaos::ChaosElementTag;
+using Chaos::ChaosProps;
+using Chaos::ChaosPropValue;
 using Penumbra::Widgets::BarChart;
 using Penumbra::Widgets::BarOrientation;
 using Penumbra::Widgets::DonutChart;
@@ -45,17 +45,17 @@ using Penumbra::Widgets::WidgetBase;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::BuildWidgetTree;
 using PenumbraUiBackend::PenumbraWidget;
-using PenumbraUiBackend::Lustre::LustreStyleApplier;
+using PenumbraUiBackend::Cosmos::CosmosStyleApplier;
 
-Component MakeNode(IrisElementTag Tag, IrisProps Props = {}, std::vector<Component> Children = {}) {
+Component MakeNode(ChaosElementTag Tag, ChaosProps Props = {}, std::vector<Component> Children = {}) {
     return Component(Tag, std::move(Props), std::move(Children), nullptr);
 }
 
-::Lustre::Stylesheet ParseOrDie(const std::string& Source) {
-    ::Lustre::Parser      Parser(Source, "Charts.lustre");
-    ::Lustre::ParseResult Result = Parser.Parse();
+::Cosmos::Stylesheet ParseOrDie(const std::string& Source) {
+    ::Cosmos::Parser      Parser(Source, "Charts.cosmos");
+    ::Cosmos::ParseResult Result = Parser.Parse();
     Expect(Result.Errors.empty() && Result.Sheet.has_value(), "the chart test stylesheet parses cleanly");
-    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Lustre::Stylesheet{};
+    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Cosmos::Stylesheet{};
 }
 
 const char* const kChartSheet = R"(
@@ -80,26 +80,26 @@ void LayOut(WidgetBase& Widget) {
     Widget.Arrange({0.0F, 0.0F, 300.0F, 200.0F});
 }
 
-void TestABarChartTakesItsDataFromSeriesChildrenAndItsLookFromLustre() {
-    const ::Lustre::Stylesheet    Sheet = ParseOrDie(kChartSheet);
-    const LustreStyleApplier      Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &Sheet};
+void TestABarChartTakesItsDataFromSeriesChildrenAndItsLookFromCosmos() {
+    const ::Cosmos::Stylesheet    Sheet = ParseOrDie(kChartSheet);
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &Sheet};
     BuildContext                  Context;
     Context.Style        = &Sheets;
     Context.StyleApplier = &Applier;
 
-    IrisProps ChartProps;
-    ChartProps["class"]       = IrisPropValue{std::string("weekly")};
-    ChartProps["labels"]      = IrisPropValue(std::vector<std::string>({"Mon", "Tue", "Wed"}));
-    ChartProps["orientation"] = IrisPropValue{std::string("horizontal")};
-    ChartProps["stacked"]     = IrisPropValue{true};
-    ChartProps["max"]         = IrisPropValue{20.0F};
-    IrisProps Done;
-    Done["class"]  = IrisPropValue{std::string("done")};
-    Done["name"]   = IrisPropValue{std::string("Done")};
-    Done["values"] = IrisPropValue(std::vector<float>({3.0F, 5.0F, 2.0F}));
+    ChaosProps ChartProps;
+    ChartProps["class"]       = ChaosPropValue{std::string("weekly")};
+    ChartProps["labels"]      = ChaosPropValue(std::vector<std::string>({"Mon", "Tue", "Wed"}));
+    ChartProps["orientation"] = ChaosPropValue{std::string("horizontal")};
+    ChartProps["stacked"]     = ChaosPropValue{true};
+    ChartProps["max"]         = ChaosPropValue{20.0F};
+    ChaosProps Done;
+    Done["class"]  = ChaosPropValue{std::string("done")};
+    Done["name"]   = ChaosPropValue{std::string("Done")};
+    Done["values"] = ChaosPropValue(std::vector<float>({3.0F, 5.0F, 2.0F}));
 
-    auto  Built = BuildWidgetTree(MakeNode(IrisElementTag::BarChart, ChartProps, {MakeNode(IrisElementTag::Series, Done)}),
+    auto  Built = BuildWidgetTree(MakeNode(ChaosElementTag::BarChart, ChartProps, {MakeNode(ChaosElementTag::Series, Done)}),
                                   Context);
     auto* Chart = dynamic_cast<BarChart*>(Built.get());
     if (Chart == nullptr) {
@@ -115,7 +115,7 @@ void TestABarChartTakesItsDataFromSeriesChildrenAndItsLookFromLustre() {
                Chart->Series[0].Values == std::vector<float>({3.0F, 5.0F, 2.0F}),
            "its data comes from the <Series> child");
     Expect(!Chart->Series.empty() && Chart->Series[0].SeriesColor.R == 0x61 && Chart->Series[0].SeriesColor.B == 0xFF,
-           "the series' colour is its own Lustre class's `color`");
+           "the series' colour is its own Cosmos class's `color`");
     const Penumbra::Widgets::ChartStyle& Look = Chart->ChartVisualStyle;
     Expect(Look.ColorLabel.R == 0x88 && Look.ColorAxis.R == 0x99 && Look.AxisThicknessLogical == 1.0F &&
                Look.TickSpacingLogical == 28.0F && Look.BarGapFraction == 0.3F && Look.AppearSeconds == 0.6F &&
@@ -126,28 +126,28 @@ void TestABarChartTakesItsDataFromSeriesChildrenAndItsLookFromLustre() {
 }
 
 void TestASeriesFollowsItsValuesThroughTheReconciler() {
-    const ::Lustre::Stylesheet    Sheet = ParseOrDie(kChartSheet);
-    const LustreStyleApplier      Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &Sheet};
+    const ::Cosmos::Stylesheet    Sheet = ParseOrDie(kChartSheet);
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &Sheet};
     BuildContext                  Context;
     Context.Style        = &Sheets;
     Context.StyleApplier = &Applier;
-    const iris::MountFn Mount = PenumbraUiBackend::MakeMountFn(Context);
+    const chaos::MountFn Mount = PenumbraUiBackend::MakeMountFn(Context);
 
-    iris::Signal<float> Today = 3.0F;
-    IrisProps           ChartProps;
-    ChartProps["class"]  = IrisPropValue{std::string("weekly")};
-    ChartProps["labels"] = IrisPropValue(std::vector<std::string>({"Mon", "Tue"}));
+    chaos::Signal<float> Today = 3.0F;
+    ChaosProps           ChartProps;
+    ChartProps["class"]  = ChaosPropValue{std::string("weekly")};
+    ChartProps["labels"] = ChaosPropValue(std::vector<std::string>({"Mon", "Tue"}));
     const Component RootNode = MakeNode(
-        IrisElementTag::BarChart, ChartProps,
-        {Component(IrisElementTag::Slot, {}, {}, Iris::MakeSlotCallable([&]() -> Component {
-                       IrisProps Series;
-                       Series["class"]  = IrisPropValue{std::string("added")};
-                       Series["values"] = IrisPropValue(std::vector<float>({1.0F, Today.get()}));
-                       return MakeNode(IrisElementTag::Series, Series);
+        ChaosElementTag::BarChart, ChartProps,
+        {Component(ChaosElementTag::Slot, {}, {}, Chaos::MakeSlotCallable([&]() -> Component {
+                       ChaosProps Series;
+                       Series["class"]  = ChaosPropValue{std::string("added")};
+                       Series["values"] = ChaosPropValue(std::vector<float>({1.0F, Today.get()}));
+                       return MakeNode(ChaosElementTag::Series, Series);
                    }))});
     std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
-    auto                            Slots = iris::ResolveSlots(*Root, RootNode, Mount);
+    auto                            Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
     auto* Chart = dynamic_cast<BarChart*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
     if (Chart == nullptr) {
         Expect(false, "a <BarChart> with a <Slot> series mounts through MakeMountFn");
@@ -159,7 +159,7 @@ void TestASeriesFollowsItsValuesThroughTheReconciler() {
            "a <Slot>-mounted <Series> becomes the chart's data, coloured by its class");
 
     Today.set(8.0F);
-    iris::Tick();
+    chaos::Tick();
     LayOut(*Chart);
     Expect(Chart->Series.size() == 1 && Chart->Series[0].Values == std::vector<float>({1.0F, 8.0F}),
            "a Signal change re-renders the Slot and the reconciler's diff carries the series' new values");
@@ -183,17 +183,17 @@ private:
     std::filesystem::path Root_;
 };
 
-// The whole path a Nyx-authored app takes: a real .irisx with Nyx arrays, a .lustre beside
-// it, mounted through IrisApplication, then drawn.
-void TestAnIrisxChartMountsFromNyxArraysAndDraws() {
+// The whole path a Nyx-authored app takes: a real .chaos with Nyx arrays, a .cosmos beside
+// it, mounted through ChaosApplication, then drawn.
+void TestAChaosChartMountsFromNyxArraysAndDraws() {
     TempProject Project;
-    Project.Write("Stats.lustre", std::string(kChartSheet) + R"(
+    Project.Write("Stats.cosmos", std::string(kChartSheet) + R"(
 .page { display: stack; flex-direction: column; }
 .status { donut-thickness: 18px; segment-gap: 3deg; }
 .todo { color: #F0A046; }
 .doing { color: #6193FF; }
 )");
-    Project.Write("Stats.irisx", "void Stats() {\n"
+    Project.Write("Stats.chaos", "void Stats() {\n"
                                  "    Array<string> days = [\"Mon\", \"Tue\", \"Wed\"];\n"
                                  "    Array<int> done = [3, 5, 2];\n"
                                  "    render {\n"
@@ -210,14 +210,14 @@ void TestAnIrisxChartMountsFromNyxArraysAndDraws() {
                                  "    }\n"
                                  "}\n");
 
-    Iris::IrisConfig Config;
-    Config.Target      = Iris::IrisBuildTarget::UmbraEngine;
+    Chaos::ChaosConfig Config;
+    Config.Target      = Chaos::ChaosBuildTarget::UmbraEngine;
     Config.SearchPaths = {"demo"};
-    Iris::IrisNyxDriver            Driver(Config, Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver            Driver(Config, Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
-    Expect(App.MountAppRoot("Stats.irisx", "Stats") && Driver.Errors().empty(),
-           "a .irisx with <BarChart>/<DonutChart>, Nyx arrays and Series/Slice children mounts with no errors");
+    Expect(App.MountAppRoot("Stats.chaos", "Stats") && Driver.Errors().empty(),
+           "a .chaos with <BarChart>/<DonutChart>, Nyx arrays and Series/Slice children mounts with no errors");
 
     auto* Weekly = dynamic_cast<BarChart*>(App.GetRef("weekly"));
     auto* Status = dynamic_cast<DonutChart*>(App.GetRef("status"));
@@ -235,7 +235,7 @@ void TestAnIrisxChartMountsFromNyxArraysAndDraws() {
                Weekly->Series[1].Values == std::vector<float>({4.0F, 2.0F, 6.0F}),
            "the bar chart's labels and both series come from the Nyx arrays");
     Expect(Weekly->Series[1].SeriesColor.R == 0xF0 && Weekly->ChartVisualStyle.TickSpacingLogical == 28.0F,
-           "and its colours and chart properties from the .lustre beside it");
+           "and its colours and chart properties from the .cosmos beside it");
     Expect(Status->Slices.size() == 2 && Status->Slices[0].Value == 7.0F && Status->Slices[1].SliceColor.R == 0x61 &&
                Status->CentreText == "12" && Status->CentreCaption == "tasks" &&
                Status->ChartVisualStyle.DonutThicknessLogical == 18.0F,
@@ -261,7 +261,7 @@ void TestAnIrisxChartMountsFromNyxArraysAndDraws() {
 } // namespace
 
 void RunChartTests() {
-    TestABarChartTakesItsDataFromSeriesChildrenAndItsLookFromLustre();
+    TestABarChartTakesItsDataFromSeriesChildrenAndItsLookFromCosmos();
     TestASeriesFollowsItsValuesThroughTheReconciler();
-    TestAnIrisxChartMountsFromNyxArraysAndDraws();
+    TestAChaosChartMountsFromNyxArraysAndDraws();
 }

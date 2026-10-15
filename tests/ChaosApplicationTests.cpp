@@ -1,8 +1,8 @@
-#include "PenumbraUiBackend/IrisApplication.h"
+#include "PenumbraUiBackend/ChaosApplication.h"
 #include "PenumbraUiBackend/NyxApplicationBridge.h"
 
-#include "Iris/IrisConfig.h"
-#include "Iris/IrisNyxDriver.h"
+#include "Chaos/ChaosConfig.h"
+#include "Chaos/ChaosNyxDriver.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
@@ -32,13 +32,13 @@ void Expect(bool Condition, const std::string& Description) {
 }
 
 // Same real-on-disk-fixture convention tests/WalkerTests.cpp's own TempProject uses
-// (IrisNyxDriver::MountRoot needs a real `.irisx` -> IrisIrDocument -> Component pipeline,
+// (ChaosNyxDriver::MountRoot needs a real `.chaos` -> ChaosIrDocument -> Component pipeline,
 // not a hand-built tree) -- kept local rather than shared since TempProject lives in
 // WalkerTests.cpp's own anonymous namespace.
 class TempProject {
 public:
     TempProject() {
-        Root_ = std::filesystem::temp_directory_path() / "penumbra_ui_backend_iris_application_test";
+        Root_ = std::filesystem::temp_directory_path() / "penumbra_ui_backend_chaos_application_test";
         std::filesystem::remove_all(Root_);
         std::filesystem::create_directories(Root_ / "demo");
     }
@@ -57,98 +57,98 @@ private:
     std::filesystem::path Root_;
 };
 
-Iris::IrisConfig TestConfig() {
-    Iris::IrisConfig Config;
-    Config.Target      = Iris::IrisBuildTarget::UmbraEngine;
+Chaos::ChaosConfig TestConfig() {
+    Chaos::ChaosConfig Config;
+    Config.Target      = Chaos::ChaosBuildTarget::UmbraEngine;
     Config.SearchPaths = {"demo"};
     return Config;
 }
 
 void TestMountComponentAutoDiscoversItsOwnColocatedStylesheet() {
     TempProject Project;
-    Project.Write("Solo.lustre", ".foo { background-color: #FF0000; }");
-    Project.Write("Solo.irisx", "void Solo() {\n"
+    Project.Write("Solo.cosmos", ".foo { background-color: #FF0000; }");
+    Project.Write("Solo.chaos", "void Solo() {\n"
                                  "    render {\n"
                                  "        <Text ref=\"label\">hello</Text>\n"
                                  "    }\n"
                                  "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
     Expect(App.ComposedStylesheet().Component == nullptr || App.ComposedStylesheet().Component->Rules.empty(),
            "nothing composed before the first mount");
 
-    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
-    App.MountComponent("Solo.irisx", "Solo", {}, KeepAlive);
+    std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
+    App.MountComponent("Solo.chaos", "Solo", {}, KeepAlive);
 
     Expect(Driver.Errors().empty(), "the Solo fixture compiles and mounts with no errors");
     Expect(App.ComposedStylesheet().Component != nullptr && !App.ComposedStylesheet().Component->Rules.empty(),
-           "MountComponent auto-discovers Solo.irisx's own colocated Solo.lustre with no explicit call");
+           "MountComponent auto-discovers Solo.chaos's own colocated Solo.cosmos with no explicit call");
 }
 
 void TestMountComponentDiscoversAnImportedComponentsStylesheetInASeparateDirectoryTransitively() {
     TempProject Project;
     const std::filesystem::path NestedDir = std::filesystem::path(Project.RootPath()) / "nested";
     std::filesystem::create_directories(NestedDir);
-    std::ofstream(NestedDir / "Child.lustre") << ".child { background-color: #00FF00; }";
-    std::ofstream(NestedDir / "Child.irisx") << "void Child() {\n"
+    std::ofstream(NestedDir / "Child.cosmos") << ".child { background-color: #00FF00; }";
+    std::ofstream(NestedDir / "Child.chaos") << "void Child() {\n"
                                                  "    render {\n"
                                                  "        <Text>child</Text>\n"
                                                  "    }\n"
                                                  "}\n";
-    Project.Write("Parent.irisx", "import Child\n"
+    Project.Write("Parent.chaos", "import Child\n"
                                    "void Parent() {\n"
                                    "    render {\n"
                                    "        <Child />\n"
                                    "    }\n"
                                    "}\n");
 
-    Iris::IrisConfig Config = TestConfig();
+    Chaos::ChaosConfig Config = TestConfig();
     Config.SearchPaths      = {"demo", "nested"};
-    Iris::IrisNyxDriver Driver(Config, Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(Config, Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
-    App.MountComponent("Parent.irisx", "Parent", {}, KeepAlive);
+    std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
+    App.MountComponent("Parent.chaos", "Parent", {}, KeepAlive);
 
-    Expect(Driver.Errors().empty(), "Parent.irisx (importing Child from a separate directory) mounts with no errors");
+    Expect(Driver.Errors().empty(), "Parent.chaos (importing Child from a separate directory) mounts with no errors");
     Expect(App.ComposedStylesheet().Component != nullptr && !App.ComposedStylesheet().Component->Rules.empty(),
-           "mounting Parent.irisx also discovers Child.irisx's own directory (nested/, not demo/) via the import "
+           "mounting Parent.chaos also discovers Child.chaos's own directory (nested/, not demo/) via the import "
            "graph, before Child is ever actually invoked as a <Slot>-mediated child");
 }
 
 void TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThanReplace() {
     TempProject Project;
-    Project.Write("First.lustre", ".first { background-color: #FF0000; }");
-    Project.Write("First.irisx", "void First() {\n"
+    Project.Write("First.cosmos", ".first { background-color: #FF0000; }");
+    Project.Write("First.chaos", "void First() {\n"
                                   "    render {\n"
                                   "        <Text>first</Text>\n"
                                   "    }\n"
                                   "}\n");
     const std::filesystem::path NestedDir = std::filesystem::path(Project.RootPath()) / "nested";
     std::filesystem::create_directories(NestedDir);
-    std::ofstream(NestedDir / "Second.lustre") << ".second { background-color: #0000FF; }";
-    std::ofstream(NestedDir / "Second.irisx") << "void Second() {\n"
+    std::ofstream(NestedDir / "Second.cosmos") << ".second { background-color: #0000FF; }";
+    std::ofstream(NestedDir / "Second.chaos") << "void Second() {\n"
                                                   "    render {\n"
                                                   "        <Text>second</Text>\n"
                                                   "    }\n"
                                                   "}\n";
 
-    Iris::IrisConfig Config = TestConfig();
+    Chaos::ChaosConfig Config = TestConfig();
     Config.SearchPaths      = {"demo", "nested"};
-    Iris::IrisNyxDriver Driver(Config, Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(Config, Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
-    App.MountComponent("First.irisx", "First", {}, KeepAlive);
+    std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
+    App.MountComponent("First.chaos", "First", {}, KeepAlive);
     const std::size_t RuleCountAfterFirst = App.ComposedStylesheet().Component->Rules.size();
 
-    PenumbraUiBackend::IrisApplication::MountResult SecondResult =
-        App.MountComponent("../nested/Second.irisx", "Second", {}, KeepAlive);
+    PenumbraUiBackend::ChaosApplication::MountResult SecondResult =
+        App.MountComponent("../nested/Second.chaos", "Second", {}, KeepAlive);
     const std::size_t RuleCountAfterSecond = App.ComposedStylesheet().Component->Rules.size();
 
     Expect(SecondResult.Widget != nullptr, "the second, separately-directoried fixture mounts too");
@@ -157,14 +157,14 @@ void TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThan
            "on top of an earlier mount's, rather than replacing them");
 }
 
-void TestGlobalLustreLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponent() {
+void TestGlobalCosmosLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponent() {
     TempProject Project;
-    Project.Write("global.lustre", ":root {\n"
+    Project.Write("global.cosmos", ":root {\n"
                                    "    --accent: #CEFF00FF;\n"
                                    "}\n"
                                    ".shared { border-radius: 4px; }\n");
-    Project.Write("Solo.lustre", ".foo { background-color: var(--accent); }");
-    Project.Write("Solo.irisx", "void Solo() {\n"
+    Project.Write("Solo.cosmos", ".foo { background-color: var(--accent); }");
+    Project.Write("Solo.chaos", "void Solo() {\n"
                                  "    render {\n"
                                  "        <Frame class=\"foo\" ref=\"box\">\n"
                                  "            <Text>hello</Text>\n"
@@ -172,32 +172,32 @@ void TestGlobalLustreLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponen
                                  "    }\n"
                                  "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
-    PenumbraUiBackend::IrisApplication::MountResult Result = App.MountComponent("Solo.irisx", "Solo", {}, KeepAlive);
+    std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
+    PenumbraUiBackend::ChaosApplication::MountResult Result = App.MountComponent("Solo.chaos", "Solo", {}, KeepAlive);
 
-    const ::Lustre::StylesheetSet& Sheets = App.ComposedStylesheet();
-    Expect(Driver.Errors().empty(), "the global.lustre fixture compiles and mounts with no errors");
+    const ::Cosmos::StylesheetSet& Sheets = App.ComposedStylesheet();
+    Expect(Driver.Errors().empty(), "the global.cosmos fixture compiles and mounts with no errors");
     Expect(Sheets.Global != nullptr && Sheets.Global->Root.has_value() && Sheets.Global->Root->Variables.size() == 1,
-           "global.lustre's :root variables land in the Global slot");
+           "global.cosmos's :root variables land in the Global slot");
     Expect(Sheets.Global != nullptr && Sheets.Global->Rules.size() == 1 && Sheets.Component->Rules.size() == 1,
-           "global.lustre's rules land in the Global slot, not the component sheet");
+           "global.cosmos's rules land in the Global slot, not the component sheet");
     const auto* AsBox = dynamic_cast<Penumbra::Widgets::Box*>(Result.Refs.count("box") ? Result.Refs.at("box") : nullptr);
     Expect(AsBox != nullptr && AsBox->Style.ColorBackground.R == 0xCE && AsBox->Style.ColorBackground.G == 0xFF &&
                AsBox->Style.ColorBackground.B == 0x00,
-           "a component rule's var(--accent) resolves to global.lustre's value");
+           "a component rule's var(--accent) resolves to global.cosmos's value");
 }
 
 void TestRootVariablesInAComponentStylesheetAreKept() {
     TempProject Project;
-    Project.Write("Solo.lustre", ":root {\n"
+    Project.Write("Solo.cosmos", ":root {\n"
                                  "    --tint: #123456FF;\n"
                                  "}\n"
                                  ".foo { background-color: var(--tint); }\n");
-    Project.Write("Solo.irisx", "void Solo() {\n"
+    Project.Write("Solo.chaos", "void Solo() {\n"
                                  "    render {\n"
                                  "        <Frame class=\"foo\" ref=\"box\">\n"
                                  "            <Text>hello</Text>\n"
@@ -205,14 +205,14 @@ void TestRootVariablesInAComponentStylesheetAreKept() {
                                  "    }\n"
                                  "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
-    PenumbraUiBackend::IrisApplication::MountResult Result = App.MountComponent("Solo.irisx", "Solo", {}, KeepAlive);
+    std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
+    PenumbraUiBackend::ChaosApplication::MountResult Result = App.MountComponent("Solo.chaos", "Solo", {}, KeepAlive);
 
-    const ::Lustre::StylesheetSet& Sheets = App.ComposedStylesheet();
+    const ::Cosmos::StylesheetSet& Sheets = App.ComposedStylesheet();
     Expect(Sheets.Component != nullptr && Sheets.Component->Root.has_value() &&
                Sheets.Component->Root->Variables.size() == 1,
            "a :root block in a component stylesheet is kept in the composed sheet, not dropped");
@@ -224,18 +224,18 @@ void TestRootVariablesInAComponentStylesheetAreKept() {
 
 void TestMountComponentBuildsAWidgetAndPopulatesRefMap() {
     TempProject Project;
-    Project.Write("Card.irisx", "void Card() {\n"
+    Project.Write("Card.chaos", "void Card() {\n"
                                  "    render {\n"
                                  "        <Text ref=\"label\">hello</Text>\n"
                                  "    }\n"
                                  "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    std::vector<std::shared_ptr<Iris::Component>> KeepAlive;
-    PenumbraUiBackend::IrisApplication::MountResult Result = App.MountComponent("Card.irisx", "Card", {}, KeepAlive);
+    std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
+    PenumbraUiBackend::ChaosApplication::MountResult Result = App.MountComponent("Card.chaos", "Card", {}, KeepAlive);
 
     Expect(Driver.Errors().empty(), "the Card fixture compiles and mounts with no errors");
     Expect(Result.Widget != nullptr, "MountComponent returns a real built widget");
@@ -249,7 +249,7 @@ void TestMountedIconsGetTheBackendGivenToSetIconBackend() {
     } Backend;
 
     TempProject Project;
-    Project.Write("Glyph.irisx", "void Glyph() {\n"
+    Project.Write("Glyph.chaos", "void Glyph() {\n"
                                   "    render {\n"
                                   "        <Frame>\n"
                                   "            <Icon ref=\"glyph\" icon=\"close\" />\n"
@@ -257,11 +257,11 @@ void TestMountedIconsGetTheBackendGivenToSetIconBackend() {
                                   "    }\n"
                                   "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
     App.SetIconBackend(&Backend);
-    Expect(App.MountAppRoot("Glyph.irisx", "Glyph"), "MountAppRoot mounts a root holding an <Icon>");
+    Expect(App.MountAppRoot("Glyph.chaos", "Glyph"), "MountAppRoot mounts a root holding an <Icon>");
 
     const auto* Glyph = dynamic_cast<Penumbra::Widgets::IconWidget*>(App.GetRef("glyph"));
     Expect(Glyph != nullptr && Glyph->IconBackend == &Backend,
@@ -270,17 +270,17 @@ void TestMountedIconsGetTheBackendGivenToSetIconBackend() {
 
 void TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef() {
     TempProject Project;
-    Project.Write("Root.irisx", "void Root() {\n"
+    Project.Write("Root.chaos", "void Root() {\n"
                                  "    render {\n"
                                  "        <Frame ref=\"content\"></Frame>\n"
                                  "    }\n"
                                  "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    const bool Mounted = App.MountAppRoot("Root.irisx", "Root");
+    const bool Mounted = App.MountAppRoot("Root.chaos", "Root");
     Expect(Mounted, "MountAppRoot succeeds against a real fixture");
     Expect(App.GetRootWidget() != nullptr, "MountAppRoot calls SetRootWidget with a real widget");
     Expect(App.GetRef("content") != nullptr, "MountAppRoot's ref map is queryable via GetRef");
@@ -293,9 +293,9 @@ void TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef() {
 
 void TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard() {
     TempProject Project;
-    Project.Write("Fields.lustre", ".fields { display: stack; flex-direction: column; }\n"
+    Project.Write("Fields.cosmos", ".fields { display: stack; flex-direction: column; }\n"
                                     ".editor { width: 200px; height: 100px; }\n");
-    Project.Write("Fields.irisx", "void Fields() {\n"
+    Project.Write("Fields.chaos", "void Fields() {\n"
                                    "    render {\n"
                                    "        <Frame class=\"fields\">\n"
                                    "            <Input ref=\"field\" />\n"
@@ -304,10 +304,10 @@ void TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard() {
                                    "    }\n"
                                    "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
-    Expect(App.MountAppRoot("Fields.irisx", "Fields"), "MountAppRoot mounts a root holding an <Input> and a <TextArea>");
+    Expect(App.MountAppRoot("Fields.chaos", "Fields"), "MountAppRoot mounts a root holding an <Input> and a <TextArea>");
 
     const auto* Field = dynamic_cast<Penumbra::Widgets::TextInput*>(App.GetRef("field"));
     auto* Editor = dynamic_cast<Penumbra::Widgets::TextArea*>(App.GetRef("editor"));
@@ -342,7 +342,7 @@ void TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard() {
 
 void TestGetRefFindsRefsInsideSlotMountedContent() {
     TempProject Project;
-    Project.Write("Board.irisx", "void Board() {\n"
+    Project.Write("Board.chaos", "void Board() {\n"
                                   "    render {\n"
                                   "        <Frame ref=\"board\">\n"
                                   "            <Slot>\n"
@@ -352,7 +352,7 @@ void TestGetRefFindsRefsInsideSlotMountedContent() {
                                   "        </Frame>\n"
                                   "    }\n"
                                   "}\n");
-    Project.Write("Panel.irisx", "void Panel() {\n"
+    Project.Write("Panel.chaos", "void Panel() {\n"
                                   "    render {\n"
                                   "        <Frame ref=\"panel-static\">\n"
                                   "            <Slot>\n"
@@ -362,17 +362,17 @@ void TestGetRefFindsRefsInsideSlotMountedContent() {
                                   "    }\n"
                                   "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
-    Expect(App.MountAppRoot("Board.irisx", "Board"), "MountAppRoot mounts a root with a ref inside a <Slot>");
+    Expect(App.MountAppRoot("Board.chaos", "Board"), "MountAppRoot mounts a root with a ref inside a <Slot>");
 
     auto* Board = dynamic_cast<Penumbra::Widgets::Box*>(App.GetRef("board"));
     Penumbra::Widgets::WidgetBase* Lane = App.GetRef("lane-todo");
     Expect(Lane != nullptr && Board != nullptr && Board->GetChildCount() > 0 && Board->GetChildAt(0) == Lane,
            "GetRef finds a ref inside <Slot>-mounted content, and it's the widget the Slot mounted");
 
-    Expect(App.MountReconciledComponent("Panel.irisx", "Panel", {}, "content"),
+    Expect(App.MountReconciledComponent("Panel.chaos", "Panel", {}, "content"),
            "MountReconciledComponent mounts a component with refs in its static part and in a <Slot>");
     Expect(App.GetRef("panel-static") != nullptr, "GetRef finds a ref in a reconciled mount's static part");
     Expect(App.GetRef("panel-slot") != nullptr, "GetRef finds a ref inside a reconciled mount's <Slot>");
@@ -385,12 +385,12 @@ void TestGetRefFindsRefsInsideSlotMountedContent() {
 
 void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
     TempProject Project;
-    Project.Write("Root.irisx", "void Root() {\n"
+    Project.Write("Root.chaos", "void Root() {\n"
                                  "    render {\n"
                                  "        <Frame ref=\"content\"></Frame>\n"
                                  "    }\n"
                                  "}\n");
-    Project.Write("CardListThree.irisx",
+    Project.Write("CardListThree.chaos",
                    "void CardListThree() {\n"
                    "    render {\n"
                    "        <Frame>\n"
@@ -403,7 +403,7 @@ void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
                    "        </Frame>\n"
                    "    }\n"
                    "}\n");
-    Project.Write("CardListTwo.irisx",
+    Project.Write("CardListTwo.chaos",
                    "void CardListTwo() {\n"
                    "    render {\n"
                    "        <Frame>\n"
@@ -417,12 +417,12 @@ void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
                    "    }\n"
                    "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
-    App.MountAppRoot("Root.irisx", "Root");
+    App.MountAppRoot("Root.chaos", "Root");
 
-    const bool MountedFirst = App.MountReconciledComponent("CardListThree.irisx", "CardListThree", {}, "content");
+    const bool MountedFirst = App.MountReconciledComponent("CardListThree.chaos", "CardListThree", {}, "content");
     Expect(MountedFirst, "MountReconciledComponent mounts against a real fixture");
 
     auto* Content = dynamic_cast<Penumbra::Widgets::Box*>(App.GetRef("content"));
@@ -433,7 +433,7 @@ void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
     Expect(Inner != nullptr && Inner->GetChildCount() == 3,
            "the <Slot> .Map() over 3 names resolves into 3 real children");
 
-    const bool MountedSecond = App.MountReconciledComponent("CardListTwo.irisx", "CardListTwo", {}, "content");
+    const bool MountedSecond = App.MountReconciledComponent("CardListTwo.chaos", "CardListTwo", {}, "content");
     Expect(MountedSecond, "a second MountReconciledComponent call against the same target succeeds");
     Expect(Content != nullptr && Content->GetChildCount() == 1,
            "the second mount still leaves exactly one child -- the first mount's tree was cleared, not "
@@ -449,46 +449,46 @@ void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
 
 void TestMountReconciledComponentFailsForAnUnknownTargetRef() {
     TempProject Project;
-    Project.Write("Root.irisx", "void Root() {\n"
+    Project.Write("Root.chaos", "void Root() {\n"
                                  "    render {\n"
                                  "        <Frame ref=\"content\"></Frame>\n"
                                  "    }\n"
                                  "}\n");
-    Project.Write("Card.irisx", "void Card() {\n"
+    Project.Write("Card.chaos", "void Card() {\n"
                                  "    render {\n"
                                  "        <Text>hello</Text>\n"
                                  "    }\n"
                                  "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
-    App.MountAppRoot("Root.irisx", "Root");
+    App.MountAppRoot("Root.chaos", "Root");
 
-    const bool Mounted = App.MountReconciledComponent("Card.irisx", "Card", {}, "no-such-ref");
+    const bool Mounted = App.MountReconciledComponent("Card.chaos", "Card", {}, "no-such-ref");
     Expect(!Mounted, "MountReconciledComponent returns false for a TargetRefName the app root never declared");
 }
 
 void TestMountAppRootFailsGracefullyOnAMalformedFixture() {
     TempProject Project;
-    Project.Write("Broken.irisx", "this is not valid irisx source {{{\n");
+    Project.Write("Broken.chaos", "this is not valid chaos source {{{\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
-    const bool Mounted = App.MountAppRoot("Broken.irisx", "Broken");
+    const bool Mounted = App.MountAppRoot("Broken.chaos", "Broken");
     Expect(!Mounted, "MountAppRoot returns false for a fixture that fails to compile");
     Expect(App.GetRootWidget() == nullptr, "a failed MountAppRoot never calls SetRootWidget");
 }
 
 void TestStyleApplierFollowsTheDpiScaleGivenToReloadFont() {
-    PenumbraUiBackend::IrisApplication BuiltAfter;
+    PenumbraUiBackend::ChaosApplication BuiltAfter;
     BuiltAfter.ReloadFont(2.0F);
     Expect(BuiltAfter.StyleApplier().DpiScaleFactor() == 2.0F,
            "a style applier built after ReloadFont uses the DPI scale it was given");
 
-    PenumbraUiBackend::IrisApplication BuiltBefore;
+    PenumbraUiBackend::ChaosApplication BuiltBefore;
     BuiltBefore.StyleApplier();
     BuiltBefore.ReloadFont(2.0F);
     Expect(BuiltBefore.StyleApplier().DpiScaleFactor() == 2.0F,
@@ -496,13 +496,13 @@ void TestStyleApplierFollowsTheDpiScaleGivenToReloadFont() {
 }
 
 void TestStyleApplierDefaultsToTheFontGivenToSetFontConfig() {
-    PenumbraUiBackend::IrisApplication BuiltAfter;
+    PenumbraUiBackend::ChaosApplication BuiltAfter;
     BuiltAfter.SetFontConfig("/fonts/Body.ttf", 14.0F);
     const auto& AfterDefault = BuiltAfter.StyleApplier().DefaultFont();
     Expect(AfterDefault && AfterDefault->Path == "/fonts/Body.ttf" && AfterDefault->SizeLogical == 14.0F,
            "a style applier built after SetFontConfig defaults to that font");
 
-    PenumbraUiBackend::IrisApplication BuiltBefore;
+    PenumbraUiBackend::ChaosApplication BuiltBefore;
     Expect(!BuiltBefore.StyleApplier().DefaultFont(), "a style applier has no default font before SetFontConfig");
     BuiltBefore.SetFontConfig("/fonts/Body.ttf", 16.0F);
     const auto& BeforeDefault = BuiltBefore.StyleApplier().DefaultFont();
@@ -510,27 +510,27 @@ void TestStyleApplierDefaultsToTheFontGivenToSetFontConfig() {
            "SetFontConfig gives an already built style applier its default font");
 }
 
-void TestBridgedIrisApplicationExposesInheritedMethodsToNyx() {
-    PenumbraUiBackend::IrisApplicationBridge Bridge(TestConfig(), ".");
+void TestBridgedChaosApplicationExposesInheritedMethodsToNyx() {
+    PenumbraUiBackend::ChaosApplicationBridge Bridge(TestConfig(), ".");
 
-    PenumbraUiBackend::IrisApplication* Application = Bridge.LoadApplication(
+    PenumbraUiBackend::ChaosApplication* Application = Bridge.LoadApplication(
         "class TestApplication : Application {\n"
         "    bool OnStart() override {\n"
-        "        return this.MountAppRoot(\"BridgedRoot.irisx\", \"BridgedRoot\");\n"
+        "        return this.MountAppRoot(\"BridgedRoot.chaos\", \"BridgedRoot\");\n"
         "    }\n"
         "}\n",
-        "bridged-iris-application-test.nyx", "TestApplication");
+        "bridged-chaos-application-test.nyx", "TestApplication");
 
-    Expect(Application != nullptr, "IrisApplicationBridge loads a Nyx Application backed by IrisApplication");
+    Expect(Application != nullptr, "ChaosApplicationBridge loads a Nyx Application backed by ChaosApplication");
     if (Application) {
         delete Application;
     }
 }
 
 void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
-    PenumbraUiBackend::IrisApplicationBridge Bridge(TestConfig(), ".");
+    PenumbraUiBackend::ChaosApplicationBridge Bridge(TestConfig(), ".");
 
-    PenumbraUiBackend::IrisApplication* Application = Bridge.LoadApplication(
+    PenumbraUiBackend::ChaosApplication* Application = Bridge.LoadApplication(
         "class TestApplication : Application {\n"
         "    int LastValue = 0;\n"
         "    void Record(int value) { this.LastValue = value; }\n"
@@ -538,7 +538,7 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
         "}\n",
         "forwarder-test.nyx", "TestApplication");
 
-    Expect(Application != nullptr, "IrisApplicationBridge loads a Nyx Application with a custom method to forward to");
+    Expect(Application != nullptr, "ChaosApplicationBridge loads a Nyx Application with a custom method to forward to");
     if (!Application) return;
 
     int PreDispatchCalls = 0;
@@ -566,11 +566,11 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
 
 } // namespace
 
-void RunIrisApplicationTests() {
+void RunChaosApplicationTests() {
     TestMountComponentAutoDiscoversItsOwnColocatedStylesheet();
     TestMountComponentDiscoversAnImportedComponentsStylesheetInASeparateDirectoryTransitively();
     TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThanReplace();
-    TestGlobalLustreLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponent();
+    TestGlobalCosmosLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponent();
     TestRootVariablesInAComponentStylesheetAreKept();
     TestMountComponentBuildsAWidgetAndPopulatesRefMap();
     TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef();
@@ -582,6 +582,6 @@ void RunIrisApplicationTests() {
     TestMountAppRootFailsGracefullyOnAMalformedFixture();
     TestStyleApplierFollowsTheDpiScaleGivenToReloadFont();
     TestStyleApplierDefaultsToTheFontGivenToSetFontConfig();
-    TestBridgedIrisApplicationExposesInheritedMethodsToNyx();
+    TestBridgedChaosApplicationExposesInheritedMethodsToNyx();
     TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName();
 }

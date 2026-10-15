@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Lustre/Resolver.h"
-#include "PenumbraUiBackend/Lustre/StyleApplier.h"
+#include "Cosmos/Resolver.h"
+#include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 
-#include "Iris/Component.h"
-#include "Iris/IrisNyxDriver.h"
+#include "Chaos/Component.h"
+#include "Chaos/ChaosNyxDriver.h"
 #include "Penumbra/Backends/IIconBackend.h"
 #include "Penumbra/Backends/IImageBackend.h"
 #include "Penumbra/LifecycleRegistry.h"
@@ -21,23 +21,23 @@
 
 namespace PenumbraUiBackend {
 
-// Maps a built widget's raw pointer to its real Lustre primitive tag
+// Maps a built widget's raw pointer to its real Cosmos primitive tag
 // ("Frame"/"Inline"/"Grid"/"Image"/"Text") -- the piece of information that
-// BuildWidgetTree's own IrisElementTag switch knows but a plain
+// BuildWidgetTree's own ChaosElementTag switch knows but a plain
 // `Penumbra::Widgets::WidgetBase` tree can't represent on its own (`Frame`
 // and `Grid` both build to a plain `Box`, per BuildGrid's own comment).
 // Optional: only populated when a caller passes a non-null map to
 // BuildWidgetTree, so PenumbraWidgetAdapter.cpp can later thread the exact
 // original tag onto each `PenumbraWidget` wrapper at wrap time, rather than
 // re-inferring it from C++ type on a class change (see
-// docs/penumbra_ui_backend_lustre_bridge_decision.md's "Fixing the
+// docs/penumbra_ui_backend_cosmos_bridge_decision.md's "Fixing the
 // primitive-tag limitation" section for why that re-inference was
 // unreliable for Frame/Grid specifically).
 using PrimitiveTagMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::string>;
 
 // Maps a `ref`-tagged node's ref name (docs/next_steps.md's "GetByRef lookup on a
-// mounted tree" ask -- `iris`'s own `Component::Ref` field, `vendor/iris/include/
-// Iris/Component.h`) to the widget built from it. Same "optional, populated only when
+// mounted tree" ask -- `chaos`'s own `Component::Ref` field, `vendor/chaos/include/
+// Chaos/Component.h`) to the widget built from it. Same "optional, populated only when
 // a caller passes a non-null map" convention as PrimitiveTagMap above, and populated at
 // exactly the same point in BuildWidgetTreeInternal's recursion for the same reason: by
 // the time PenumbraWidgetAdapter.cpp wraps the already-built tree, the originating
@@ -48,7 +48,7 @@ using RefMap = std::unordered_map<std::string, Penumbra::Widgets::WidgetBase*>;
 
 // Each built widget's number props (int or float, as float), by name -- only widgets
 // that have any. Same optional out-parameter convention as PrimitiveTagMap/RefMap. A
-// Lustre `attr()` binding reads these: BuildWidgetTree fills bindings in from the
+// Cosmos `attr()` binding reads these: BuildWidgetTree fills bindings in from the
 // Component directly, but a PenumbraWidget re-resolving a widget's style later (a class
 // change) has only the widget, so WrapExistingTree seeds each wrapper from this.
 using NumberPropMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::unordered_map<std::string, float>>;
@@ -65,7 +65,7 @@ using NumberPropMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, s
 // content yet; useful for structural tests that don't need a real font/SDL context.
 //
 // `Style`/`StyleApplier` are the same kind of optional resource: if either is null, no
-// Lustre resolution happens at all and every widget builds exactly as it did before this
+// Cosmos resolution happens at all and every widget builds exactly as it did before this
 // wiring existed. Both pointers must outlive every widget built with this Context, since
 // PenumbraWidgetAdapter.cpp threads them onto live `PenumbraWidget` wrappers for later
 // re-resolution on a class change, not just the initial mount here.
@@ -88,12 +88,12 @@ struct BuildContext {
     // layer. Null leaves the portal anchor mounted but unpresented.
     Penumbra::Widgets::OverlayHost* OverlayHost{nullptr};
 
-    const ::Lustre::StylesheetSet* Style{nullptr};
-    const Lustre::IStyleApplier*    StyleApplier{nullptr};
+    const ::Cosmos::StylesheetSet* Style{nullptr};
+    const Cosmos::IStyleApplier*    StyleApplier{nullptr};
 
     // docs/next_steps.md's "reconciler-side wiring for a framework-owned component
     // lifecycle system" ask. When set, every built widget whose originating Component
-    // carries a live `Instance->Lifecycle` (iris::RegisterLifecycle, `Iris/
+    // carries a live `Instance->Lifecycle` (chaos::RegisterLifecycle, `Chaos/
     // ComponentInstance.h`) gets registered against this registry's own
     // RegisterLifecycle/UnregisterLifecycle pair automatically -- see Walker.cpp's
     // BuildWidgetTreeInternal for the actual wiring. Left null (the default) means
@@ -112,13 +112,13 @@ struct BuildContext {
 
     // docs/next_steps.md's "a Nyx-authored OnMount/OnTick has no way to reach its own
     // component's ref'd widgets" ask. When set (alongside LifecycleHost, and only for a
-    // node whose `Instance->DriverState` was actually produced by `Iris::IrisNyxDriver` --
+    // node whose `Instance->DriverState` was actually produced by `Chaos::ChaosNyxDriver` --
     // see Walker.cpp's RegisterGetRefIfPresent for the exact gate), BuildWidgetTreeInternal
     // defines a Nyx-callable `GetRef(name: string)` directly into that component's own
-    // `Iris::NyxDriverState::RenderScope` Environment (never onto this Runtime's own
+    // `Chaos::NyxDriverState::RenderScope` Environment (never onto this Runtime's own
     // `Globals()` -- see RegisterGetRefIfPresent's own comment for why per-instance scoping
     // is both necessary, so concurrently-mounted components' ref sets never collide under
-    // one shared name, and achievable with zero `iris-proto`/`nyx-proto` API additions).
+    // one shared name, and achievable with zero Chaos/`nyx-proto` API additions).
     // `GetRef` returns a small host-object handle (`SetText`/`SetIconName`/`SetColor`/
     // `SetVisible`, dispatched by `dynamic_cast` against whichever concrete Penumbra widget
     // type the ref actually names) for whatever the calling component's own `ref`-tagged
@@ -135,15 +135,15 @@ struct BuildContext {
     nyx::host::NyxRuntime* NyxHost{nullptr};
 };
 
-// Walks a single `Component` IR node (docs/iris_core_spec.md §2.5, from the `iris`
+// Walks a single `Component` IR node (docs/iris_core_spec.md §2.5, from the `chaos`
 // preprocessor — never a Penumbra type) and builds the equivalent real Penumbra widget
 // via that primitive's own fluent `Builder`, recursing into `Node.Children`. This is
 // Stage 2 only: a one-shot tree build, no diffing, no identity tracking — `Component`
-// does carry a `Key` now (docs/iris_stage3_implementation_decision.md, in the `iris`
+// does carry a `Key` now (docs/iris_stage3_implementation_decision.md, in the `chaos`
 // repo), but this function never reads it; matching by key across two trees is Stage 3's
 // reconciler's job (`PenumbraWidgetAdapter.h`), built on top of this, not part of it.
 //
-// Two IrisElementTag values get special handling rather than a Builder call, and both
+// Two ChaosElementTag values get special handling rather than a Builder call, and both
 // return `nullptr` — "no widget here, contributes nothing to its parent's built
 // children," not an error:
 //   - `None` (the `<Slot>`-callable-returned-`nullptr` sentinel, docs/iris_core_spec.md
@@ -151,8 +151,8 @@ struct BuildContext {
 //   - `Slot` (docs/iris_slot_stage2_wiring_decision.md) — a `<Slot>` child's own
 //     content isn't known yet at this point in the build (its callable hasn't been
 //     invoked), so this function leaves its position empty, same as `None`. The real
-//     content gets spliced in afterward by `iris::ResolveSlots`
-//     (`Iris/SlotResolution.h`, in the `iris` repo), which walks the just-built static
+//     content gets spliced in afterward by `chaos::ResolveSlots`
+//     (`Chaos/SlotResolution.h`, in the `chaos` repo), which walks the just-built static
 //     tree and `Node`'s own `Component` tree in lockstep to find each `<Slot>`'s
 //     correct position and attach its initial (and, later, every subsequent) render
 //     there. A `<Slot>` at the very root of what's being built (no static wrapper at
@@ -160,29 +160,29 @@ struct BuildContext {
 //     doesn't handle either — see its own doc comment for what to do instead.
 //
 // When `Context.Style`/`Context.StyleApplier` are both set, every built widget also gets
-// its Lustre style resolved and applied before this function returns it — see
-// docs/penumbra_ui_backend_lustre_bridge_decision.md's "Wiring into the mount and
+// its Cosmos style resolved and applied before this function returns it — see
+// docs/penumbra_ui_backend_cosmos_bridge_decision.md's "Wiring into the mount and
 // reconcile paths" section for the ancestor-chain/component-boundary bookkeeping this
 // does internally. `Node` itself is always treated as a component-root boundary (§1.2):
 // correct for every real caller today (this function is only ever invoked at a whole
-// mount's root — see `MakeMountFn`/`iris::ResolveSlots`), but not detectable from
+// mount's root — see `MakeMountFn`/`chaos::ResolveSlots`), but not detectable from
 // `Component` alone if a future caller ever builds a *sub*tree containing more than
 // one component's worth of composed content in a single call.
 //
 // When OutTags is non-null, every built widget's raw pointer is recorded there against
-// its real Lustre primitive tag -- see PrimitiveTagMap's own comment above. Left null
+// its real Cosmos primitive tag -- see PrimitiveTagMap's own comment above. Left null
 // (the default), behaves exactly as before this parameter existed.
 //
 // When OutRefs is non-null, every node carrying a `ref` prop has its built widget's raw
 // pointer recorded there against that ref name -- see RefMap's own comment above. Left
 // null (the default), behaves exactly as before this parameter existed. A `ref` whose
-// value isn't a plain string (shouldn't happen via real `.iris` codegen, `Component.h`'s
+// value isn't a plain string (shouldn't happen via real `.chaos` codegen, `Component.h`'s
 // `Ref` field always carries the string an `IIFE` wrapper set it from) is silently
 // skipped, same "malformed input is simply not recorded" tolerance the rest of this
 // walker already has for e.g. a wrongly-typed `class` prop.
 //
 // When Context.LifecycleHost is non-null, every node's `Component::Instance` is checked
-// for a live `Instance->Lifecycle` (set via `iris::RegisterLifecycle` inside that
+// for a live `Instance->Lifecycle` (set via `chaos::RegisterLifecycle` inside that
 // component's own body) -- not just Node itself: `MountComponentInstance` sets
 // `Instance` for *every* component invocation `Codegen.h` wraps, including a plain
 // nested `<ChildComponent .../>` used as an ordinary static child with no `<Slot>`
@@ -192,7 +192,7 @@ struct BuildContext {
 //
 // When OutNumbers is non-null, every built widget's number props are recorded there --
 // see NumberPropMap's own comment above.
-std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Iris::Component& Node,
+std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Chaos::Component& Node,
                                                                  const BuildContext&        Context,
                                                                  PrimitiveTagMap*           OutTags = nullptr,
                                                                  RefMap*                    OutRefs = nullptr,

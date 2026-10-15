@@ -7,7 +7,7 @@
 // counters -- the whole point of the fix is a human-visible signal.
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Lustre/Parser.h"
+#include "Cosmos/Parser.h"
 
 #include <cstdio>
 #include <fcntl.h>
@@ -31,29 +31,29 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-using Iris::Component;
-using Iris::IrisElementTag;
-using Iris::IrisProps;
-using Iris::IrisPropValue;
+using Chaos::Component;
+using Chaos::ChaosElementTag;
+using Chaos::ChaosProps;
+using Chaos::ChaosPropValue;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::BuildWidgetTree;
-using PenumbraUiBackend::Lustre::LustreStyleApplier;
+using PenumbraUiBackend::Cosmos::CosmosStyleApplier;
 
-Component MakeNode(IrisElementTag Tag, IrisProps Props = {}, std::vector<Component> Children = {}) {
+Component MakeNode(ChaosElementTag Tag, ChaosProps Props = {}, std::vector<Component> Children = {}) {
     return Component(Tag, std::move(Props), std::move(Children), nullptr);
 }
 
-IrisProps WithClass(const std::string& ClassName) {
-    IrisProps Props;
-    Props["class"] = IrisPropValue{ClassName};
+ChaosProps WithClass(const std::string& ClassName) {
+    ChaosProps Props;
+    Props["class"] = ChaosPropValue{ClassName};
     return Props;
 }
 
-::Lustre::Stylesheet ParseOrDie(const std::string& Source, const std::string& FilePath) {
-    ::Lustre::Parser Parser(Source, FilePath);
-    ::Lustre::ParseResult Result = Parser.Parse();
+::Cosmos::Stylesheet ParseOrDie(const std::string& Source, const std::string& FilePath) {
+    ::Cosmos::Parser Parser(Source, FilePath);
+    ::Cosmos::ParseResult Result = Parser.Parse();
     Expect(Result.Errors.empty() && Result.Sheet.has_value(), "test fixture stylesheet `" + FilePath + "` parses cleanly");
-    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Lustre::Stylesheet{};
+    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Cosmos::Stylesheet{};
 }
 
 // Redirects the real stderr file descriptor (not just the FILE* stream --
@@ -91,16 +91,16 @@ void TestMismatchedStylesheetWarns() {
     // A real stylesheet, just for a class this tree never uses -- exactly
     // the InspectorRow/InspectorChrome shape: a real, valid StylesheetSet,
     // just the wrong one for what's being built.
-    const ::Lustre::Stylesheet WrongSheet = ParseOrDie(".unrelated-class { background-color: #E8593C; }", "Wrong.lustre");
-    const ::Lustre::StylesheetSet Sheets{nullptr, &WrongSheet};
-    const LustreStyleApplier Applier;
+    const ::Cosmos::Stylesheet WrongSheet = ParseOrDie(".unrelated-class { background-color: #E8593C; }", "Wrong.cosmos");
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &WrongSheet};
+    const CosmosStyleApplier Applier;
 
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("my-row"),
-                                {MakeNode(IrisElementTag::Frame, WithClass("my-row-inner"))});
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("my-row"),
+                                {MakeNode(ChaosElementTag::Frame, WithClass("my-row-inner"))});
 
     const std::string Stderr = CaptureStderr([&]() { BuildWidgetTree(Node, Context); });
 
@@ -112,15 +112,15 @@ void TestMismatchedStylesheetWarns() {
 }
 
 void TestMatchingStylesheetStaysQuiet() {
-    const ::Lustre::Stylesheet RightSheet = ParseOrDie(".my-row { background-color: #E8593C; }", "Right.lustre");
-    const ::Lustre::StylesheetSet Sheets{nullptr, &RightSheet};
-    const LustreStyleApplier Applier;
+    const ::Cosmos::Stylesheet RightSheet = ParseOrDie(".my-row { background-color: #E8593C; }", "Right.cosmos");
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &RightSheet};
+    const CosmosStyleApplier Applier;
 
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("my-row"));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("my-row"));
 
     const std::string Stderr = CaptureStderr([&]() { BuildWidgetTree(Node, Context); });
 
@@ -132,16 +132,16 @@ void TestPartiallyMatchingStylesheetStaysQuiet() {
     // One real resolution anywhere in the tree is enough to suppress the
     // whole-tree warning -- see build_context_style_mismatch_gap.md's own
     // "why any node resolved something, not per-node warnings" reasoning.
-    const ::Lustre::Stylesheet Sheet = ParseOrDie(".my-row-inner { background-color: #E8593C; }", "Partial.lustre");
-    const ::Lustre::StylesheetSet Sheets{nullptr, &Sheet};
-    const LustreStyleApplier Applier;
+    const ::Cosmos::Stylesheet Sheet = ParseOrDie(".my-row-inner { background-color: #E8593C; }", "Partial.cosmos");
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &Sheet};
+    const CosmosStyleApplier Applier;
 
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("my-row"),
-                                {MakeNode(IrisElementTag::Frame, WithClass("my-row-inner"))});
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("my-row"),
+                                {MakeNode(ChaosElementTag::Frame, WithClass("my-row-inner"))});
 
     const std::string Stderr = CaptureStderr([&]() { BuildWidgetTree(Node, Context); });
 
@@ -151,7 +151,7 @@ void TestPartiallyMatchingStylesheetStaysQuiet() {
 void TestNoStyleConfiguredStaysQuiet() {
     // BuildContext{} -- Context.Style left null is a supported "no styling
     // at all" mode (BuildContext's own doc comment), not a mismatch.
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("my-row"));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("my-row"));
 
     const std::string Stderr = CaptureStderr([&]() { BuildWidgetTree(Node, BuildContext{}); });
 
@@ -159,15 +159,15 @@ void TestNoStyleConfiguredStaysQuiet() {
 }
 
 void TestNoClassedNodesStaysQuiet() {
-    const ::Lustre::Stylesheet Sheet = ParseOrDie(".irrelevant { background-color: #E8593C; }", "Irrelevant.lustre");
-    const ::Lustre::StylesheetSet Sheets{nullptr, &Sheet};
-    const LustreStyleApplier Applier;
+    const ::Cosmos::Stylesheet Sheet = ParseOrDie(".irrelevant { background-color: #E8593C; }", "Irrelevant.cosmos");
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &Sheet};
+    const CosmosStyleApplier Applier;
 
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Frame); // no `class` prop at all
+    const auto Node = MakeNode(ChaosElementTag::Frame); // no `class` prop at all
 
     const std::string Stderr = CaptureStderr([&]() { BuildWidgetTree(Node, Context); });
 

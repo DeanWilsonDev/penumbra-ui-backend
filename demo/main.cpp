@@ -1,22 +1,22 @@
 // A small, real running app exercising both wiring points
-// docs/penumbra_ui_backend_lustre_bridge_decision.md's "Wiring into the mount and
-// reconcile paths" describes: BuildWidgetTree/Walker.cpp resolving Lustre style at
+// docs/penumbra_ui_backend_cosmos_bridge_decision.md's "Wiring into the mount and
+// reconcile paths" describes: BuildWidgetTree/Walker.cpp resolving Cosmos style at
 // mount, and PenumbraWidgetAdapter::ApplyPropDiff re-resolving it on a live class
 // change. Not shipped as part of the library -- purely for visually confirming the
 // wiring works against a real window/renderer, not just test assertions.
 //
-// Recreates docs/lustre_core_spec.md §4's HealthBar worked example: an outer
+// Recreates docs/cosmos_core_spec.md §4's HealthBar worked example: an outer
 // `.health-bar` container wrapping an inner bar whose class -- and therefore its
 // background-color -- switches between `.bar-normal` and `.bar-critical`. Click
 // anywhere to toggle it; the color change you see is PenumbraWidgetAdapter::
 // ApplyPropDiff re-resolving and re-applying style through the exact path a real
-// Iris reconcile (`iris::Signal`/`iris::Tick`) would drive in a full app.
+// Chaos reconcile (`chaos::Signal`/`chaos::Tick`) would drive in a full app.
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Lustre/Parser.h"
+#include "Cosmos/Parser.h"
 
-#include "Iris/Component.h"
+#include "Chaos/Component.h"
 
 #include "Penumbra/Platform/PlatformWindow.h"
 #include "Penumbra/Render/Renderer.h"
@@ -77,26 +77,26 @@ void SaveScreenshot(SDL_Renderer* SdlRenderer, const std::string& Path) {
     SDL_DestroySurface(Frame);
 }
 
-Iris::Component MakeNode(Iris::IrisElementTag Tag, Iris::IrisProps Props = {},
-                              std::vector<Iris::Component> Children = {}) {
-    return Iris::Component(Tag, std::move(Props), std::move(Children), nullptr);
+Chaos::Component MakeNode(Chaos::ChaosElementTag Tag, Chaos::ChaosProps Props = {},
+                              std::vector<Chaos::Component> Children = {}) {
+    return Chaos::Component(Tag, std::move(Props), std::move(Children), nullptr);
 }
 
-Iris::IrisProps WithClass(const std::string& ClassName) {
-    Iris::IrisProps Props;
-    Props["class"] = Iris::IrisPropValue{ClassName};
+Chaos::ChaosProps WithClass(const std::string& ClassName) {
+    Chaos::ChaosProps Props;
+    Props["class"] = Chaos::ChaosPropValue{ClassName};
     return Props;
 }
 
 // The bar's own Component subtree -- the part this demo's stylesheet targets.
 // `BarClass` is the one thing that changes between mount and a later click, matching
-// HealthBar.iris's own `barClass` local in the spec's worked example.
-Iris::Component MakeHealthBarNode(const std::string& BarClass) {
-    std::vector<Iris::Component> BarChildren;
-    BarChildren.push_back(MakeNode(Iris::IrisElementTag::Text, WithClass("bar-label")));
-    std::vector<Iris::Component> Children;
-    Children.push_back(MakeNode(Iris::IrisElementTag::Frame, WithClass(BarClass), std::move(BarChildren)));
-    return MakeNode(Iris::IrisElementTag::Frame, WithClass("health-bar"), std::move(Children));
+// HealthBar.chaos's own `barClass` local in the spec's worked example.
+Chaos::Component MakeHealthBarNode(const std::string& BarClass) {
+    std::vector<Chaos::Component> BarChildren;
+    BarChildren.push_back(MakeNode(Chaos::ChaosElementTag::Text, WithClass("bar-label")));
+    std::vector<Chaos::Component> Children;
+    Children.push_back(MakeNode(Chaos::ChaosElementTag::Frame, WithClass(BarClass), std::move(BarChildren)));
+    return MakeNode(Chaos::ChaosElementTag::Frame, WithClass("health-bar"), std::move(Children));
 }
 
 } // namespace
@@ -104,7 +104,7 @@ Iris::Component MakeHealthBarNode(const std::string& BarClass) {
 int main() {
     // `.bar-label` deliberately has no `color` rule of its own -- its text renders
     // white by inheriting `.health-bar`'s `color` down through two levels of nested
-    // Frames (docs/lustre_style_inheritance_decision.md), not from a rule on itself.
+    // Frames (docs/cosmos_style_inheritance_decision.md), not from a rule on itself.
     // Proves inheritance survives both wiring points this demo exercises: the
     // mount-time resolve in Walker.cpp, and the reconcile-time re-resolve
     // PenumbraWidgetAdapter::ApplyPropDiff runs on the .bar-normal/.bar-critical
@@ -132,8 +132,8 @@ int main() {
     padding: 10px 20px;
 }
 )";
-    ::Lustre::Parser       Parser(StylesheetSource, "HealthBar.lustre");
-    ::Lustre::ParseResult ParseResult = Parser.Parse();
+    ::Cosmos::Parser       Parser(StylesheetSource, "HealthBar.cosmos");
+    ::Cosmos::ParseResult ParseResult = Parser.Parse();
     if (!ParseResult.Errors.empty() || !ParseResult.Sheet.has_value()) {
         std::fprintf(stderr, "Failed to parse the demo stylesheet:\n");
         for (const auto& Error : ParseResult.Errors) {
@@ -141,12 +141,12 @@ int main() {
         }
         return 1;
     }
-    const ::Lustre::Stylesheet             ComponentSheet = std::move(*ParseResult.Sheet);
-    const ::Lustre::StylesheetSet          Sheets{nullptr, &ComponentSheet};
-    const PenumbraUiBackend::Lustre::LustreStyleApplier Applier;
+    const ::Cosmos::Stylesheet             ComponentSheet = std::move(*ParseResult.Sheet);
+    const ::Cosmos::StylesheetSet          Sheets{nullptr, &ComponentSheet};
+    const PenumbraUiBackend::Cosmos::CosmosStyleApplier Applier;
 
     Penumbra::Platform::PlatformWindow Window;
-    if (!Window.Initialise("Lustre Style Wiring Demo", WindowLogicalWidth, WindowLogicalHeight)) {
+    if (!Window.Initialise("Cosmos Style Wiring Demo", WindowLogicalWidth, WindowLogicalHeight)) {
         std::fprintf(stderr, "Failed to initialise platform window: %s\n", Window.GetLastError().c_str());
         return 1;
     }
@@ -176,8 +176,8 @@ int main() {
         WrapExistingTree(std::move(Built), nullptr, nullptr, Context.Style, Context.StyleApplier);
 
     // The Text child of the bar element -- set once here, same as any ordinary
-    // non-Lustre-styled prop (HealthBar.iris's own `{props.current}/{props.max}`
-    // interpolation, docs/lustre_core_spec.md §4).
+    // non-Cosmos-styled prop (HealthBar.chaos's own `{props.current}/{props.max}`
+    // interpolation, docs/cosmos_core_spec.md §4).
     if (auto* HealthBarBox = dynamic_cast<Box*>(HealthBarWrapper->RawWidget())) {
         if (HealthBarBox->GetChildCount() == 1) {
             if (auto* BarBox = dynamic_cast<Box*>(HealthBarBox->GetChildAt(0))) {
@@ -216,7 +216,7 @@ int main() {
 
     auto ToggleClass = [&]() {
         Critical = !Critical;
-        Umbra::IrisPropDiff Diff;
+        Umbra::ChaosPropDiff Diff;
         Diff.ClassName = Critical ? "bar-critical" : "bar-normal";
         BarWrapper->ApplyPropDiff(Diff); // the exact reconcile-time re-styling path, real click or automated
     };

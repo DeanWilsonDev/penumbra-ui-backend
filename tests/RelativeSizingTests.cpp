@@ -1,7 +1,7 @@
-#include "PenumbraUiBackend/Lustre/StyleApplier.h"
+#include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Lustre/Parser.h"
+#include "Cosmos/Parser.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Length.h"
@@ -26,37 +26,37 @@ void Expect(bool Condition, const std::string& Description) {
 
 bool Near(float A, float B) { return std::fabs(A - B) < 0.01f; }
 
-using Iris::Component;
-using Iris::IrisElementTag;
-using Iris::IrisProps;
-using Iris::IrisPropValue;
+using Chaos::Component;
+using Chaos::ChaosElementTag;
+using Chaos::ChaosProps;
+using Chaos::ChaosPropValue;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::BuildWidgetTree;
-using PenumbraUiBackend::Lustre::LustreStyleApplier;
+using PenumbraUiBackend::Cosmos::CosmosStyleApplier;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::WidgetBase;
 
-Component MakeNode(IrisElementTag Tag, IrisProps Props = {}, std::vector<Component> Children = {}) {
+Component MakeNode(ChaosElementTag Tag, ChaosProps Props = {}, std::vector<Component> Children = {}) {
     return Component(Tag, std::move(Props), std::move(Children), nullptr);
 }
 
-IrisProps WithClass(const std::string& ClassName) {
-    IrisProps Props;
-    Props["class"] = IrisPropValue{ClassName};
+ChaosProps WithClass(const std::string& ClassName) {
+    ChaosProps Props;
+    Props["class"] = ChaosPropValue{ClassName};
     return Props;
 }
 
-::Lustre::Stylesheet ParseOrDie(const std::string& Source) {
-    ::Lustre::Parser      Parser(Source, "RelativeSizing.lustre");
-    ::Lustre::ParseResult Result = Parser.Parse();
+::Cosmos::Stylesheet ParseOrDie(const std::string& Source) {
+    ::Cosmos::Parser      Parser(Source, "RelativeSizing.cosmos");
+    ::Cosmos::ParseResult Result = Parser.Parse();
     Expect(Result.Errors.empty() && Result.Sheet.has_value(), "relative-sizing fixture stylesheet parses cleanly");
-    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Lustre::Stylesheet{};
+    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Cosmos::Stylesheet{};
 }
 
 struct StyledBuild {
-    ::Lustre::Stylesheet        Sheet;
-    ::Lustre::StylesheetSet     Sheets;
-    LustreStyleApplier          Applier;
+    ::Cosmos::Stylesheet        Sheet;
+    ::Cosmos::StylesheetSet     Sheets;
+    CosmosStyleApplier          Applier;
     BuildContext                Context;
     std::unique_ptr<WidgetBase> Root;
 
@@ -96,7 +96,7 @@ const char* kDialogSheet = R"(
 )";
 
 Component MakeDialog() {
-    return MakeNode(IrisElementTag::Frame, WithClass("overlay"), {MakeNode(IrisElementTag::Frame, WithClass("panel"))});
+    return MakeNode(ChaosElementTag::Frame, WithClass("overlay"), {MakeNode(ChaosElementTag::Frame, WithClass("panel"))});
 }
 
 void TestAPanelKeepsItsWidthWhenTheWindowIsWideEnough() {
@@ -122,7 +122,7 @@ void TestMinWidthWinsOverMaxWidth() {
 
 void TestMaxWidthClampsAnExplicitPixelWidth() {
     StyledBuild Build(".box { width: 600px; max-width: 300px; height: 10px; }",
-                      MakeNode(IrisElementTag::Frame, WithClass("box")));
+                      MakeNode(ChaosElementTag::Frame, WithClass("box")));
     const Penumbra::Point Size = Build.Root->Measure({1000.0f, 1000.0f});
     Expect(Near(Size.X, 300.0f), "max-width clamps an explicit width, as in CSS");
 }
@@ -141,15 +141,15 @@ void TestPercentWidthResolvesAgainstTheParentsContentBox() {
     height: 10px;
 }
 )";
-    StyledBuild Build(Sheet, MakeNode(IrisElementTag::Frame, WithClass("parent"),
-                                      {MakeNode(IrisElementTag::Frame, WithClass("child"))}));
+    StyledBuild Build(Sheet, MakeNode(ChaosElementTag::Frame, WithClass("parent"),
+                                      {MakeNode(ChaosElementTag::Frame, WithClass("child"))}));
     Build.LayOut(400.0f, 1000.0f);
     Expect(Near(Build.ChildRect(0).W, 190.0f), "width: 50% is half of the parent's 380px content box");
 }
 
 void TestViewportUnitsResolveAgainstTheLayoutViewport() {
     Penumbra::Widgets::SetLayoutViewportLogical({1000.0f, 800.0f});
-    StyledBuild Build(".box { width: 30vw; height: 25vh; }", MakeNode(IrisElementTag::Frame, WithClass("box")));
+    StyledBuild Build(".box { width: 30vw; height: 25vh; }", MakeNode(ChaosElementTag::Frame, WithClass("box")));
     const Penumbra::Point Size = Build.Root->Measure({100.0f, 100.0f});
     Penumbra::Widgets::SetLayoutViewportLogical({0.0f, 0.0f});
     Expect(Near(Size.X, 300.0f) && Near(Size.Y, 200.0f),
@@ -174,9 +174,9 @@ void TestAFlexGrowInputFillsTheRowBesideItsButton() {
     height: 20px;
 }
 )";
-    StyledBuild Build(Sheet, MakeNode(IrisElementTag::Frame, WithClass("row"),
-                                      {MakeNode(IrisElementTag::Input, WithClass("field")),
-                                       MakeNode(IrisElementTag::Frame, WithClass("button"))}));
+    StyledBuild Build(Sheet, MakeNode(ChaosElementTag::Frame, WithClass("row"),
+                                      {MakeNode(ChaosElementTag::Input, WithClass("field")),
+                                       MakeNode(ChaosElementTag::Frame, WithClass("button"))}));
     Build.LayOut(400.0f, 100.0f);
     Expect(Near(Build.ChildRect(0).W, 300.0f) && Near(Build.ChildRect(1).X, 310.0f),
            "an <Input> with flex-grow: 1 takes the row's width left beside its button");

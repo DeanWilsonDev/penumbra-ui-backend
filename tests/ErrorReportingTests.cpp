@@ -1,8 +1,8 @@
-#include "PenumbraUiBackend/IrisApplication.h"
+#include "PenumbraUiBackend/ChaosApplication.h"
 #include "PenumbraUiBackend/NyxApplicationBridge.h"
 
-#include "Iris/IrisConfig.h"
-#include "Iris/IrisNyxDriver.h"
+#include "Chaos/ChaosConfig.h"
+#include "Chaos/ChaosNyxDriver.h"
 
 #include "Penumbra/Application.h"
 
@@ -80,16 +80,16 @@ private:
     std::filesystem::path Root_;
 };
 
-Iris::IrisConfig TestConfig() {
-    Iris::IrisConfig Config;
-    Config.Target      = Iris::IrisBuildTarget::UmbraEngine;
+Chaos::ChaosConfig TestConfig() {
+    Chaos::ChaosConfig Config;
+    Config.Target      = Chaos::ChaosBuildTarget::UmbraEngine;
     Config.SearchPaths = {"demo"};
     return Config;
 }
 
-void TestTickIrisReportsASlotErrorOnceAndRemountStillSucceeds() {
+void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
     TempProject Project;
-    Project.Write("Root.irisx", "string Explode() {\n"
+    Project.Write("Root.chaos", "string Explode() {\n"
                                  "    string s = \"text\";\n"
                                  "    bool b = !s;\n"
                                  "    return \"never\";\n"
@@ -107,35 +107,35 @@ void TestTickIrisReportsASlotErrorOnceAndRemountStillSucceeds() {
                                  "    }\n"
                                  "}\n");
 
-    Iris::IrisNyxDriver Driver(TestConfig(), Project.RootPath());
-    PenumbraUiBackend::IrisApplication App;
+    Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
+    PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
 
     bool Mounted = false;
-    const std::string MountOutput = CaptureStderr([&]() { Mounted = App.MountAppRoot("Root.irisx", "Root"); });
-    Expect(Mounted && !Contains(MountOutput, "[IrisApplication]"), "a clean mount succeeds and reports no errors");
+    const std::string MountOutput = CaptureStderr([&]() { Mounted = App.MountAppRoot("Root.chaos", "Root"); });
+    Expect(Mounted && !Contains(MountOutput, "[ChaosApplication]"), "a clean mount succeeds and reports no errors");
 
     Penumbra::Widgets::WidgetBase* Button = App.GetRef("button");
     Expect(Button != nullptr && Button->OnPressed != nullptr, "the mounted button carries its onPress handler");
     if (!Button || !Button->OnPressed) return;
 
     Button->OnPressed();
-    const std::string TickOutput = CaptureStderr([&]() { App.TickIris(); });
-    Expect(Contains(TickOutput, "[IrisApplication]") && Contains(TickOutput, "Root.irisx") &&
+    const std::string TickOutput = CaptureStderr([&]() { App.TickChaos(); });
+    Expect(Contains(TickOutput, "[ChaosApplication]") && Contains(TickOutput, "Root.chaos") &&
                Contains(TickOutput, "bool"),
-           "TickIris reports a Nyx error raised while a <Slot> re-renders, with its file");
+           "TickChaos reports a Nyx error raised while a <Slot> re-renders, with its file");
 
-    const std::string SecondTickOutput = CaptureStderr([&]() { App.TickIris(); });
-    Expect(!Contains(SecondTickOutput, "[IrisApplication]"), "an error already reported is not reported again on the next tick");
+    const std::string SecondTickOutput = CaptureStderr([&]() { App.TickChaos(); });
+    Expect(!Contains(SecondTickOutput, "[ChaosApplication]"), "an error already reported is not reported again on the next tick");
 
     bool Remounted = false;
-    CaptureStderr([&]() { Remounted = App.MountAppRoot("Root.irisx", "Root"); });
+    CaptureStderr([&]() { Remounted = App.MountAppRoot("Root.chaos", "Root"); });
     Expect(Remounted, "MountAppRoot still succeeds after an earlier, unrelated error was recorded");
 }
 
-void TestIrisApplicationBridgeReportsLifecycleHookErrors() {
-    PenumbraUiBackend::IrisApplicationBridge Bridge(TestConfig(), ".");
-    PenumbraUiBackend::IrisApplication* Application = Bridge.LoadApplication(
+void TestChaosApplicationBridgeReportsLifecycleHookErrors() {
+    PenumbraUiBackend::ChaosApplicationBridge Bridge(TestConfig(), ".");
+    PenumbraUiBackend::ChaosApplication* Application = Bridge.LoadApplication(
         "class TestApplication : Application {\n"
         "    bool OnStart() override {\n"
         "        string s = \"start\";\n"
@@ -148,7 +148,7 @@ void TestIrisApplicationBridgeReportsLifecycleHookErrors() {
         "    }\n"
         "}\n",
         "hook-error-test.nyx", "TestApplication");
-    Expect(Application != nullptr, "IrisApplicationBridge loads an Application whose hooks raise");
+    Expect(Application != nullptr, "ChaosApplicationBridge loads an Application whose hooks raise");
     if (!Application) return;
 
     bool Started = true;
@@ -186,7 +186,7 @@ void TestNyxApplicationBridgeReportsLifecycleHookErrors() {
 } // namespace
 
 void RunErrorReportingTests() {
-    TestTickIrisReportsASlotErrorOnceAndRemountStillSucceeds();
-    TestIrisApplicationBridgeReportsLifecycleHookErrors();
+    TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds();
+    TestChaosApplicationBridgeReportsLifecycleHookErrors();
     TestNyxApplicationBridgeReportsLifecycleHookErrors();
 }

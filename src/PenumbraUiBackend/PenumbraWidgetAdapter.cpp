@@ -1,7 +1,7 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
 #include "PenumbraUiBackend/ChartNodes.h"
-#include "PenumbraUiBackend/Lustre/StyleResolution.h"
+#include "PenumbraUiBackend/Cosmos/StyleResolution.h"
 #include "PenumbraUiBackend/Portal.h"
 
 #include "Penumbra/Widgets/Box.h"
@@ -65,14 +65,14 @@ private:
     std::function<void()> OnDestroyed_;
 };
 
-// Lustre::IStyleTarget over a live PenumbraWidget's ancestor chain, for
+// Cosmos::IStyleTarget over a live PenumbraWidget's ancestor chain, for
 // ApplyPropDiff's class-change re-resolution below. Kept as its own small
 // value type (not PenumbraWidget implementing IStyleTarget directly) because
 // IStyleTarget::Parent() must return a pointer valid for the whole
 // Resolve() call, and PenumbraWidget's own tree only has PenumbraWidget*
 // parent pointers, not IStyleTarget* ones -- BuildReconcileStyleChain below
 // builds a small parallel chain with stable addresses instead.
-class ReconcileStyleElement : public ::Lustre::IStyleTarget {
+class ReconcileStyleElement : public ::Cosmos::IStyleTarget {
 public:
     ReconcileStyleElement(std::string ClassName, std::string PrimitiveTag, bool IsRoot)
         : ClassName_(std::move(ClassName)), PrimitiveTag_(std::move(PrimitiveTag)), IsRoot_(IsRoot) {}
@@ -82,7 +82,7 @@ public:
     std::string ClassName() const override { return ClassName_; }
     std::string PrimitiveTag() const override { return PrimitiveTag_; }
     bool         IsComponentRoot() const override { return IsRoot_; }
-    const ::Lustre::IStyleTarget* Parent() const override { return Parent_; }
+    const ::Cosmos::IStyleTarget* Parent() const override { return Parent_; }
 
 private:
     std::string ClassName_;
@@ -178,7 +178,7 @@ void ResetStyleableFields(WidgetBase& Widget) {
 
 } // namespace
 
-void ApplyChartProps(WidgetBase& Widget, const Umbra::IrisPropDiff& Diff) {
+void ApplyChartProps(WidgetBase& Widget, const Umbra::ChaosPropDiff& Diff) {
     const auto Find = [](const auto& Map, const char* Name) {
         const auto It = Map.find(Name);
         return It == Map.end() ? nullptr : &It->second;
@@ -233,8 +233,8 @@ struct PortalAnchorWidget::State : std::enable_shared_from_this<PortalAnchorWidg
     Penumbra::Widgets::OverlayHost* Host{nullptr};
     Penumbra::Widgets::OverlayId    Id{0};
     PortalAnchorWidget*             Anchor{nullptr};
-    Iris::IPortalTarget*            Adapter{nullptr};
-    Iris::PortalProperties          Properties;
+    Chaos::IPortalTarget*            Adapter{nullptr};
+    Chaos::PortalProperties          Properties;
     bool                            SuppressDismiss{false};
     bool                            HostDismissInProgress{false};
     bool                            Prepared{false};
@@ -263,7 +263,7 @@ struct PortalAnchorWidget::State : std::enable_shared_from_this<PortalAnchorWidg
 
         const std::function<void()> OnDismiss = Properties.OnDismiss;
         HostDismissInProgress = true;
-        if (Adapter != nullptr) Iris::PreparePortalSubtreeForUnmount(dynamic_cast<Umbra::IWidget*>(Adapter));
+        if (Adapter != nullptr) Chaos::PreparePortalSubtreeForUnmount(dynamic_cast<Umbra::IWidget*>(Adapter));
         HostDismissInProgress = false;
         if (OnDismiss) OnDismiss();
     }
@@ -279,7 +279,7 @@ struct PortalAnchorWidget::State : std::enable_shared_from_this<PortalAnchorWidg
 };
 
 PortalAnchorWidget::PortalAnchorWidget(Penumbra::Widgets::OverlayHost* Host, std::unique_ptr<WidgetBase> Content,
-                                       const Iris::PortalProperties& Properties) {
+                                       const Chaos::PortalProperties& Properties) {
     State_ = std::make_shared<State>();
     State_->Host = Host;
     State_->Anchor = this;
@@ -293,7 +293,7 @@ PortalAnchorWidget::~PortalAnchorWidget() {
     State_->DismissWithoutNotification();
 }
 
-void PortalAnchorWidget::ApplyPortalProperties(const Iris::PortalProperties& Properties) {
+void PortalAnchorWidget::ApplyPortalProperties(const Chaos::PortalProperties& Properties) {
     const bool DismissModeChanged = State_->Properties.DismissOnOutsideClick != Properties.DismissOnOutsideClick;
     State_->Properties = Properties;
     State_->Prepared = false;
@@ -307,8 +307,8 @@ void PortalAnchorWidget::ApplyPortalProperties(const Iris::PortalProperties& Pro
     }
 }
 
-void PortalAnchorWidget::AttachAdapter(Iris::IPortalTarget* Adapter) { State_->Adapter = Adapter; }
-void PortalAnchorWidget::DetachAdapter(Iris::IPortalTarget* Adapter) {
+void PortalAnchorWidget::AttachAdapter(Chaos::IPortalTarget* Adapter) { State_->Adapter = Adapter; }
+void PortalAnchorWidget::DetachAdapter(Chaos::IPortalTarget* Adapter) {
     if (State_->Adapter == Adapter) State_->Adapter = nullptr;
 }
 
@@ -337,7 +337,7 @@ PenumbraPortalWidget::~PenumbraPortalWidget() {
     if (Anchor_) Anchor_->DetachAdapter(this);
 }
 
-void PenumbraPortalWidget::ApplyPortalProperties(const Iris::PortalProperties& Properties) {
+void PenumbraPortalWidget::ApplyPortalProperties(const Chaos::PortalProperties& Properties) {
     if (Anchor_) Anchor_->ApplyPortalProperties(Properties);
 }
 
@@ -361,7 +361,7 @@ void PenumbraWidget::SetImageContext(Penumbra::Backends::IImageBackend* ImageBac
     SdlRenderer_ = SdlRenderer;
 }
 
-void PenumbraWidget::SetStyleContext(const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier) {
+void PenumbraWidget::SetStyleContext(const ::Cosmos::StylesheetSet* Sheets, const Cosmos::IStyleApplier* StyleApplier) {
     Sheets_ = Sheets;
     StyleApplier_ = StyleApplier;
 }
@@ -387,7 +387,7 @@ PenumbraWidget* PenumbraWidget::FindDescendantByRef(std::string_view Ref) {
     return nullptr;
 }
 
-void PenumbraWidget::ApplyPropDiff(const Umbra::IrisPropDiff& Diff) {
+void PenumbraWidget::ApplyPropDiff(const Umbra::ChaosPropDiff& Diff) {
     WidgetBase* Widget = RawWidget();
     if (Widget == nullptr) {
         return;
@@ -458,8 +458,8 @@ void PenumbraWidget::Restyle(WidgetBase& Widget) {
     }
     ResetStyleableFields(Widget);
     const std::vector<std::unique_ptr<ReconcileStyleElement>> Chain = BuildReconcileStyleChain(*this);
-    ::Lustre::ResolvedStyle Resolved = Lustre::ResolveStyle(*Chain.front(), *Sheets_);
-    Lustre::BindAttributes(Resolved, [this](std::string_view Name) -> std::optional<float> {
+    ::Cosmos::ResolvedStyle Resolved = Cosmos::ResolveStyle(*Chain.front(), *Sheets_);
+    Cosmos::BindAttributes(Resolved, [this](std::string_view Name) -> std::optional<float> {
         const auto It = NumberProps_.find(std::string(Name));
         return It == NumberProps_.end() ? std::nullopt : std::optional<float>(It->second);
     });
@@ -492,7 +492,7 @@ void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWi
     // invisible and unreachable, not just misplaced. Whatever already occupies the
     // target slot (if anything) is destroyed as a side effect of SetFirst/SetSecond's
     // own plain unique_ptr move-assignment -- correct and expected for the paired
-    // RemoveChildAt-then-InsertChildAt pattern `iris::ReconcileChildrenAt` actually uses
+    // RemoveChildAt-then-InsertChildAt pattern `chaos::ReconcileChildrenAt` actually uses
     // (the slot is already empty by the time this runs, see RemoveChildAt's own
     // comment), not safe for a bare InsertChildAt into an already-occupied slot with no
     // matching prior removal -- SplitPanel has no `Box::ReplaceChild`-equivalent to fall
@@ -550,8 +550,8 @@ std::unique_ptr<Umbra::IWidget> PenumbraWidget::RemoveChildAt(std::size_t Index)
 }
 
 void PenumbraWidget::AdoptChildrenFromRawTree(
-    Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer, const ::Lustre::StylesheetSet* Sheets,
-    const Lustre::IStyleApplier* StyleApplier, const PrimitiveTagMap* Tags,
+    Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer, const ::Cosmos::StylesheetSet* Sheets,
+    const Cosmos::IStyleApplier* StyleApplier, const PrimitiveTagMap* Tags,
     const std::unordered_map<const WidgetBase*, std::string>* ReverseRefs, PenumbraWidget* RegistryRoot,
     const NumberPropMap* Numbers) {
     WidgetBase* Raw = RawWidget();
@@ -679,8 +679,8 @@ std::unique_ptr<WidgetBase> PenumbraWidget::ReplaceRawWidget(std::unique_ptr<Wid
 std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>         Root,
                                                   Penumbra::Backends::IImageBackend* ImageBackend,
                                                   SDL_Renderer*                       SdlRenderer,
-                                                  const ::Lustre::StylesheetSet*      Sheets,
-                                                  const Lustre::IStyleApplier*        StyleApplier,
+                                                  const ::Cosmos::StylesheetSet*      Sheets,
+                                                  const Cosmos::IStyleApplier*        StyleApplier,
                                                   const PrimitiveTagMap*              Tags,
                                                   const RefMap*                       Refs,
                                                   const NumberPropMap*                Numbers) {
@@ -727,8 +727,8 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>    
     return Wrapper;
 }
 
-iris::MountFn MakeMountFn(BuildContext Context) {
-    return [Context](const Iris::Component& Node) -> std::unique_ptr<Umbra::IWidget> {
+chaos::MountFn MakeMountFn(BuildContext Context) {
+    return [Context](const Chaos::Component& Node) -> std::unique_ptr<Umbra::IWidget> {
         PrimitiveTagMap             Tags;
         RefMap                      Refs;
         NumberPropMap               Numbers;

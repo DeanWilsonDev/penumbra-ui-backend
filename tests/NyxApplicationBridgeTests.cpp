@@ -1,7 +1,7 @@
 #include "PenumbraUiBackend/NyxApplicationBridge.h"
 
-#include "Iris/IrisConfig.h"
-#include "Iris/IrisNyxDriver.h"
+#include "Chaos/ChaosConfig.h"
+#include "Chaos/ChaosNyxDriver.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Widgets/Box.h"
@@ -23,35 +23,35 @@ void ExpectBridge(bool Condition, const std::string& Description) {
     }
 }
 
-Iris::IrisConfig TestConfig() {
-    return Iris::IrisConfig{Iris::IrisBuildTarget::UmbraEngine, "1", {}};
+Chaos::ChaosConfig TestConfig() {
+    return Chaos::ChaosConfig{Chaos::ChaosBuildTarget::UmbraEngine, "1", {}};
 }
 
-void TestBridgeConstructsIrisDriverAgainstItsOwnedRuntime() {
+void TestBridgeConstructsChaosDriverAgainstItsOwnedRuntime() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
 
     Bridge.Runtime().RegisterFunction(
         "BridgeIdentityMarker",
         [](std::vector<nyx::runtime::Value>) -> nyx::runtime::Value { return nyx::runtime::Value(true); });
 
-    ExpectBridge(&Bridge.IrisDriver().Runtime() == &Bridge.Runtime(),
-                 "NyxApplicationBridge constructs IrisNyxDriver against the bridge-owned runtime");
-    ExpectBridge(Bridge.IrisDriver().Runtime().Globals().count("BridgeIdentityMarker") == 1,
-                 "registrations made through NyxApplicationBridge::Runtime are visible to its Iris driver");
+    ExpectBridge(&Bridge.ChaosDriver().Runtime() == &Bridge.Runtime(),
+                 "NyxApplicationBridge constructs ChaosNyxDriver against the bridge-owned runtime");
+    ExpectBridge(Bridge.ChaosDriver().Runtime().Globals().count("BridgeIdentityMarker") == 1,
+                 "registrations made through NyxApplicationBridge::Runtime are visible to its Chaos driver");
 }
 
-void TestBridgeRuntimeIsIsolatedFromASelfOwnedIrisDriver() {
+void TestBridgeRuntimeIsIsolatedFromASelfOwnedChaosDriver() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
     Bridge.Runtime().RegisterFunction(
         "BridgeOnlyMarker",
         [](std::vector<nyx::runtime::Value>) -> nyx::runtime::Value { return nyx::runtime::Value(true); });
 
-    Iris::IrisNyxDriver SelfOwnedDriver(TestConfig(), ".");
+    Chaos::ChaosNyxDriver SelfOwnedDriver(TestConfig(), ".");
 
     ExpectBridge(&SelfOwnedDriver.Runtime() != &Bridge.Runtime(),
-                 "a self-owned IrisNyxDriver uses a different runtime from NyxApplicationBridge");
+                 "a self-owned ChaosNyxDriver uses a different runtime from NyxApplicationBridge");
     ExpectBridge(SelfOwnedDriver.Runtime().Globals().count("BridgeOnlyMarker") == 0,
-                 "bridge-only registrations do not leak into a self-owned IrisNyxDriver runtime");
+                 "bridge-only registrations do not leak into a self-owned ChaosNyxDriver runtime");
 }
 
 void TestBridgeLoadsNyxApplicationAgainstSharedRuntime() {
@@ -159,7 +159,7 @@ void TestGetApplicationInstanceValueLetsAnotherScopeCallCustomMethodsDirectly() 
     });
 
     // A second scope, parsed and interpreted independently of the one TestApplication was
-    // declared in (mirrors Iris's own per-.irisx-file GetFileScope) -- it never mentions
+    // declared in (mirrors Chaos's own per-.chaos-file GetFileScope) -- it never mentions
     // TestApplication in its own source at all.
     nyx::host::NyxRuntime::NyxScope CallerScope = Bridge.Runtime().CreateScope("", "caller.nyx");
     Bridge.Runtime().EvaluateInScope(CallerScope, "GetApp().Bump()");
@@ -263,8 +263,8 @@ void TestNyxApplicationCanCallApplicationAccessorsAndShowOrHideAWidget() {
 } // namespace
 
 void RunNyxApplicationBridgeTests() {
-    TestBridgeConstructsIrisDriverAgainstItsOwnedRuntime();
-    TestBridgeRuntimeIsIsolatedFromASelfOwnedIrisDriver();
+    TestBridgeConstructsChaosDriverAgainstItsOwnedRuntime();
+    TestBridgeRuntimeIsIsolatedFromASelfOwnedChaosDriver();
     TestBridgeLoadsNyxApplicationAgainstSharedRuntime();
     TestBridgeAppliesNyxConfigureOverrideToApplicationConfig();
     TestBridgeCallApplicationMethodInvokesACustomNyxMethod();

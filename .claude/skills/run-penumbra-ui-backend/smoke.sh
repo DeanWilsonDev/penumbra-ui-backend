@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Automated driver for penumbra-ui-backend's demo (demo/main.cpp, the Lustre
+# Automated driver for penumbra-ui-backend's demo (demo/main.cpp, the Cosmos
 # Style Wiring Demo). Builds if needed, launches the demo with its built-in
 # automation env vars, captures a screenshot before and after an
 # auto-triggered click, converts them to PNG, and exits automatically.

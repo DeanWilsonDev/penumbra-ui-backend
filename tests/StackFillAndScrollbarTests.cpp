@@ -1,7 +1,7 @@
-#include "PenumbraUiBackend/Lustre/StyleApplier.h"
+#include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Lustre/Parser.h"
+#include "Cosmos/Parser.h"
 
 #include "Penumbra/Platform/InputState.h"
 #include "Penumbra/Widgets/Box.h"
@@ -28,39 +28,39 @@ void Expect(bool Condition, const std::string& Description) {
 
 bool Near(float A, float B) { return std::fabs(A - B) < 0.01f; }
 
-using Iris::Component;
-using Iris::IrisElementTag;
-using Iris::IrisProps;
-using Iris::IrisPropValue;
+using Chaos::Component;
+using Chaos::ChaosElementTag;
+using Chaos::ChaosProps;
+using Chaos::ChaosPropValue;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::BuildWidgetTree;
-using PenumbraUiBackend::Lustre::LustreStyleApplier;
+using PenumbraUiBackend::Cosmos::CosmosStyleApplier;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::ScrollablePanel;
 using Penumbra::Widgets::TextArea;
 using Penumbra::Widgets::WidgetBase;
 
-Component MakeNode(IrisElementTag Tag, IrisProps Props = {}, std::vector<Component> Children = {}) {
+Component MakeNode(ChaosElementTag Tag, ChaosProps Props = {}, std::vector<Component> Children = {}) {
     return Component(Tag, std::move(Props), std::move(Children), nullptr);
 }
 
-IrisProps WithClass(const std::string& ClassName) {
-    IrisProps Props;
-    Props["class"] = IrisPropValue{ClassName};
+ChaosProps WithClass(const std::string& ClassName) {
+    ChaosProps Props;
+    Props["class"] = ChaosPropValue{ClassName};
     return Props;
 }
 
-::Lustre::Stylesheet ParseOrDie(const std::string& Source) {
-    ::Lustre::Parser      Parser(Source, "StackFill.lustre");
-    ::Lustre::ParseResult Result = Parser.Parse();
+::Cosmos::Stylesheet ParseOrDie(const std::string& Source) {
+    ::Cosmos::Parser      Parser(Source, "StackFill.cosmos");
+    ::Cosmos::ParseResult Result = Parser.Parse();
     Expect(Result.Errors.empty() && Result.Sheet.has_value(), "stack-fill fixture stylesheet parses cleanly");
-    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Lustre::Stylesheet{};
+    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Cosmos::Stylesheet{};
 }
 
 struct StyledBuild {
-    ::Lustre::Stylesheet          Sheet;
-    ::Lustre::StylesheetSet       Sheets;
-    LustreStyleApplier            Applier;
+    ::Cosmos::Stylesheet          Sheet;
+    ::Cosmos::StylesheetSet       Sheets;
+    CosmosStyleApplier            Applier;
     BuildContext                  Context;
     std::unique_ptr<WidgetBase>   Root;
 
@@ -99,13 +99,13 @@ const char* kLaneSheet = R"(
 Component MakeLane(int CardCount) {
     std::vector<Component> Cards;
     for (int Index = 0; Index < CardCount; ++Index) {
-        Cards.push_back(MakeNode(IrisElementTag::Frame, WithClass("card")));
+        Cards.push_back(MakeNode(ChaosElementTag::Frame, WithClass("card")));
     }
-    IrisProps BodyProps = WithClass("lane-body");
-    BodyProps["wheelStep"] = IrisPropValue{50.0f};
-    return MakeNode(IrisElementTag::Frame, WithClass("lane"),
-                    {MakeNode(IrisElementTag::Frame, WithClass("lane-header")),
-                     MakeNode(IrisElementTag::Scroll, BodyProps, std::move(Cards))});
+    ChaosProps BodyProps = WithClass("lane-body");
+    BodyProps["wheelStep"] = ChaosPropValue{50.0f};
+    return MakeNode(ChaosElementTag::Frame, WithClass("lane"),
+                    {MakeNode(ChaosElementTag::Frame, WithClass("lane-header")),
+                     MakeNode(ChaosElementTag::Scroll, BodyProps, std::move(Cards))});
 }
 
 void TestAFlexGrowScrollGetsTheHeightItsSiblingsLeave() {
@@ -173,10 +173,10 @@ void TestFlexGrowSplitsTheRemainingWidthByWeight() {
     flex-grow: 3;
 }
 )";
-    const Component Row = MakeNode(IrisElementTag::Frame, WithClass("row"),
-                                   {MakeNode(IrisElementTag::Frame, WithClass("fixed")),
-                                    MakeNode(IrisElementTag::Frame, WithClass("one")),
-                                    MakeNode(IrisElementTag::Frame, WithClass("three"))});
+    const Component Row = MakeNode(ChaosElementTag::Frame, WithClass("row"),
+                                   {MakeNode(ChaosElementTag::Frame, WithClass("fixed")),
+                                    MakeNode(ChaosElementTag::Frame, WithClass("one")),
+                                    MakeNode(ChaosElementTag::Frame, WithClass("three"))});
     StyledBuild Build(Sheet, Row);
     auto* AsBox = dynamic_cast<Box*>(Build.Root.get());
     if (AsBox == nullptr || AsBox->Children.size() != 3) {
@@ -205,8 +205,8 @@ void TestAStackWithoutFlexGrowStillPacksChildrenAtTheirOwnSize() {
     height: 40px;
 }
 )";
-    const Component Column = MakeNode(IrisElementTag::Frame, WithClass("column"),
-                                      {MakeNode(IrisElementTag::Frame, WithClass("item"))});
+    const Component Column = MakeNode(ChaosElementTag::Frame, WithClass("column"),
+                                      {MakeNode(ChaosElementTag::Frame, WithClass("item"))});
     StyledBuild Build(Sheet, Column);
     auto* AsBox = dynamic_cast<Box*>(Build.Root.get());
     if (AsBox == nullptr || AsBox->Children.size() != 1) {
@@ -232,13 +232,13 @@ void TestAScrollHonoursAnExplicitWidthAndHeight() {
     height: 900px;
 }
 )";
-    StyledBuild Empty(Sheet, MakeNode(IrisElementTag::Scroll, WithClass("viewport")));
+    StyledBuild Empty(Sheet, MakeNode(ChaosElementTag::Scroll, WithClass("viewport")));
     const Penumbra::Point EmptySize = Empty.Root->Measure({800.0f, 600.0f});
     Expect(Near(EmptySize.X, 320.0f) && Near(EmptySize.Y, 200.0f),
            "an empty <Scroll> with width/height measures to exactly that size");
 
-    StyledBuild Overflowing(Sheet, MakeNode(IrisElementTag::Scroll, WithClass("viewport"),
-                                            {MakeNode(IrisElementTag::Frame, WithClass("tall"))}));
+    StyledBuild Overflowing(Sheet, MakeNode(ChaosElementTag::Scroll, WithClass("viewport"),
+                                            {MakeNode(ChaosElementTag::Frame, WithClass("tall"))}));
     const Penumbra::Point OverflowingSize = Overflowing.Root->Measure({800.0f, 600.0f});
     Expect(Near(OverflowingSize.X, 320.0f) && Near(OverflowingSize.Y, 200.0f),
            "an overflowing <Scroll> with width/height still measures to exactly that size");
@@ -255,7 +255,7 @@ void TestScrollbarPropertiesReachTheScrollablePanel() {
     scrollbar-color: #4C5287;
 }
 )";
-    StyledBuild Build(Sheet, MakeNode(IrisElementTag::Scroll, WithClass("body")));
+    StyledBuild Build(Sheet, MakeNode(ChaosElementTag::Scroll, WithClass("body")));
     const auto* Scroll = dynamic_cast<ScrollablePanel*>(Build.Root.get());
     if (Scroll == nullptr) {
         Expect(false, "<Scroll> builds a ScrollablePanel");
@@ -271,7 +271,7 @@ void TestScrollbarPropertiesReachTheScrollablePanel() {
            "a :hover scrollbar-color reaches ColorScrollbarThumbHovered");
 }
 
-void TestTextAreaTakesItsColoursAndScrollbarFromLustre() {
+void TestTextAreaTakesItsColoursAndScrollbarFromCosmos() {
     const char* Sheet = R"(
 .editor {
     color: #ECECF1;
@@ -280,7 +280,7 @@ void TestTextAreaTakesItsColoursAndScrollbarFromLustre() {
     scrollbar-color: #3A3A48;
 }
 )";
-    StyledBuild Build(Sheet, MakeNode(IrisElementTag::TextArea, WithClass("editor")));
+    StyledBuild Build(Sheet, MakeNode(ChaosElementTag::TextArea, WithClass("editor")));
     auto* Editor = dynamic_cast<TextArea*>(Build.Root.get());
     if (Editor == nullptr) {
         Expect(false, "<TextArea> builds a TextArea");
@@ -304,5 +304,5 @@ void RunStackFillAndScrollbarTests() {
     TestAStackWithoutFlexGrowStillPacksChildrenAtTheirOwnSize();
     TestAScrollHonoursAnExplicitWidthAndHeight();
     TestScrollbarPropertiesReachTheScrollablePanel();
-    TestTextAreaTakesItsColoursAndScrollbarFromLustre();
+    TestTextAreaTakesItsColoursAndScrollbarFromCosmos();
 }

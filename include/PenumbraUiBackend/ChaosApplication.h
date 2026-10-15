@@ -1,12 +1,12 @@
 #pragma once
 
-#include "PenumbraUiBackend/Lustre/StyleApplier.h"
+#include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Iris/Component.h"
-#include "Iris/IrisNyxDriver.h"
-#include "Iris/SlotRuntime.h"
+#include "Chaos/Component.h"
+#include "Chaos/ChaosNyxDriver.h"
+#include "Chaos/SlotRuntime.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
@@ -36,23 +36,23 @@ class Box;
 
 namespace PenumbraUiBackend {
 
-// Owns the Iris/Lustre/Penumbra mounting machinery every Iris-driven Penumbra
+// Owns the Chaos/Cosmos/Penumbra mounting machinery every Chaos-driven Penumbra
 // application needs, regardless of what language authors its own orchestration
 // (OnStart/OnUpdate/click handlers): stylesheet loading by name, font/DPI reload,
 // generic single-component mounting (widget + `ref` map), and the app-root
 // mount/OverlayHost/SetRootWidget lifecycle. `Cairn`'s own `src/main.cpp` hand-rolled all
 // of this before this class existed -- see cairn's own `eliminate-native-business-logic-
 // board-kanban-to-nyx`/`reduce main.cpp` epics for why that was true even after every
-// piece of *business* logic left native code: this is the boilerplate any Iris app still
+// piece of *business* logic left native code: this is the boilerplate any Chaos app still
 // needs regardless.
 //
 // **Host-language-agnostic on purpose.** A plain C++ application subclasses this directly
 // (overriding `OnStart`/`OnUpdate`/etc. as ordinary `Penumbra::Application` virtuals,
 // calling the methods below directly -- no Nyx runtime involved in its own orchestration
-// at all, though `.irisx` UI files it mounts are still Nyx/Chaos-IR under the hood, since
-// that's what Iris itself compiles to). A Nyx-authored application reaches the exact same
-// methods as *inherited* Nyx-callable methods instead, via `IrisApplicationBridge`
-// (`NyxApplicationBridge.h`'s own `NyxApplicationBridgeT<IrisApplication>` alias), which
+// at all, though `.chaos` UI files it mounts are still Nyx/Chaos-IR under the hood, since
+// that's what Chaos itself compiles to). A Nyx-authored application reaches the exact same
+// methods as *inherited* Nyx-callable methods instead, via `ChaosApplicationBridge`
+// (`NyxApplicationBridge.h`'s own `NyxApplicationBridgeT<ChaosApplication>` alias), which
 // bridges this class the same way `NyxApplicationBridge` (`NyxApplicationBridgeT<
 // Penumbra::Application>`) already bridges plain `Penumbra::Application` -- see that
 // header's own doc comment for why both share one template rather than two independently
@@ -62,7 +62,7 @@ namespace PenumbraUiBackend {
 // construction is `new NyxBridge<T>()`, unconditionally zero-argument (nyx-proto's own
 // `nyx-runtime.hpp`) -- there is no way to inject constructor parameters through that path.
 // All setup here happens via `Attach`/`SetFontConfig`, called once, post-construction, by
-// whichever bootstrap owns the instance: `NyxApplicationBridgeT<IrisApplication>` calls
+// whichever bootstrap owns the instance: `NyxApplicationBridgeT<ChaosApplication>` calls
 // both automatically right after a successful `LoadApplication[FromFile]`; a plain C++
 // subclass's own `CreateApplication()`-equivalent calls them by hand instead.
 //
@@ -73,20 +73,20 @@ namespace PenumbraUiBackend {
 // registered functions (which already receive `vector<Value>` from Nyx through the
 // ordinary `RegisterFunction` path -- no new marshaling boundary crossed there), or
 // directly by a plain C++ subclass. Only the zero/primitive-arg entry points below
-// (`ReloadFont`, `MountAppRoot`, `TeardownRootWidget`, `TickIris`,
-// `GetRef`) are registered onto the Nyx-visible surface (see `RegisterIrisApplicationMethods`
-// below, called from `NyxApplicationBridgeT<IrisApplication>::RegisterApplicationType()`).
-class IrisApplication : public Penumbra::Application {
+// (`ReloadFont`, `MountAppRoot`, `TeardownRootWidget`, `TickChaos`,
+// `GetRef`) are registered onto the Nyx-visible surface (see `RegisterChaosApplicationMethods`
+// below, called from `NyxApplicationBridgeT<ChaosApplication>::RegisterApplicationType()`).
+class ChaosApplication : public Penumbra::Application {
 public:
-    IrisApplication() = default;
-    ~IrisApplication() override = default;
+    ChaosApplication() = default;
+    ~ChaosApplication() override = default;
 
     // Called once, post-construction, before anything else on this class. `Driver` must
     // outlive this object (same ownership shape `NyxApplicationBridgeT` already gives its
-    // own `IrisDriver_` relative to the `Application*` it hands back). `UiDir` is the
-    // directory every `.irisx`/`.lustre` file passed to the methods below is resolved
+    // own `ChaosDriver_` relative to the `Application*` it hands back). `UiDir` is the
+    // directory every `.chaos`/`.cosmos` file passed to the methods below is resolved
     // relative to.
-    void Attach(Iris::IrisNyxDriver& Driver, std::string UiDir);
+    void Attach(Chaos::ChaosNyxDriver& Driver, std::string UiDir);
 
     void SetFontConfig(std::string FontPath, float FontSizeLogical);
     void SetIconBackend(Penumbra::Backends::IIconBackend* Backend) { IconBackend_ = Backend; }
@@ -94,7 +94,7 @@ public:
     bool ReloadFont(float DpiScaleFactor);
     Penumbra::Render::FontHandle CurrentFont() const { return Font_; }
 
-    const Lustre::LustreStyleApplier& StyleApplier();
+    const Cosmos::CosmosStyleApplier& StyleApplier();
 
     // -- Generic single-component mount --
 
@@ -103,18 +103,18 @@ public:
         RefMap                                          Refs;
     };
 
-    // Mounts `File`'s own `FunctionName` component (via `IrisDriver().MountRoot`) and
+    // Mounts `File`'s own `FunctionName` component (via `ChaosDriver().MountRoot`) and
     // builds it into a real Penumbra widget tree (`PenumbraUiBackend::BuildWidgetTree`),
-    // styled against every `.lustre` file discovered transitively from `File`'s own
-    // `import` graph (`EnsureStylesheetsFor`). The returned `Iris::Component` is pushed
+    // styled against every `.cosmos` file discovered transitively from `File`'s own
+    // `import` graph (`EnsureStylesheetsFor`). The returned `Chaos::Component` is pushed
     // onto `KeepAlive` -- the caller must keep that vector alive for as long as the
     // returned widget (or anything it mounted, e.g. a `<Slot>`/`onRelease` closure) stays
     // live: those closures hold a raw reference into the `Component`'s own
     // `ComponentInstance::DriverState`, which is destroyed with the `Component` itself
-    // (`IrisNyxDriver::MountRoot`'s own doc comment).
+    // (`ChaosNyxDriver::MountRoot`'s own doc comment).
     MountResult MountComponent(const std::string& File, const std::string& FunctionName,
                                 std::vector<nyx::runtime::Value>               Args,
-                                std::vector<std::shared_ptr<Iris::Component>>& KeepAlive);
+                                std::vector<std::shared_ptr<Chaos::Component>>& KeepAlive);
 
     // -- App-root mount + OverlayHost/root-widget lifecycle --
 
@@ -131,16 +131,16 @@ public:
 
     void TeardownReconciledComponent(const std::string& TargetRefName);
 
-    void TickIris();
+    void TickChaos();
 
     void ReportNewErrors();
 
-    const ::Lustre::StylesheetSet& ComposedStylesheet() const { return ComposedStyleSet_; }
+    const ::Cosmos::StylesheetSet& ComposedStylesheet() const { return ComposedStyleSet_; }
 
-    Iris::IrisNyxDriver& IrisDriver() { return *Driver_; }
+    Chaos::ChaosNyxDriver& ChaosDriver() { return *Driver_; }
 
 protected:
-    Iris::IrisNyxDriver* Driver_ = nullptr;
+    Chaos::ChaosNyxDriver* Driver_ = nullptr;
     std::size_t           ReportedErrorCount_ = 0;
     std::string           UiDir_;
     std::string           FontPath_;
@@ -149,42 +149,42 @@ protected:
     Penumbra::Render::FontHandle Font_{0};
     Penumbra::Backends::IIconBackend* IconBackend_ = nullptr;
 
-    ::Lustre::Stylesheet            GlobalSheet_;
-    ::Lustre::Stylesheet            ComposedSheet_;
-    ::Lustre::StylesheetSet         ComposedStyleSet_{&GlobalSheet_, &ComposedSheet_};
+    ::Cosmos::Stylesheet            GlobalSheet_;
+    ::Cosmos::Stylesheet            ComposedSheet_;
+    ::Cosmos::StylesheetSet         ComposedStyleSet_{&GlobalSheet_, &ComposedSheet_};
     std::unordered_set<std::string> DiscoveredStylesheetFiles_;
     std::unordered_set<std::string> DiscoveredStylesheetDirs_;
-    std::optional<Lustre::LustreStyleApplier> Applier_;
+    std::optional<Cosmos::CosmosStyleApplier> Applier_;
 
     void EnsureStylesheetsFor(const std::string& EntryResolvedPath);
 
     BuildContext MakeBuildContext();
 
-    Iris::Component AppRoot_;
+    Chaos::Component AppRoot_;
     RefMap           AppRootRefs_;
     Penumbra::Widgets::OverlayHost* OverlayHostPtr_ = nullptr;
     Penumbra::Widgets::FocusState   Focus_;
 
     std::unique_ptr<PenumbraWidget>               AppRootWrapper_;
-    std::vector<std::unique_ptr<iris::SlotState>> AppRootSlots_;
+    std::vector<std::unique_ptr<chaos::SlotState>> AppRootSlots_;
 
     struct ReconciledMount {
-        std::vector<std::shared_ptr<Iris::Component>> Roots;
+        std::vector<std::shared_ptr<Chaos::Component>> Roots;
         std::unique_ptr<PenumbraWidget>                 Wrapper;
-        std::vector<std::unique_ptr<iris::SlotState>>   Slots;
+        std::vector<std::unique_ptr<chaos::SlotState>>   Slots;
     };
     void ClearReconciledMount(ReconciledMount& Mount, Penumbra::Widgets::Box* Target);
     std::unordered_map<std::string, ReconciledMount> ReconciledMounts_;
 };
 
-// Adds IrisApplication's own methods onto Builder -- called from
+// Adds ChaosApplication's own methods onto Builder -- called from
 // `NyxApplicationBridgeT<AppBaseT>::RegisterApplicationType()` only when `AppBaseT ==
-// IrisApplication` (an `if constexpr` in that method, so a plain `NyxApplicationBridgeT<
+// ChaosApplication` (an `if constexpr` in that method, so a plain `NyxApplicationBridgeT<
 // Penumbra::Application>` instantiation never instantiates this at all). `WidgetDescriptor`
 // is the already-registered `TypeDescriptor` for `PenumbraWidget` (`NyxApplicationBridge.cpp`'s
 // own `RegisterOpaqueType<Penumbra::Widgets::WidgetBase>` call), reused here for `GetRef`'s
 // own `PointerMethod` registration rather than registering it a second time.
-void RegisterIrisApplicationMethods(nyx::host::InheritableTypeBuilder<IrisApplication>& Builder,
+void RegisterChaosApplicationMethods(nyx::host::InheritableTypeBuilder<ChaosApplication>& Builder,
                                      const nyx::runtime::TypeDescriptor*                  WidgetDescriptor);
 
 } // namespace PenumbraUiBackend

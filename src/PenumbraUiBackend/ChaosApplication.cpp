@@ -1,11 +1,11 @@
-#include "PenumbraUiBackend/IrisApplication.h"
+#include "PenumbraUiBackend/ChaosApplication.h"
 
-#include "PenumbraUiBackend/Lustre/StylesheetLoader.h"
+#include "PenumbraUiBackend/Cosmos/StylesheetLoader.h"
 #include "PenumbraUiBackend/Portal.h"
 
-#include "Iris/ImportResolver.h"
-#include "Iris/SlotResolution.h"
-#include "Iris/SlotRuntime.h"
+#include "Chaos/ImportResolver.h"
+#include "Chaos/SlotResolution.h"
+#include "Chaos/SlotRuntime.h"
 
 #include "Penumbra/Widgets/Box.h"
 
@@ -31,19 +31,19 @@ std::optional<std::string> ReadFileToString(const std::string& Path) {
 
 } // namespace
 
-void IrisApplication::Attach(Iris::IrisNyxDriver& Driver, std::string UiDir) {
+void ChaosApplication::Attach(Chaos::ChaosNyxDriver& Driver, std::string UiDir) {
     Driver_             = &Driver;
     ReportedErrorCount_ = 0;
     UiDir_              = std::move(UiDir);
 }
 
-void IrisApplication::SetFontConfig(std::string FontPath, float FontSizeLogical) {
+void ChaosApplication::SetFontConfig(std::string FontPath, float FontSizeLogical) {
     FontPath_        = std::move(FontPath);
     FontSizeLogical_ = FontSizeLogical;
     if (Applier_) Applier_->SetDefaultFont({FontPath_, FontSizeLogical_});
 }
 
-bool IrisApplication::ReloadFont(float DpiScaleFactor) {
+bool ChaosApplication::ReloadFont(float DpiScaleFactor) {
     DpiScaleFactor_ = DpiScaleFactor;
     if (Applier_) Applier_->SetDpiScaleFactor(DpiScaleFactor);
     if (FontPath_.empty()) return false;
@@ -51,7 +51,7 @@ bool IrisApplication::ReloadFont(float DpiScaleFactor) {
     return true;
 }
 
-void IrisApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath) {
+void ChaosApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath) {
     std::vector<std::string> Worklist{EntryResolvedPath};
     while (!Worklist.empty()) {
         std::string Path = std::move(Worklist.back());
@@ -63,27 +63,27 @@ void IrisApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath)
             std::error_code Ignored;
             for (const std::filesystem::directory_entry& Entry :
                  std::filesystem::directory_iterator(Dir, Ignored)) {
-                if (Entry.path().extension() != ".lustre") continue;
-                ::Lustre::Stylesheet Sheet =
-                    Lustre::LoadStylesheetFromFile(Entry.path().string().c_str(), Entry.path().stem().string().c_str());
-                ::Lustre::Stylesheet& Target = Entry.path().filename() == "global.lustre" ? GlobalSheet_ : ComposedSheet_;
+                if (Entry.path().extension() != ".cosmos") continue;
+                ::Cosmos::Stylesheet Sheet =
+                    Cosmos::LoadStylesheetFromFile(Entry.path().string().c_str(), Entry.path().stem().string().c_str());
+                ::Cosmos::Stylesheet& Target = Entry.path().filename() == "global.cosmos" ? GlobalSheet_ : ComposedSheet_;
                 if (Sheet.Root) {
                     if (!Target.Root) Target.Root.emplace();
-                    for (::Lustre::VariableDeclaration& V : Sheet.Root->Variables) Target.Root->Variables.push_back(std::move(V));
+                    for (::Cosmos::VariableDeclaration& V : Sheet.Root->Variables) Target.Root->Variables.push_back(std::move(V));
                 }
-                for (::Lustre::RulePtr& R : Sheet.Rules) Target.Rules.push_back(std::move(R));
+                for (::Cosmos::RulePtr& R : Sheet.Rules) Target.Rules.push_back(std::move(R));
             }
         }
 
         std::optional<std::string> Source = ReadFileToString(Path);
         if (!Source) continue;
-        const std::vector<Iris::ImportStatement>   Imports = Iris::ScanImports(*Source, Path);
-        const Iris::ImportResolutionResult Resolved = Iris::ResolveImports(Imports, Driver_->Config(), Driver_->ProjectRoot());
-        for (const Iris::ResolvedImport& R : Resolved.Resolved) Worklist.push_back(R.ResolvedPath);
+        const std::vector<Chaos::ImportStatement>   Imports = Chaos::ScanImports(*Source, Path);
+        const Chaos::ImportResolutionResult Resolved = Chaos::ResolveImports(Imports, Driver_->Config(), Driver_->ProjectRoot());
+        for (const Chaos::ResolvedImport& R : Resolved.Resolved) Worklist.push_back(R.ResolvedPath);
     }
 }
 
-const Lustre::LustreStyleApplier& IrisApplication::StyleApplier() {
+const Cosmos::CosmosStyleApplier& ChaosApplication::StyleApplier() {
     if (!Applier_) {
         Applier_.emplace(&GetFontBackend(), DpiScaleFactor_);
         if (!FontPath_.empty()) Applier_->SetDefaultFont({FontPath_, FontSizeLogical_});
@@ -91,7 +91,7 @@ const Lustre::LustreStyleApplier& IrisApplication::StyleApplier() {
     return *Applier_;
 }
 
-BuildContext IrisApplication::MakeBuildContext() {
+BuildContext ChaosApplication::MakeBuildContext() {
     BuildContext Context;
     Context.FontBackend  = &GetFontBackend();
     Context.Font         = Font_;
@@ -104,13 +104,13 @@ BuildContext IrisApplication::MakeBuildContext() {
     return Context;
 }
 
-IrisApplication::MountResult IrisApplication::MountComponent(
+ChaosApplication::MountResult ChaosApplication::MountComponent(
     const std::string& File, const std::string& FunctionName, std::vector<nyx::runtime::Value> Args,
-    std::vector<std::shared_ptr<Iris::Component>>& KeepAlive) {
+    std::vector<std::shared_ptr<Chaos::Component>>& KeepAlive) {
     EnsureStylesheetsFor(UiDir_ + "/" + File);
 
     auto Root =
-        std::make_shared<Iris::Component>(Driver_->MountRoot(UiDir_ + "/" + File, FunctionName, std::move(Args)));
+        std::make_shared<Chaos::Component>(Driver_->MountRoot(UiDir_ + "/" + File, FunctionName, std::move(Args)));
     KeepAlive.push_back(Root);
 
     BuildContext Context = MakeBuildContext();
@@ -120,7 +120,7 @@ IrisApplication::MountResult IrisApplication::MountComponent(
     return Result;
 }
 
-bool IrisApplication::MountAppRoot(const std::string& File, const std::string& FunctionName) {
+bool ChaosApplication::MountAppRoot(const std::string& File, const std::string& FunctionName) {
     EnsureStylesheetsFor(UiDir_ + "/" + File);
 
     AppRootSlots_.clear();
@@ -129,7 +129,7 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
     const std::size_t ErrorsBefore = Driver_->Errors().size();
     AppRoot_ = Driver_->MountRoot(UiDir_ + "/" + File, FunctionName);
     if (Driver_->Errors().size() > ErrorsBefore) {
-        std::fprintf(stderr, "[IrisApplication] %s mount failed\n", File.c_str());
+        std::fprintf(stderr, "[ChaosApplication] %s mount failed\n", File.c_str());
         ReportNewErrors();
         return false;
     }
@@ -145,8 +145,8 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
     std::unique_ptr<Penumbra::Widgets::WidgetBase> Built = BuildWidgetTree(AppRoot_, Context, nullptr, &AppRootRefs_);
 
     AppRootWrapper_ = WrapExistingTree(std::move(Built), nullptr, nullptr, &ComposedStyleSet_, &StyleApplier());
-    AppRootSlots_    = iris::ResolveSlots(*AppRootWrapper_, AppRoot_, MakeMountFn(Context));
-    for (std::unique_ptr<iris::SlotState>& Slot : AppRootSlots_) Slot->Reconcile();
+    AppRootSlots_    = chaos::ResolveSlots(*AppRootWrapper_, AppRoot_, MakeMountFn(Context));
+    for (std::unique_ptr<chaos::SlotState>& Slot : AppRootSlots_) Slot->Reconcile();
 
     RootOverlayHost->SetRoot(AppRootWrapper_->DetachOwnership());
     SetRootWidget(std::move(RootOverlayHost));
@@ -154,7 +154,7 @@ bool IrisApplication::MountAppRoot(const std::string& File, const std::string& F
     return true;
 }
 
-Penumbra::Widgets::WidgetBase* IrisApplication::GetRef(const std::string& Name) const {
+Penumbra::Widgets::WidgetBase* ChaosApplication::GetRef(const std::string& Name) const {
     if (auto It = AppRootRefs_.find(Name); It != AppRootRefs_.end()) {
         return It->second;
     }
@@ -176,7 +176,7 @@ Penumbra::Widgets::WidgetBase* IrisApplication::GetRef(const std::string& Name) 
     return nullptr;
 }
 
-void IrisApplication::TeardownRootWidget() {
+void ChaosApplication::TeardownRootWidget() {
     for (auto& [Name, Mount] : ReconciledMounts_) {
         Mount.Slots.clear();
         Mount.Wrapper.reset();
@@ -189,7 +189,7 @@ void IrisApplication::TeardownRootWidget() {
     AppRootRefs_.clear();
 }
 
-void IrisApplication::ClearReconciledMount(ReconciledMount& Mount, Penumbra::Widgets::Box* Target) {
+void ChaosApplication::ClearReconciledMount(ReconciledMount& Mount, Penumbra::Widgets::Box* Target) {
     if (Target && Target->GetChildCount() > 0) {
         if (auto* Anchor = dynamic_cast<PortalAnchorWidget*>(Target->GetChildAt(0))) {
             Anchor->PreparePortalUnmount();
@@ -201,7 +201,7 @@ void IrisApplication::ClearReconciledMount(ReconciledMount& Mount, Penumbra::Wid
     Mount.Roots.clear();
 }
 
-bool IrisApplication::MountReconciledComponent(const std::string& File, const std::string& FunctionName,
+bool ChaosApplication::MountReconciledComponent(const std::string& File, const std::string& FunctionName,
                                                  std::vector<nyx::runtime::Value> Args,
                                                  const std::string& TargetRefName) {
     auto* Target = dynamic_cast<Penumbra::Widgets::Box*>(GetRef(TargetRefName));
@@ -213,7 +213,7 @@ bool IrisApplication::MountReconciledComponent(const std::string& File, const st
     const std::size_t ErrorsBefore = Driver_->Errors().size();
     MountResult Result = MountComponent(File, FunctionName, std::move(Args), Mount.Roots);
     if (Driver_->Errors().size() > ErrorsBefore) {
-        std::fprintf(stderr, "[IrisApplication] %s mount failed\n", File.c_str());
+        std::fprintf(stderr, "[ChaosApplication] %s mount failed\n", File.c_str());
         ReportNewErrors();
         Mount.Roots.clear();
         return false;
@@ -225,32 +225,32 @@ bool IrisApplication::MountReconciledComponent(const std::string& File, const st
     BuildContext SlotContext = MakeBuildContext();
     SlotContext.OverlayHost  = nullptr;
 
-    Mount.Slots = iris::ResolveSlots(*Mount.Wrapper, *Mount.Roots.back(), MakeMountFn(SlotContext));
-    for (std::unique_ptr<iris::SlotState>& Slot : Mount.Slots) Slot->Reconcile();
+    Mount.Slots = chaos::ResolveSlots(*Mount.Wrapper, *Mount.Roots.back(), MakeMountFn(SlotContext));
+    for (std::unique_ptr<chaos::SlotState>& Slot : Mount.Slots) Slot->Reconcile();
 
     Target->AddChild(Mount.Wrapper->DetachOwnership());
     ReportNewErrors();
     return true;
 }
 
-void IrisApplication::TeardownReconciledComponent(const std::string& TargetRefName) {
+void ChaosApplication::TeardownReconciledComponent(const std::string& TargetRefName) {
     auto It = ReconciledMounts_.find(TargetRefName);
     if (It == ReconciledMounts_.end()) return;
     ClearReconciledMount(It->second, dynamic_cast<Penumbra::Widgets::Box*>(GetRef(TargetRefName)));
     ReconciledMounts_.erase(It);
 }
 
-void IrisApplication::TickIris() {
-    iris::Tick();
+void ChaosApplication::TickChaos() {
+    chaos::Tick();
     ReportNewErrors();
 }
 
-void IrisApplication::ReportNewErrors() {
+void ChaosApplication::ReportNewErrors() {
     if (!Driver_) return;
-    const std::vector<Iris::IrisIrRuntimeError>& Errors = Driver_->Errors();
+    const std::vector<Chaos::ChaosIrRuntimeError>& Errors = Driver_->Errors();
     for (; ReportedErrorCount_ < Errors.size(); ++ReportedErrorCount_) {
-        const Iris::IrisIrRuntimeError& Error = Errors[ReportedErrorCount_];
-        std::fprintf(stderr, "[IrisApplication] %s:%u:%u: %s\n", Error.Location.FilePath.c_str(),
+        const Chaos::ChaosIrRuntimeError& Error = Errors[ReportedErrorCount_];
+        std::fprintf(stderr, "[ChaosApplication] %s:%u:%u: %s\n", Error.Location.FilePath.c_str(),
                      static_cast<unsigned>(Error.Location.Line), static_cast<unsigned>(Error.Location.Column),
                      Error.Message.c_str());
     }
@@ -258,20 +258,20 @@ void IrisApplication::ReportNewErrors() {
 
 namespace {
 
-Penumbra::Widgets::WidgetBase* GetRefForNyx(IrisApplication& Self, const std::string& Name) {
+Penumbra::Widgets::WidgetBase* GetRefForNyx(ChaosApplication& Self, const std::string& Name) {
     return Self.GetRef(Name);
 }
 
 } // namespace
 
-void RegisterIrisApplicationMethods(nyx::host::InheritableTypeBuilder<IrisApplication>& Builder,
+void RegisterChaosApplicationMethods(nyx::host::InheritableTypeBuilder<ChaosApplication>& Builder,
                                      const nyx::runtime::TypeDescriptor* WidgetDescriptor) {
-    Builder.Method("ReloadFont", &IrisApplication::ReloadFont)
-        .Method("MountAppRoot", &IrisApplication::MountAppRoot)
-        .Method("MountReconciledComponent", &IrisApplication::MountReconciledComponent)
-        .Method("TeardownReconciledComponent", &IrisApplication::TeardownReconciledComponent)
-        .Method("TeardownRootWidget", &IrisApplication::TeardownRootWidget)
-        .Method("TickIris", &IrisApplication::TickIris)
+    Builder.Method("ReloadFont", &ChaosApplication::ReloadFont)
+        .Method("MountAppRoot", &ChaosApplication::MountAppRoot)
+        .Method("MountReconciledComponent", &ChaosApplication::MountReconciledComponent)
+        .Method("TeardownReconciledComponent", &ChaosApplication::TeardownReconciledComponent)
+        .Method("TeardownRootWidget", &ChaosApplication::TeardownRootWidget)
+        .Method("TickChaos", &ChaosApplication::TickChaos)
         .PointerMethod("GetRef", &GetRefForNyx, WidgetDescriptor);
 }
 

@@ -1,4 +1,4 @@
-#include "PenumbraUiBackend/Lustre/StyleApplier.h"
+#include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Button.h"
@@ -25,7 +25,7 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-using PenumbraUiBackend::Lustre::LustreStyleApplier;
+using PenumbraUiBackend::Cosmos::CosmosStyleApplier;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::Button;
 using Penumbra::Widgets::Checkbox;
@@ -34,18 +34,18 @@ using Penumbra::Widgets::Label;
 using Penumbra::Widgets::SplitPanel;
 using Penumbra::Widgets::TextInput;
 
-::Lustre::ResolvedStyle MakeStyle() {
-    ::Lustre::ResolvedStyle Style;
-    Style.BackgroundColor = ::Lustre::Color{0xE8, 0x59, 0x3C, 0xFF};
+::Cosmos::ResolvedStyle MakeStyle() {
+    ::Cosmos::ResolvedStyle Style;
+    Style.BackgroundColor = ::Cosmos::Color{0xE8, 0x59, 0x3C, 0xFF};
     Style.BorderRadius = 8.0F;
-    Style.Padding = ::Lustre::EdgeInsets{4.0F, 4.0F, 4.0F, 4.0F};
+    Style.Padding = ::Cosmos::EdgeInsets{4.0F, 4.0F, 4.0F, 4.0F};
     return Style;
 }
 
 void TestBoxStyleReachesAPlainBox() {
     Box              WidgetBox;
     const auto       Style = MakeStyle();
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
 
     Applier.Apply(WidgetBox, Style);
 
@@ -60,10 +60,10 @@ void TestUnsetPropertiesLeaveExistingFieldsUntouched() {
     Box WidgetBox;
     WidgetBox.Style.BorderWidth = 2.0F; // pre-existing value the style doesn't mention
 
-    ::Lustre::ResolvedStyle Style;
-    Style.BackgroundColor = ::Lustre::Color{0, 0, 0, 255};
+    ::Cosmos::ResolvedStyle Style;
+    Style.BackgroundColor = ::Cosmos::Color{0, 0, 0, 255};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.BorderWidth == 2.0F,
@@ -72,11 +72,11 @@ void TestUnsetPropertiesLeaveExistingFieldsUntouched() {
 
 void TestHoverOverlayReachesAButtonWidget() {
     Button                  WidgetButton;
-    ::Lustre::ResolvedStyle Style = MakeStyle();
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->BackgroundColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF};
+    ::Cosmos::ResolvedStyle Style = MakeStyle();
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->BackgroundColor = ::Cosmos::Color{0x66, 0xBB, 0x6A, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetButton, Style);
 
     Expect(WidgetButton.Style.ColorBackgroundHovered.R == 0x66 && WidgetButton.Style.ColorBackgroundHovered.G == 0xBB,
@@ -92,11 +92,11 @@ void TestHoverOverlayReachesAPlainBoxToo() {
     // already renders them for any Box -- Apply()'s pseudo-class overlay is
     // no longer gated to Button, see docs/pseudo_class_plain_box_decision.md.
     Box                      WidgetBox;
-    ::Lustre::ResolvedStyle  Style;
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->BackgroundColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF};
+    ::Cosmos::ResolvedStyle  Style;
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->BackgroundColor = ::Cosmos::Color{0x66, 0xBB, 0x6A, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.ColorBackgroundHovered.R == 0x66 && WidgetBox.Style.ColorBackgroundHovered.G == 0xBB,
@@ -105,15 +105,15 @@ void TestHoverOverlayReachesAPlainBoxToo() {
 
 void TestHoverAndActiveGradientOverlaysReachBoxStyle() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style = MakeStyle();
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->BackgroundGradientStart = ::Lustre::Color{0x4A, 0x90, 0xFF, 0xFF};
-    Style.Hover->BackgroundGradientEnd = ::Lustre::Color{0x2A, 0x5A, 0xDD, 0xFF};
-    Style.Active = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Active->BackgroundGradientStart = ::Lustre::Color{0x1A, 0x40, 0xAA, 0xFF};
-    Style.Active->BackgroundGradientEnd = ::Lustre::Color{0x0A, 0x20, 0x66, 0xFF};
+    ::Cosmos::ResolvedStyle Style = MakeStyle();
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->BackgroundGradientStart = ::Cosmos::Color{0x4A, 0x90, 0xFF, 0xFF};
+    Style.Hover->BackgroundGradientEnd = ::Cosmos::Color{0x2A, 0x5A, 0xDD, 0xFF};
+    Style.Active = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Active->BackgroundGradientStart = ::Cosmos::Color{0x1A, 0x40, 0xAA, 0xFF};
+    Style.Active->BackgroundGradientEnd = ::Cosmos::Color{0x0A, 0x20, 0x66, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.GradientTopHovered.R == 0x4A && WidgetBox.Style.GradientTopHovered.B == 0xFF,
@@ -128,11 +128,11 @@ void TestHoverAndActiveGradientOverlaysReachBoxStyle() {
 
 void TestNoGradientOverlayLeavesPerStateGradientFieldsAtDefault() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style = MakeStyle();
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->BackgroundColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF}; // no gradient in the overlay
+    ::Cosmos::ResolvedStyle Style = MakeStyle();
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->BackgroundColor = ::Cosmos::Color{0x66, 0xBB, 0x6A, 0xFF}; // no gradient in the overlay
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.GradientTopHovered.A == 0,
@@ -144,15 +144,15 @@ void TestHoverActiveAndDisabledBorderColorOverlaysReachBoxStyle() {
     // precedent: BoxStyle::ColorBorderHovered/Pressed/Disabled are universal
     // (penumbra@7fad4dc), so a plain Box picks these up too.
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style = MakeStyle();
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->BorderColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF};
-    Style.Active = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Active->BorderColor = ::Lustre::Color{0x1A, 0x40, 0xAA, 0xFF};
-    Style.Disabled = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Disabled->BorderColor = ::Lustre::Color{0x80, 0x80, 0x80, 0xFF};
+    ::Cosmos::ResolvedStyle Style = MakeStyle();
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->BorderColor = ::Cosmos::Color{0x66, 0xBB, 0x6A, 0xFF};
+    Style.Active = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Active->BorderColor = ::Cosmos::Color{0x1A, 0x40, 0xAA, 0xFF};
+    Style.Disabled = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Disabled->BorderColor = ::Cosmos::Color{0x80, 0x80, 0x80, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.ColorBorderHovered.R == 0x66 && WidgetBox.Style.ColorBorderHovered.G == 0xBB,
@@ -165,11 +165,11 @@ void TestHoverActiveAndDisabledBorderColorOverlaysReachBoxStyle() {
 
 void TestNoBorderColorOverlayLeavesPerStateBorderFieldsAtDefault() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style = MakeStyle();
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->BackgroundColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF}; // no border-color in the overlay
+    ::Cosmos::ResolvedStyle Style = MakeStyle();
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->BackgroundColor = ::Cosmos::Color{0x66, 0xBB, 0x6A, 0xFF}; // no border-color in the overlay
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.ColorBorderHovered.A == 0,
@@ -178,11 +178,11 @@ void TestNoBorderColorOverlayLeavesPerStateBorderFieldsAtDefault() {
 
 void TestBoxShadowReachesBoxStyle() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style = MakeStyle();
-    Style.ShadowColor = ::Lustre::Color{0x00, 0x00, 0x00, 0xAA};
+    ::Cosmos::ResolvedStyle Style = MakeStyle();
+    Style.ShadowColor = ::Cosmos::Color{0x00, 0x00, 0x00, 0xAA};
     Style.ShadowBlurRadiusLogical = 12.0F;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.ShadowColor.A == 0xAA, "box-shadow color reaches Box::Style.ShadowColor");
@@ -194,7 +194,7 @@ void TestNoBoxShadowLeavesBoxStyleShadowFieldsAtDefault() {
     Box        WidgetBox;
     const auto Style = MakeStyle(); // sets BackgroundColor, no box-shadow
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.ShadowBlurRadiusLogical == 0.0F,
@@ -203,10 +203,10 @@ void TestNoBoxShadowLeavesBoxStyleShadowFieldsAtDefault() {
 
 void TestTextColorReachesALabel() {
     Label                    WidgetLabel;
-    ::Lustre::ResolvedStyle  Style;
-    Style.TextColor = ::Lustre::Color{0xFF, 0xFF, 0xFF, 0xFF};
+    ::Cosmos::ResolvedStyle  Style;
+    Style.TextColor = ::Cosmos::Color{0xFF, 0xFF, 0xFF, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetLabel, Style);
 
     Expect(WidgetLabel.ColorText.R == 0xFF && WidgetLabel.ColorText.G == 0xFF && WidgetLabel.ColorText.B == 0xFF,
@@ -215,10 +215,10 @@ void TestTextColorReachesALabel() {
 
 void TestTextColorReachesATextInputTextCaretAndSelection() {
     TextInput                WidgetInput;
-    ::Lustre::ResolvedStyle  Style;
-    Style.TextColor = ::Lustre::Color{0xF5, 0xF5, 0xFA, 0xFF};
+    ::Cosmos::ResolvedStyle  Style;
+    Style.TextColor = ::Cosmos::Color{0xF5, 0xF5, 0xFA, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetInput, Style);
 
     Expect(WidgetInput.ColorText.R == 0xF5 && WidgetInput.ColorText.B == 0xFA && WidgetInput.ColorText.A == 0xFF,
@@ -232,10 +232,10 @@ void TestTextColorReachesATextInputTextCaretAndSelection() {
 void TestTextColorKeepsAnExplicitTextInputCaretWidth() {
     TextInput WidgetInput;
     WidgetInput.CaretWidthLogical = 2.0f;
-    ::Lustre::ResolvedStyle Style;
-    Style.TextColor = ::Lustre::Color{0xFF, 0xFF, 0xFF, 0xFF};
+    ::Cosmos::ResolvedStyle Style;
+    Style.TextColor = ::Cosmos::Color{0xFF, 0xFF, 0xFF, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetInput, Style);
 
     Expect(WidgetInput.CaretWidthLogical == 2.0f, "color leaves an explicitly-set TextInput caret width alone");
@@ -245,7 +245,7 @@ void TestNoTextColorLeavesTextInputColorsUntouched() {
     TextInput  WidgetInput;
     const auto Style = MakeStyle();
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetInput, Style);
 
     Expect(WidgetInput.ColorText.A == 0 && WidgetInput.ColorCaret.A == 0 && WidgetInput.CaretWidthLogical == 0.0f,
@@ -258,10 +258,10 @@ void TestColorReachesAnIconWidget() {
     // dynamic_cast<IconWidget*> branch that has to run before Apply()'s
     // Box-only early return.
     IconWidget               WidgetIcon;
-    ::Lustre::ResolvedStyle  Style;
-    Style.TextColor = ::Lustre::Color{0xFF, 0xFF, 0xFF, 0xFF};
+    ::Cosmos::ResolvedStyle  Style;
+    Style.TextColor = ::Cosmos::Color{0xFF, 0xFF, 0xFF, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetIcon, Style);
 
     Expect(WidgetIcon.ColorLogical.R == 0xFF && WidgetIcon.ColorLogical.G == 0xFF && WidgetIcon.ColorLogical.B == 0xFF,
@@ -270,15 +270,15 @@ void TestColorReachesAnIconWidget() {
 
 void TestHoverActiveAndDisabledColorOverlaysReachAnIconWidget() {
     IconWidget               WidgetIcon;
-    ::Lustre::ResolvedStyle  Style;
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->TextColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF};
-    Style.Active = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Active->TextColor = ::Lustre::Color{0x1A, 0x40, 0xAA, 0xFF};
-    Style.Disabled = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Disabled->TextColor = ::Lustre::Color{0x80, 0x80, 0x80, 0xFF};
+    ::Cosmos::ResolvedStyle  Style;
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->TextColor = ::Cosmos::Color{0x66, 0xBB, 0x6A, 0xFF};
+    Style.Active = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Active->TextColor = ::Cosmos::Color{0x1A, 0x40, 0xAA, 0xFF};
+    Style.Disabled = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Disabled->TextColor = ::Cosmos::Color{0x80, 0x80, 0x80, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetIcon, Style);
 
     Expect(WidgetIcon.ColorLogicalHovered.R == 0x66 && WidgetIcon.ColorLogicalHovered.G == 0xBB,
@@ -291,11 +291,11 @@ void TestHoverActiveAndDisabledColorOverlaysReachAnIconWidget() {
 
 void TestNoColorOverlayLeavesIconWidgetPerStateFieldsAtDefault() {
     IconWidget               WidgetIcon;
-    ::Lustre::ResolvedStyle  Style;
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->BackgroundColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF}; // no color in the overlay
+    ::Cosmos::ResolvedStyle  Style;
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->BackgroundColor = ::Cosmos::Color{0x66, 0xBB, 0x6A, 0xFF}; // no color in the overlay
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetIcon, Style);
 
     Expect(WidgetIcon.ColorLogicalHovered.A == 0,
@@ -307,10 +307,10 @@ void TestColorReachesASplitPanelHandle() {
     // exercises the same `color`/TextColor reuse as IconWidget above, landing
     // on the divider handle instead of a text/icon foreground.
     SplitPanel               WidgetSplit;
-    ::Lustre::ResolvedStyle  Style;
-    Style.TextColor = ::Lustre::Color{0xFF, 0xFF, 0xFF, 0xFF};
+    ::Cosmos::ResolvedStyle  Style;
+    Style.TextColor = ::Cosmos::Color{0xFF, 0xFF, 0xFF, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetSplit, Style);
 
     const auto Handle = WidgetSplit.GetHandleColor();
@@ -319,13 +319,13 @@ void TestColorReachesASplitPanelHandle() {
 
 void TestHoverAndActiveColorOverlaysReachASplitPanelHandle() {
     SplitPanel                WidgetSplit;
-    ::Lustre::ResolvedStyle   Style;
-    Style.Hover = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Hover->TextColor = ::Lustre::Color{0x66, 0xBB, 0x6A, 0xFF};
-    Style.Active = std::make_shared<::Lustre::ResolvedStyle>();
-    Style.Active->TextColor = ::Lustre::Color{0x1A, 0x40, 0xAA, 0xFF};
+    ::Cosmos::ResolvedStyle   Style;
+    Style.Hover = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Hover->TextColor = ::Cosmos::Color{0x66, 0xBB, 0x6A, 0xFF};
+    Style.Active = std::make_shared<::Cosmos::ResolvedStyle>();
+    Style.Active->TextColor = ::Cosmos::Color{0x1A, 0x40, 0xAA, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetSplit, Style);
 
     const auto Hovered = WidgetSplit.GetHandleColorHovered();
@@ -338,7 +338,7 @@ void TestNoColorOverlayLeavesSplitPanelHandleAtDefaultAndKeepsBoxStyle() {
     SplitPanel               WidgetSplit;
     const auto                Style = MakeStyle(); // sets BackgroundColor, no color at all
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetSplit, Style);
 
     const auto Handle = WidgetSplit.GetHandleColor();
@@ -349,11 +349,11 @@ void TestNoColorOverlayLeavesSplitPanelHandleAtDefaultAndKeepsBoxStyle() {
 
 void TestDisplayStackWithRowFlexDirectionMapsToHorizontalStack() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style;
-    Style.DisplayMode = ::Lustre::Display::Stack;
-    Style.FlexDirectionMode = ::Lustre::FlexDirection::Row;
+    ::Cosmos::ResolvedStyle Style;
+    Style.DisplayMode = ::Cosmos::Display::Stack;
+    Style.FlexDirectionMode = ::Cosmos::FlexDirection::Row;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Layout == Penumbra::Widgets::LayoutMode::HorizontalStack,
@@ -362,11 +362,11 @@ void TestDisplayStackWithRowFlexDirectionMapsToHorizontalStack() {
 
 void TestDisplayStackWithColumnFlexDirectionMapsToVerticalStack() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style;
-    Style.DisplayMode = ::Lustre::Display::Stack;
-    Style.FlexDirectionMode = ::Lustre::FlexDirection::Column;
+    ::Cosmos::ResolvedStyle Style;
+    Style.DisplayMode = ::Cosmos::Display::Stack;
+    Style.FlexDirectionMode = ::Cosmos::FlexDirection::Column;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Layout == Penumbra::Widgets::LayoutMode::VerticalStack,
@@ -376,10 +376,10 @@ void TestDisplayStackWithColumnFlexDirectionMapsToVerticalStack() {
 void TestDisplayInlineMapsToLayoutNone() {
     Box                     WidgetBox;
     WidgetBox.Layout = Penumbra::Widgets::LayoutMode::HorizontalStack; // pre-existing, should be overwritten
-    ::Lustre::ResolvedStyle Style;
-    Style.DisplayMode = ::Lustre::Display::Inline;
+    ::Cosmos::ResolvedStyle Style;
+    Style.DisplayMode = ::Cosmos::Display::Inline;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Layout == Penumbra::Widgets::LayoutMode::None, "display: inline reaches Box::Layout as None");
@@ -390,7 +390,7 @@ void TestNoDisplaySetLeavesLayoutUntouched() {
     WidgetBox.Layout = Penumbra::Widgets::LayoutMode::HorizontalStack;
     const auto Style = MakeStyle(); // never sets DisplayMode
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Layout == Penumbra::Widgets::LayoutMode::HorizontalStack,
@@ -399,11 +399,11 @@ void TestNoDisplaySetLeavesLayoutUntouched() {
 
 void TestGapAndAlignItemsReachBox() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style;
+    ::Cosmos::ResolvedStyle Style;
     Style.Gap = 12.0F;
-    Style.AlignItems = ::Lustre::Align::Center;
+    Style.AlignItems = ::Cosmos::Align::Center;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.ChildGap == 12.0F, "gap reaches Box::ChildGap");
@@ -413,10 +413,10 @@ void TestGapAndAlignItemsReachBox() {
 
 void TestJustifyContentReachesBox() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style;
-    Style.JustifyContent = ::Lustre::Justify::SpaceBetween;
+    ::Cosmos::ResolvedStyle Style;
+    Style.JustifyContent = ::Cosmos::Justify::SpaceBetween;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.JustifyContentMode == Penumbra::Widgets::Justify::SpaceBetween,
@@ -428,7 +428,7 @@ void TestNoJustifyContentSetLeavesItUntouched() {
     WidgetBox.JustifyContentMode = Penumbra::Widgets::Justify::Center;
     const auto Style = MakeStyle(); // never sets JustifyContent
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.JustifyContentMode == Penumbra::Widgets::Justify::Center,
@@ -437,11 +437,11 @@ void TestNoJustifyContentSetLeavesItUntouched() {
 
 void TestGradientPairReachesBoxStyle() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style;
-    Style.BackgroundGradientStart = ::Lustre::Color{0x4A, 0x90, 0xFF, 0xFF};
-    Style.BackgroundGradientEnd = ::Lustre::Color{0x2A, 0x5A, 0xDD, 0xFF};
+    ::Cosmos::ResolvedStyle Style;
+    Style.BackgroundGradientStart = ::Cosmos::Color{0x4A, 0x90, 0xFF, 0xFF};
+    Style.BackgroundGradientEnd = ::Cosmos::Color{0x2A, 0x5A, 0xDD, 0xFF};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.GradientTop.R == 0x4A && WidgetBox.Style.GradientTop.G == 0x90 &&
@@ -456,7 +456,7 @@ void TestNoGradientLeavesBoxStyleGradientFieldsAtDefault() {
     Box        WidgetBox;
     const auto Style = MakeStyle(); // sets BackgroundColor, no gradient
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     Expect(WidgetBox.Style.GradientTop.A == 0,
@@ -465,11 +465,11 @@ void TestNoGradientLeavesBoxStyleGradientFieldsAtDefault() {
 
 void TestMaxWidthAndEllipsisReachALabel() {
     Label                   WidgetLabel;
-    ::Lustre::ResolvedStyle Style;
-    Style.MaxWidth = ::Lustre::Length{220.0F, ::Lustre::LengthUnit::Px};
-    Style.TextOverflowMode = ::Lustre::TextOverflow::Ellipsis;
+    ::Cosmos::ResolvedStyle Style;
+    Style.MaxWidth = ::Cosmos::Length{220.0F, ::Cosmos::LengthUnit::Px};
+    Style.TextOverflowMode = ::Cosmos::TextOverflow::Ellipsis;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetLabel, Style);
 
     Expect(WidgetLabel.MaxWidthLogical.has_value() && *WidgetLabel.MaxWidthLogical == 220.0F,
@@ -480,13 +480,13 @@ void TestMaxWidthAndEllipsisReachALabel() {
 
 void TestSizeLengthsReachBoxStyleWithTheirUnits() {
     Box                     WidgetBox;
-    ::Lustre::ResolvedStyle Style;
-    Style.Width = ::Lustre::Length{600.0F, ::Lustre::LengthUnit::Px};
-    Style.Height = ::Lustre::Length{50.0F, ::Lustre::LengthUnit::Vh};
-    Style.MinWidth = ::Lustre::Length{20.0F, ::Lustre::LengthUnit::Vw};
-    Style.MaxWidth = ::Lustre::Length{100.0F, ::Lustre::LengthUnit::Percent};
+    ::Cosmos::ResolvedStyle Style;
+    Style.Width = ::Cosmos::Length{600.0F, ::Cosmos::LengthUnit::Px};
+    Style.Height = ::Cosmos::Length{50.0F, ::Cosmos::LengthUnit::Vh};
+    Style.MinWidth = ::Cosmos::Length{20.0F, ::Cosmos::LengthUnit::Vw};
+    Style.MaxWidth = ::Cosmos::Length{100.0F, ::Cosmos::LengthUnit::Percent};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetBox, Style);
 
     using Penumbra::Widgets::LengthUnit;
@@ -502,10 +502,10 @@ void TestSizeLengthsReachBoxStyleWithTheirUnits() {
 
 void TestRelativeMaxWidthOnALabelConstrainsItsBox() {
     Label                   WidgetLabel;
-    ::Lustre::ResolvedStyle Style;
-    Style.MaxWidth = ::Lustre::Length{50.0F, ::Lustre::LengthUnit::Percent};
+    ::Cosmos::ResolvedStyle Style;
+    Style.MaxWidth = ::Cosmos::Length{50.0F, ::Cosmos::LengthUnit::Percent};
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetLabel, Style);
 
     Expect(!WidgetLabel.MaxWidthLogical.has_value() &&
@@ -515,11 +515,11 @@ void TestRelativeMaxWidthOnALabelConstrainsItsBox() {
 
 void TestTextOverflowClipReachesALabelAsFalse() {
     Label                   WidgetLabel;
-    ::Lustre::ResolvedStyle Style;
-    Style.MaxWidth = ::Lustre::Length{100.0F, ::Lustre::LengthUnit::Px};
-    Style.TextOverflowMode = ::Lustre::TextOverflow::Clip;
+    ::Cosmos::ResolvedStyle Style;
+    Style.MaxWidth = ::Cosmos::Length{100.0F, ::Cosmos::LengthUnit::Px};
+    Style.TextOverflowMode = ::Cosmos::TextOverflow::Clip;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetLabel, Style);
 
     Expect(!WidgetLabel.TruncateWithEllipsis, "text-overflow: clip reaches Label::TruncateWithEllipsis as false");
@@ -529,7 +529,7 @@ void TestNoMaxWidthLeavesLabelUnconstrained() {
     Label      WidgetLabel;
     const auto Style = MakeStyle(); // no max-width/text-overflow at all
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetLabel, Style);
 
     Expect(!WidgetLabel.MaxWidthLogical.has_value(),
@@ -538,10 +538,10 @@ void TestNoMaxWidthLeavesLabelUnconstrained() {
 
 void TestWhiteSpaceNormalReachesALabelAsWrapTrue() {
     Label                   WidgetLabel;
-    ::Lustre::ResolvedStyle Style;
-    Style.WhiteSpaceMode = ::Lustre::WhiteSpace::Normal;
+    ::Cosmos::ResolvedStyle Style;
+    Style.WhiteSpaceMode = ::Cosmos::WhiteSpace::Normal;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetLabel, Style);
 
     Expect(WidgetLabel.Wrap, "white-space: normal reaches Label::Wrap as true");
@@ -549,10 +549,10 @@ void TestWhiteSpaceNormalReachesALabelAsWrapTrue() {
 
 void TestWhiteSpaceNowrapReachesALabelAsWrapFalse() {
     Label                   WidgetLabel;
-    ::Lustre::ResolvedStyle Style;
-    Style.WhiteSpaceMode = ::Lustre::WhiteSpace::Nowrap;
+    ::Cosmos::ResolvedStyle Style;
+    Style.WhiteSpaceMode = ::Cosmos::WhiteSpace::Nowrap;
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetLabel, Style);
 
     Expect(!WidgetLabel.Wrap, "white-space: nowrap reaches Label::Wrap as false");
@@ -562,7 +562,7 @@ void TestNoWhiteSpaceLeavesLabelWrapAtDefault() {
     Label      WidgetLabel;
     const auto Style = MakeStyle(); // no white-space at all
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetLabel, Style);
 
     Expect(!WidgetLabel.Wrap, "no white-space in the style leaves Label::Wrap at its default (false)");
@@ -572,7 +572,7 @@ void TestCheckboxStillReceivesItsBoxStyleSlice() {
     Checkbox                 WidgetCheckbox;
     const auto                Style = MakeStyle();
 
-    LustreStyleApplier Applier;
+    CosmosStyleApplier Applier;
     Applier.Apply(WidgetCheckbox, Style);
 
     Expect(WidgetCheckbox.Style.ColorBackground.R == 0xE8,
@@ -608,9 +608,9 @@ public:
 
 void TestFontLoadsAtTheApplierDpiScaleAndReloadsWhenItChanges() {
     RecordingFontBackend    Backend;
-    LustreStyleApplier      Applier(&Backend, 2.0F);
-    ::Lustre::ResolvedStyle Style;
-    Style.Font = ::Lustre::FontRequest{"/fonts/Code.ttf", 13.0F};
+    CosmosStyleApplier      Applier(&Backend, 2.0F);
+    ::Cosmos::ResolvedStyle Style;
+    Style.Font = ::Cosmos::FontRequest{"/fonts/Code.ttf", 13.0F};
 
     Label First;
     Label Second;
@@ -632,12 +632,12 @@ void TestFontLoadsAtTheApplierDpiScaleAndReloadsWhenItChanges() {
 
 void TestAFontSizeOrFamilyAloneFillsTheRestFromTheDefaultFont() {
     RecordingFontBackend Backend;
-    LustreStyleApplier   Applier(&Backend, 2.0F);
+    CosmosStyleApplier   Applier(&Backend, 2.0F);
     Applier.SetDefaultFont({"/fonts/Body.ttf", 14.0F});
 
-    ::Lustre::ResolvedStyle SizeOnly;
+    ::Cosmos::ResolvedStyle SizeOnly;
     SizeOnly.FontSizeLogical = 20.0F;
-    ::Lustre::ResolvedStyle FamilyOnly;
+    ::Cosmos::ResolvedStyle FamilyOnly;
     FamilyOnly.FontFamily = "/fonts/Code.ttf";
 
     Label     Title;
@@ -653,8 +653,8 @@ void TestAFontSizeOrFamilyAloneFillsTheRestFromTheDefaultFont() {
 
 void TestWithoutADefaultFontAFontSizeAloneLeavesTheFontAlone() {
     RecordingFontBackend    Backend;
-    LustreStyleApplier      Applier(&Backend);
-    ::Lustre::ResolvedStyle SizeOnly;
+    CosmosStyleApplier      Applier(&Backend);
+    ::Cosmos::ResolvedStyle SizeOnly;
     SizeOnly.FontSizeLogical = 20.0F;
 
     Label Title;
@@ -667,14 +667,14 @@ void TestWithoutADefaultFontAFontSizeAloneLeavesTheFontAlone() {
 
 void TestFontStyleAndTextDecorationLoadAStyledFont() {
     RecordingFontBackend Backend;
-    LustreStyleApplier   Applier(&Backend);
+    CosmosStyleApplier   Applier(&Backend);
     Applier.SetDefaultFont({"/fonts/Body.ttf", 14.0F});
 
-    ::Lustre::ResolvedStyle Italic;
-    Italic.FontStyleMode = ::Lustre::FontStyle::Italic;
-    ::Lustre::ResolvedStyle UnderlinedAndStruck;
-    UnderlinedAndStruck.Font = ::Lustre::FontRequest{"/fonts/Body.ttf", 14.0F};
-    UnderlinedAndStruck.TextDecorationLine = ::Lustre::TextDecoration{.Underline = true, .LineThrough = true};
+    ::Cosmos::ResolvedStyle Italic;
+    Italic.FontStyleMode = ::Cosmos::FontStyle::Italic;
+    ::Cosmos::ResolvedStyle UnderlinedAndStruck;
+    UnderlinedAndStruck.Font = ::Cosmos::FontRequest{"/fonts/Body.ttf", 14.0F};
+    UnderlinedAndStruck.TextDecorationLine = ::Cosmos::TextDecoration{.Underline = true, .LineThrough = true};
 
     Label Slanted;
     Label Decorated;
@@ -693,11 +693,11 @@ void TestFontStyleAndTextDecorationLoadAStyledFont() {
 
 void TestTheSameFontInTwoStylesLoadsTwiceAndCachesEach() {
     RecordingFontBackend    Backend;
-    LustreStyleApplier      Applier(&Backend);
-    ::Lustre::ResolvedStyle Plain;
-    Plain.Font = ::Lustre::FontRequest{"/fonts/Body.ttf", 14.0F};
-    ::Lustre::ResolvedStyle Italic = Plain;
-    Italic.FontStyleMode = ::Lustre::FontStyle::Italic;
+    CosmosStyleApplier      Applier(&Backend);
+    ::Cosmos::ResolvedStyle Plain;
+    Plain.Font = ::Cosmos::FontRequest{"/fonts/Body.ttf", 14.0F};
+    ::Cosmos::ResolvedStyle Italic = Plain;
+    Italic.FontStyleMode = ::Cosmos::FontStyle::Italic;
 
     Label First;
     Label Second;
@@ -712,12 +712,12 @@ void TestTheSameFontInTwoStylesLoadsTwiceAndCachesEach() {
 
 void TestAPlainStyleAfterAStyledOneRestoresTheDefaultFont() {
     RecordingFontBackend Backend;
-    LustreStyleApplier   Applier(&Backend);
+    CosmosStyleApplier   Applier(&Backend);
     Applier.SetDefaultFont({"/fonts/Body.ttf", 14.0F});
 
-    ::Lustre::ResolvedStyle Underlined;
-    Underlined.TextDecorationLine = ::Lustre::TextDecoration{.Underline = true};
-    ::Lustre::ResolvedStyle Plain;
+    ::Cosmos::ResolvedStyle Underlined;
+    Underlined.TextDecorationLine = ::Cosmos::TextDecoration{.Underline = true};
+    ::Cosmos::ResolvedStyle Plain;
 
     Label Reused;
     Applier.Apply(Reused, Underlined);
@@ -730,7 +730,7 @@ void TestAPlainStyleAfterAStyledOneRestoresTheDefaultFont() {
 
 } // namespace
 
-void RunLustreStyleApplierTests() {
+void RunCosmosStyleApplierTests() {
     TestBoxStyleReachesAPlainBox();
     TestUnsetPropertiesLeaveExistingFieldsUntouched();
     TestHoverOverlayReachesAButtonWidget();

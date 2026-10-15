@@ -1,13 +1,13 @@
 #include "PenumbraUiBackend/Walker.h"
 
 #include "PenumbraUiBackend/ChartNodes.h"
-#include "PenumbraUiBackend/Lustre/StyleResolution.h"
+#include "PenumbraUiBackend/Cosmos/StyleResolution.h"
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Portal.h"
 
-#include "Iris/ComponentInstance.h"
-#include "Iris/IrisNyxDriver.h"
-#include "Iris/Reconciler.h"
+#include "Chaos/ComponentInstance.h"
+#include "Chaos/ChaosNyxDriver.h"
+#include "Chaos/Reconciler.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
@@ -38,9 +38,9 @@ namespace PenumbraUiBackend {
 
 namespace {
 
-using Iris::Component;
-using Iris::IrisElementTag;
-using Iris::IrisProps;
+using Chaos::Component;
+using Chaos::ChaosElementTag;
+using Chaos::ChaosProps;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::ImageWidget;
@@ -57,7 +57,7 @@ using Penumbra::Widgets::WidgetBase;
 // node in this BuildWidgetTree() call actually resolve a property from the
 // given Context.Style" -- a component built through a BuildContext whose
 // Style points at the wrong StylesheetSet resolves nothing at all, silently
-// (Lustre::ResolveStyle's own contract: no rule matched is not an error).
+// (Cosmos::ResolveStyle's own contract: no rule matched is not an error).
 // Threaded through the recursion as a nullable pointer (nullptr in the
 // common non-debug-tooling path) rather than added to BuildContext itself --
 // this is call-scoped bookkeeping for one BuildWidgetTree() invocation, not
@@ -76,7 +76,7 @@ struct BuildRecords {
     StyleMatchStats* Stats{nullptr};
 };
 
-bool ResolvedStyleIsEmpty(const ::Lustre::ResolvedStyle& Style) {
+bool ResolvedStyleIsEmpty(const ::Cosmos::ResolvedStyle& Style) {
     return !Style.BackgroundColor && !Style.BackgroundGradientStart && !Style.BackgroundGradientEnd &&
            !Style.BorderColor && !Style.BorderWidth && !Style.BorderRadius && !Style.Padding && !Style.Margin &&
            !Style.TextColor && !Style.FontFamily && !Style.FontSizeLogical && !Style.Font && !Style.DisplayMode &&
@@ -88,8 +88,8 @@ bool ResolvedStyleIsEmpty(const ::Lustre::ResolvedStyle& Style) {
            !Style.ShadowBlurRadiusLogical && !Style.Opacity && !Style.Starting && Style.AttrBindings.empty();
 }
 
-// `Node.Ref` mirrors `Node.Key` exactly (both `std::optional<IrisPropValue>`,
-// `Iris/Component.h`) -- extracts the plain string it always carries via real `.iris`
+// `Node.Ref` mirrors `Node.Key` exactly (both `std::optional<ChaosPropValue>`,
+// `Chaos/Component.h`) -- extracts the plain string it always carries via real `.chaos`
 // codegen. Returns nullopt for an unset ref or (defensively) a non-string value.
 std::optional<std::string> GetRefName(const Component& Node) {
     if (!Node.Ref.has_value()) {
@@ -101,7 +101,7 @@ std::optional<std::string> GetRefName(const Component& Node) {
     return std::nullopt;
 }
 
-std::optional<std::string> GetStringProp(const IrisProps& Props, const std::string& Name) {
+std::optional<std::string> GetStringProp(const ChaosProps& Props, const std::string& Name) {
     const auto It = Props.find(Name);
     if (It == Props.end()) {
         return std::nullopt;
@@ -112,8 +112,8 @@ std::optional<std::string> GetStringProp(const IrisProps& Props, const std::stri
     return std::nullopt;
 }
 
-// An int or float prop as a float -- what a Lustre attr() binding reads.
-std::optional<float> GetNumberProp(const IrisProps& Props, std::string_view Name) {
+// An int or float prop as a float -- what a Cosmos attr() binding reads.
+std::optional<float> GetNumberProp(const ChaosProps& Props, std::string_view Name) {
     const auto It = Props.find(std::string(Name));
     if (It == Props.end()) {
         return std::nullopt;
@@ -127,7 +127,7 @@ std::optional<float> GetNumberProp(const IrisProps& Props, std::string_view Name
     return std::nullopt;
 }
 
-std::optional<float> GetFloatProp(const IrisProps& Props, const std::string& Name) {
+std::optional<float> GetFloatProp(const ChaosProps& Props, const std::string& Name) {
     const auto It = Props.find(Name);
     if (It == Props.end()) {
         return std::nullopt;
@@ -138,7 +138,7 @@ std::optional<float> GetFloatProp(const IrisProps& Props, const std::string& Nam
     return std::nullopt;
 }
 
-std::optional<bool> GetBoolProp(const IrisProps& Props, const std::string& Name) {
+std::optional<bool> GetBoolProp(const ChaosProps& Props, const std::string& Name) {
     const auto It = Props.find(Name);
     if (It == Props.end()) {
         return std::nullopt;
@@ -149,7 +149,7 @@ std::optional<bool> GetBoolProp(const IrisProps& Props, const std::string& Name)
     return std::nullopt;
 }
 
-std::optional<std::function<void()>> GetEventProp(const IrisProps& Props, const std::string& Name) {
+std::optional<std::function<void()>> GetEventProp(const ChaosProps& Props, const std::string& Name) {
     const auto It = Props.find(Name);
     if (It == Props.end()) {
         return std::nullopt;
@@ -161,10 +161,10 @@ std::optional<std::function<void()>> GetEventProp(const IrisProps& Props, const 
 }
 
 // Sibling to GetEventProp for the value-carrying event variant `<Input>`'s
-// onTextChange needs (IrisPropValue's std::function<void(std::string)> alternative,
+// onTextChange needs (ChaosPropValue's std::function<void(std::string)> alternative,
 // docs/iris_core_spec.md's <Input> section) -- the zero-arg GetEventProp above can't
 // extract this one, std::get_if is keyed on the exact alternative type.
-std::optional<std::function<void(std::string)>> GetStringEventProp(const IrisProps& Props, const std::string& Name) {
+std::optional<std::function<void(std::string)>> GetStringEventProp(const ChaosProps& Props, const std::string& Name) {
     const auto It = Props.find(Name);
     if (It == Props.end()) {
         return std::nullopt;
@@ -182,7 +182,7 @@ std::optional<std::function<void(std::string)>> GetStringEventProp(const IrisPro
 // field, not a Builder chain" pattern for the pieces without one), so this mirrors
 // ApplySharedProps's own five-events-plus-class set by hand rather than through a
 // templated Builder call.
-void ApplySharedPropsToWidget(WidgetBase& Widget, const IrisProps& Props) {
+void ApplySharedPropsToWidget(WidgetBase& Widget, const ChaosProps& Props) {
     if (const auto ClassName = GetStringProp(Props, "class")) {
         Widget.ClassName = *ClassName;
     }
@@ -203,36 +203,36 @@ void ApplySharedPropsToWidget(WidgetBase& Widget, const IrisProps& Props) {
     }
 }
 
-std::string IrisTagToLustreTag(IrisElementTag Tag) {
+std::string ChaosTagToCosmosTag(ChaosElementTag Tag) {
     switch (Tag) {
-        case IrisElementTag::Frame: return "Frame";
-        case IrisElementTag::Inline: return "Inline";
-        case IrisElementTag::Grid: return "Grid";
-        case IrisElementTag::Image: return "Image";
-        case IrisElementTag::Icon: return "Icon";
-        case IrisElementTag::Text: return "Text";
-        case IrisElementTag::Scroll: return "Scroll";
-        case IrisElementTag::Input: return "Input";
-        case IrisElementTag::TextArea: return "TextArea";
-        case IrisElementTag::Native: return "Native";
-        case IrisElementTag::Portal: return "Portal";
-        case IrisElementTag::Split: return "Split";
-        case IrisElementTag::BarChart: return "BarChart";
-        case IrisElementTag::LineChart: return "LineChart";
-        case IrisElementTag::DonutChart: return "DonutChart";
-        case IrisElementTag::Series: return "Series";
-        case IrisElementTag::Slice: return "Slice";
+        case ChaosElementTag::Frame: return "Frame";
+        case ChaosElementTag::Inline: return "Inline";
+        case ChaosElementTag::Grid: return "Grid";
+        case ChaosElementTag::Image: return "Image";
+        case ChaosElementTag::Icon: return "Icon";
+        case ChaosElementTag::Text: return "Text";
+        case ChaosElementTag::Scroll: return "Scroll";
+        case ChaosElementTag::Input: return "Input";
+        case ChaosElementTag::TextArea: return "TextArea";
+        case ChaosElementTag::Native: return "Native";
+        case ChaosElementTag::Portal: return "Portal";
+        case ChaosElementTag::Split: return "Split";
+        case ChaosElementTag::BarChart: return "BarChart";
+        case ChaosElementTag::LineChart: return "LineChart";
+        case ChaosElementTag::DonutChart: return "DonutChart";
+        case ChaosElementTag::Series: return "Series";
+        case ChaosElementTag::Slice: return "Slice";
         default: return "";
     }
 }
 
-// Lustre::IStyleTarget over the ancestor chain BuildWidgetTree's own recursion already
+// Cosmos::IStyleTarget over the ancestor chain BuildWidgetTree's own recursion already
 // walks -- no separate tree walk needed, since resolving a node's style happens exactly
 // once, right when that node is built, with every ancestor's WalkerStyleElement still
 // alive on the call stack above it. `IsComponentRoot_` is true exactly for the node a
 // given `BuildWidgetTree()` call started at (see that function's own doc comment for why
 // that's the correct boundary signal today).
-class WalkerStyleElement : public ::Lustre::IStyleTarget {
+class WalkerStyleElement : public ::Cosmos::IStyleTarget {
 public:
     WalkerStyleElement(std::string ClassName, std::string PrimitiveTag, bool IsComponentRoot,
                         const WalkerStyleElement* Parent)
@@ -242,7 +242,7 @@ public:
     std::string ClassName() const override { return ClassName_; }
     std::string PrimitiveTag() const override { return PrimitiveTag_; }
     bool         IsComponentRoot() const override { return IsComponentRoot_; }
-    const ::Lustre::IStyleTarget* Parent() const override { return Parent_; }
+    const ::Cosmos::IStyleTarget* Parent() const override { return Parent_; }
 
 private:
     std::string ClassName_;
@@ -252,7 +252,7 @@ private:
 };
 
 // docs/next_steps.md's "reconciler-side wiring for a framework-owned component
-// lifecycle system" ask. `Umbra::IWidgetLifecycle` (`iris::ComponentInstance::
+// lifecycle system" ask. `Umbra::IWidgetLifecycle` (`chaos::ComponentInstance::
 // Lifecycle`'s own type) and `Penumbra::IWidgetLifecycle` (what
 // `Penumbra::LifecycleRegistry::RegisterLifecycle` takes) are two distinct classes with
 // identical virtual signatures
@@ -262,7 +262,7 @@ private:
 // them -- not a framework gap on either side.
 // `InnerWatch_` (umbra-interfaces' `Umbra::LivenessGuard::Watch`) guards exactly the
 // dangling-pointer shape this repo has actually hit: `Inner_` outliving its own pointee
-// when whatever owns it (an iris-proto `NyxDriverState`, transitively through
+// when whatever owns it (a Chaos `NyxDriverState`, transitively through
 // `Node.Instance`) is torn down before this bridge's own `OnUnmount()`/`OnTick()` is
 // called by `Penumbra::LifecycleRegistry` -- previously an `EXC_BAD_ACCESS` inside
 // `Inner_->OnTick(...)`/`Inner_->OnUnmount()`, only diagnosable after the fact via
@@ -304,8 +304,8 @@ private:
 // (`Penumbra/Widgets/WidgetBase.h`) -- an existing, generic "this widget is being torn
 // down" hook, unused anywhere else in this repo -- fires from `~WidgetBase()`, giving
 // exactly the unmount timing needed without requiring `ComponentInstance` to grow a
-// destructor or a registry reference of its own (`iris-proto`'s own decision, see
-// `Iris/ComponentInstance.h`'s `Lifecycle` field comment: passive and non-owning,
+// destructor or a registry reference of its own (Chaos's own decision, see
+// `Chaos/ComponentInstance.h`'s `Lifecycle` field comment: passive and non-owning,
 // deliberately no self-unregister-at-destruction). The bridge itself needs no separate
 // storage anywhere -- the OnDestroyed lambda's own capture owns it for exactly as long
 // as it needs to live, freeing it the instant UnregisterLifecycle has been called.
@@ -394,7 +394,7 @@ private:
 // side-table keyed by `&Runtime` (a previous version of this function used exactly that --
 // a `static std::unordered_map<NyxRuntime*, const TypeDescriptor*>` -- and it was a real
 // dangling-pointer bug: a short-lived NyxRuntime (e.g. a test's own stack-local
-// Iris::IrisNyxDriver) can be destroyed and a *different*, unrelated NyxRuntime later
+// Chaos::ChaosNyxDriver) can be destroyed and a *different*, unrelated NyxRuntime later
 // constructed at the same address, at which point the stale map entry hands back a
 // TypeDescriptor* owned by the first (now-destroyed) Runtime's own `types_` -- confirmed
 // directly: two independent NyxRuntimes each calling BuildWidgetTree with NyxHost set, back
@@ -420,7 +420,7 @@ const nyx::runtime::TypeDescriptor* EnsureWidgetRefTypeRegistered(nyx::host::Nyx
 }
 
 // Defines a Nyx-callable `GetRef(name: string)` directly into Node's own component
-// instance's `Iris::NyxDriverState::RenderScope` Environment -- deliberately never onto
+// instance's `Chaos::NyxDriverState::RenderScope` Environment -- deliberately never onto
 // Context.NyxHost->Globals(). docs/next_steps.md's own ask left this as one real open
 // design question (global-on-Runtime::Globals() vs. per-instance-scoped); resolved here in
 // favor of per-instance, confirmed against real source rather than assumed:
@@ -432,10 +432,10 @@ const nyx::runtime::TypeDescriptor* EnsureWidgetRefTypeRegistered(nyx::host::Nyx
 //   later OnTick calls too, a real cross-component ref-map collision, not a hypothetical
 //   one, since ref names are only unique *within* one BuildWidgetTree call
 //   (RefMap's own doc comment), not across separately-built sibling components.
-// - Per-instance scoping needs no new iris-proto/nyx-proto API at all: NyxDriverState
-//   (Iris/IrisNyxDriver.h) is already a public type, RenderScope is the exact Environment
+// - Per-instance scoping needs no new Chaos/nyx-proto API at all: NyxDriverState
+//   (Chaos/ChaosNyxDriver.h) is already a public type, RenderScope is the exact Environment
 //   BuildFreeFunctionLifecycleAdapter's own `Scope.context.env->FindOwn("OnTick")` check
-//   already reads (IrisNyxDriver.cpp, confirmed directly) to detect the reserved-name
+//   already reads (ChaosNyxDriver.cpp, confirmed directly) to detect the reserved-name
 //   locals this same instance's OnMount/OnTick hooks are declared in, and
 //   Environment::Define (environment.hpp, already public) creates a binding "in this scope
 //   only." Nyx variable lookup is late -- walks the live parent chain at call time, not a
@@ -445,7 +445,7 @@ const nyx::runtime::TypeDescriptor* EnsureWidgetRefTypeRegistered(nyx::host::Nyx
 //
 // Only reaches Model 1 (free-function) components: Model 2 (class-based) lifecycle hooks
 // dispatch via Interpreter::TryCallInstanceMethod against the *file-level* shared
-// interpreter/registry (BuildClassLifecycleAdapter, IrisNyxDriver.cpp), never through any
+// interpreter/registry (BuildClassLifecycleAdapter, ChaosNyxDriver.cpp), never through any
 // per-instance Environment at all -- there is no analogous scope to define GetRef into for
 // that model today. A class-based OnTick calling GetRef gets an ordinary Nyx-level
 // "undefined variable" error, a real and deliberately left-open scope boundary, not a
@@ -462,7 +462,7 @@ void RegisterGetRefIfPresent(const Component& Node, const BuildContext& Context,
     if (Context.NyxHost == nullptr || Refs == nullptr || !Node.Instance || !Node.Instance->DriverState) {
         return;
     }
-    auto* State = static_cast<Iris::NyxDriverState*>(Node.Instance->DriverState.get());
+    auto* State = static_cast<Chaos::NyxDriverState*>(Node.Instance->DriverState.get());
     if (!State->RenderScope.context.env) {
         return;
     }
@@ -502,7 +502,7 @@ void RegisterGetRefIfPresent(const Component& Node, const BuildContext& Context,
 // method-naming convention"). Templated rather than duplicated per primitive since none
 // of those Builders share a common base class — only the method names line up.
 template <typename BuilderT>
-void ApplySharedProps(BuilderT& Builder, const IrisProps& Props) {
+void ApplySharedProps(BuilderT& Builder, const ChaosProps& Props) {
     if (const auto ClassName = GetStringProp(Props, "class")) {
         Builder.className(*ClassName);
     }
@@ -523,7 +523,7 @@ void ApplySharedProps(BuilderT& Builder, const IrisProps& Props) {
     }
 }
 
-// Builds every child, skipping any that resolve to `nullptr` (an `IrisElementTag::None`
+// Builds every child, skipping any that resolve to `nullptr` (a `ChaosElementTag::None`
 // child — "no widget here", never added to the parent's Children at all, not even as a
 // hole). `ThisStyleElement` is Node's own style-target wrapper, already constructed by
 // the caller -- passed down so every child's WalkerStyleElement can point back to it as
@@ -671,7 +671,7 @@ std::unique_ptr<WidgetBase> BuildScroll(const Component& Node, const BuildContex
 // (same "plain fields, not a Builder chain" treatment BuildScroll above already gives
 // ScrollablePanel) and takes exactly two children through SetFirst/SetSecond rather than
 // a generic Children vector -- Codegen.cpp already enforces exactly two children at
-// compile time (`<Split> requires exactly two children`), so real `.iris`-authored trees
+// compile time (`<Split> requires exactly two children`), so real `.chaos`-authored trees
 // always have both; the size checks below only guard a malformed tree built directly
 // (e.g. a structural test bypassing Codegen), matching this walker's existing tolerance
 // for other malformed input.
@@ -716,7 +716,7 @@ std::unique_ptr<WidgetBase> BuildChart(const Component& Node, const BuildContext
     ApplySharedPropsToWidget(*Built, Node.Props);
     Built->FontBackend = Context.FontBackend;
     Built->Font        = Context.Font;
-    ApplyChartProps(*Built, iris::ComputePropDiff({}, Node.Props));
+    ApplyChartProps(*Built, chaos::ComputePropDiff({}, Node.Props));
     if constexpr (std::is_base_of_v<Penumbra::Widgets::AxisChartBase, ChartT>) {
         Built->ShowAxes = GetBoolProp(Node.Props, "showAxes").value_or(true);
     }
@@ -737,7 +737,7 @@ template <typename NodeT>
 std::unique_ptr<WidgetBase> BuildChartData(const Component& Node) {
     auto Built = std::make_unique<NodeT>();
     ApplySharedPropsToWidget(*Built, Node.Props);
-    ApplyChartProps(*Built, iris::ComputePropDiff({}, Node.Props));
+    ApplyChartProps(*Built, chaos::ComputePropDiff({}, Node.Props));
     return Built;
 }
 
@@ -786,7 +786,7 @@ std::unique_ptr<WidgetBase> BuildTextArea(const Component& Node, const BuildCont
 
 // <Native> (docs/native_split_backend_wiring_gap.md) -- an opaque escape hatch whose
 // `build` prop already returns a live Umbra::IWidget handle, not more Component IR to
-// walk (Component::NativeBuilder, `vendor/iris/include/Iris/Component.h`). Every real
+// walk (Component::NativeBuilder, `vendor/chaos/include/Chaos/Component.h`). Every real
 // Umbra::IWidget in this stack is a PenumbraWidget -- this file and
 // PenumbraWidgetAdapter.cpp are the only two places one is ever constructed -- so this
 // downcasts to reclaim the real WidgetBase ownership via DetachOwnership(), the same
@@ -813,7 +813,7 @@ std::unique_ptr<WidgetBase> BuildPortal(const Component& Node, const BuildContex
                                           /*IsComponentRoot=*/false, Records);
     }
     auto Built = std::make_unique<PortalAnchorWidget>(Context.OverlayHost, std::move(Content),
-                                                       Iris::ReadPortalProperties(Node.Props));
+                                                       Chaos::ReadPortalProperties(Node.Props));
     ApplySharedPropsToWidget(*Built, Node.Props);
     return Built;
 }
@@ -824,65 +824,65 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
     // None/Slot build to nullptr with no widget at all -- nothing to construct a style
     // target for, same "no widget here" treatment BuildWidgetTree's own doc comment
     // describes.
-    if (Node.Tag == IrisElementTag::None || Node.Tag == IrisElementTag::Slot) {
+    if (Node.Tag == ChaosElementTag::None || Node.Tag == ChaosElementTag::Slot) {
         return nullptr;
     }
 
-    const std::string LustreTag = IrisTagToLustreTag(Node.Tag);
-    const WalkerStyleElement ThisStyleElement(GetStringProp(Node.Props, "class").value_or(std::string{}), LustreTag,
+    const std::string CosmosTag = ChaosTagToCosmosTag(Node.Tag);
+    const WalkerStyleElement ThisStyleElement(GetStringProp(Node.Props, "class").value_or(std::string{}), CosmosTag,
                                                IsComponentRoot, ParentStyleElement);
 
     std::unique_ptr<WidgetBase> Built;
     switch (Node.Tag) {
-        case IrisElementTag::Frame:
+        case ChaosElementTag::Frame:
             Built = BuildFrame(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::Grid:
+        case ChaosElementTag::Grid:
             Built = BuildGrid(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::Inline:
+        case ChaosElementTag::Inline:
             Built = BuildInline(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::Image:
+        case ChaosElementTag::Image:
             Built = BuildImage(Node, Context);
             break;
-        case IrisElementTag::Icon:
+        case ChaosElementTag::Icon:
             Built = BuildIcon(Node, Context);
             break;
-        case IrisElementTag::Text:
+        case ChaosElementTag::Text:
             Built = BuildText(Node, Context);
             break;
-        case IrisElementTag::Scroll:
+        case ChaosElementTag::Scroll:
             Built = BuildScroll(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::Input:
+        case ChaosElementTag::Input:
             Built = BuildInput(Node, Context);
             break;
-        case IrisElementTag::TextArea:
+        case ChaosElementTag::TextArea:
             Built = BuildTextArea(Node, Context);
             break;
-        case IrisElementTag::Native:
+        case ChaosElementTag::Native:
             Built = BuildNative(Node);
             break;
-        case IrisElementTag::Portal:
+        case ChaosElementTag::Portal:
             Built = BuildPortal(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::Split:
+        case ChaosElementTag::Split:
             Built = BuildSplit(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::BarChart:
+        case ChaosElementTag::BarChart:
             Built = BuildChart<DataBarChart>(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::LineChart:
+        case ChaosElementTag::LineChart:
             Built = BuildChart<DataLineChart>(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::DonutChart:
+        case ChaosElementTag::DonutChart:
             Built = BuildChart<DataDonutChart>(Node, Context, ThisStyleElement, Records);
             break;
-        case IrisElementTag::Series:
+        case ChaosElementTag::Series:
             Built = BuildChartData<SeriesNode>(Node);
             break;
-        case IrisElementTag::Slice:
+        case ChaosElementTag::Slice:
             Built = BuildChartData<SliceNode>(Node);
             break;
         default:
@@ -890,8 +890,8 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
     }
 
     if (Built && Context.Style != nullptr && Context.StyleApplier != nullptr) {
-        auto Resolved = Lustre::ResolveStyle(ThisStyleElement, *Context.Style);
-        Lustre::BindAttributes(Resolved, [&Node](std::string_view Name) { return GetNumberProp(Node.Props, Name); });
+        auto Resolved = Cosmos::ResolveStyle(ThisStyleElement, *Context.Style);
+        Cosmos::BindAttributes(Resolved, [&Node](std::string_view Name) { return GetNumberProp(Node.Props, Name); });
         Context.StyleApplier->Apply(*Built, Resolved);
         if (Records.Stats != nullptr && !ThisStyleElement.ClassName().empty()) {
             ++Records.Stats->ClassedNodes;
@@ -903,10 +903,10 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
 
     // Recorded regardless of whether OutTags is used for styling here -- this is the
     // one point every built widget funnels through, and the only place the real
-    // IrisElementTag is still known (PenumbraWidgetAdapter.cpp's wrap step, later,
+    // ChaosElementTag is still known (PenumbraWidgetAdapter.cpp's wrap step, later,
     // only has the built WidgetBase tree, with this distinction already erased).
     if (Built && Records.Tags != nullptr) {
-        (*Records.Tags)[Built.get()] = LustreTag;
+        (*Records.Tags)[Built.get()] = CosmosTag;
     }
 
     // A wrapper re-resolving this widget's style later (a class change) has only the

@@ -2,8 +2,8 @@
 
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
-#include "Iris/ComponentInstance.h"
-#include "Iris/IrisNyxDriver.h"
+#include "Chaos/ComponentInstance.h"
+#include "Chaos/ChaosNyxDriver.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
@@ -40,10 +40,10 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-using Iris::Component;
-using Iris::IrisElementTag;
-using Iris::IrisProps;
-using Iris::IrisPropValue;
+using Chaos::Component;
+using Chaos::ChaosElementTag;
+using Chaos::ChaosProps;
+using Chaos::ChaosPropValue;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::BuildWidgetTree;
 using PenumbraUiBackend::PenumbraWidget;
@@ -60,19 +60,19 @@ using Penumbra::Widgets::TextArea;
 using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
-Component MakeNode(IrisElementTag Tag, IrisProps Props = {}, std::vector<Component> Children = {}) {
+Component MakeNode(ChaosElementTag Tag, ChaosProps Props = {}, std::vector<Component> Children = {}) {
     return Component(Tag, std::move(Props), std::move(Children), nullptr);
 }
 
 void TestNoneProducesNoWidget() {
     const auto Built = BuildWidgetTree(Component(nullptr), BuildContext{});
-    Expect(Built == nullptr, "IrisElementTag::None builds to nullptr — no widget, not an error");
+    Expect(Built == nullptr, "ChaosElementTag::None builds to nullptr — no widget, not an error");
 }
 
 void TestFrameBuildsABoxWithClassName() {
-    IrisProps Props;
-    Props["class"] = IrisPropValue{std::string("health-bar")};
-    const auto Node = MakeNode(IrisElementTag::Frame, Props);
+    ChaosProps Props;
+    Props["class"] = ChaosPropValue{std::string("health-bar")};
+    const auto Node = MakeNode(ChaosElementTag::Frame, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     Expect(Built != nullptr, "<Frame> builds a widget");
@@ -83,11 +83,11 @@ void TestFrameBuildsABoxWithClassName() {
 
 void TestFrameChildrenAreAttachedAndNoneChildrenAreSkipped() {
     std::vector<Component> Children;
-    Children.push_back(MakeNode(IrisElementTag::Frame));
+    Children.push_back(MakeNode(ChaosElementTag::Frame));
     Children.push_back(Component(nullptr)); // None — should be silently dropped
-    Children.push_back(MakeNode(IrisElementTag::Frame));
+    Children.push_back(MakeNode(ChaosElementTag::Frame));
 
-    const auto Node = MakeNode(IrisElementTag::Frame, {}, std::move(Children));
+    const auto Node = MakeNode(ChaosElementTag::Frame, {}, std::move(Children));
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     Expect(Built != nullptr && Built->GetChildCount() == 2,
            "two real children are attached; the None child contributes nothing, not even a hole");
@@ -95,20 +95,20 @@ void TestFrameChildrenAreAttachedAndNoneChildrenAreSkipped() {
 
 void TestFramePressEventReachesWidgetBase() {
     bool      Pressed = false;
-    IrisProps Props;
-    Props["onPress"] = IrisPropValue{std::function<void()>([&Pressed]() { Pressed = true; })};
-    const auto Node = MakeNode(IrisElementTag::Frame, Props);
+    ChaosProps Props;
+    Props["onPress"] = ChaosPropValue{std::function<void()>([&Pressed]() { Pressed = true; })};
+    const auto Node = MakeNode(ChaosElementTag::Frame, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     Expect(Built != nullptr && static_cast<bool>(Built->OnPressed), "onPress reaches WidgetBase::OnPressed");
     if (Built != nullptr && Built->OnPressed) {
         Built->OnPressed();
-        Expect(Pressed, "invoking the built widget's OnPressed calls back into the original Iris escape hatch");
+        Expect(Pressed, "invoking the built widget's OnPressed calls back into the original Chaos escape hatch");
     }
 }
 
 void TestGridBuildsABoxWithHorizontalStackLayout() {
-    const auto Node = MakeNode(IrisElementTag::Grid);
+    const auto Node = MakeNode(ChaosElementTag::Grid);
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsBox = dynamic_cast<Box*>(Built.get());
     Expect(AsBox != nullptr, "<Grid> builds a Box (the stub mapping, docs/iris_stage2_decision_doc.md §3)");
@@ -117,16 +117,16 @@ void TestGridBuildsABoxWithHorizontalStackLayout() {
 }
 
 void TestInlineBuildsAnInlineContainer() {
-    const auto Node = MakeNode(IrisElementTag::Inline);
+    const auto Node = MakeNode(ChaosElementTag::Inline);
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     Expect(dynamic_cast<InlineContainer*>(Built.get()) != nullptr,
            "<Inline> builds an InlineContainer, distinct from a plain Box");
 }
 
 void TestTextBuildsALabelWithContent() {
-    IrisProps Props;
-    Props["text"] = IrisPropValue{std::string("Hello")};
-    const auto Node = MakeNode(IrisElementTag::Text, Props);
+    ChaosProps Props;
+    Props["text"] = ChaosPropValue{std::string("Hello")};
+    const auto Node = MakeNode(ChaosElementTag::Text, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsLabel = dynamic_cast<Label*>(Built.get());
@@ -135,7 +135,7 @@ void TestTextBuildsALabelWithContent() {
 }
 
 void TestTextPicksUpFontFromBuildContext() {
-    const auto Node = MakeNode(IrisElementTag::Text);
+    const auto Node = MakeNode(ChaosElementTag::Text);
 
     BuildContext Context;
     Context.Font = 42;
@@ -146,9 +146,9 @@ void TestTextPicksUpFontFromBuildContext() {
 }
 
 void TestImageBuildsWithoutLoadingWhenNoBackendProvided() {
-    IrisProps Props;
-    Props["src"] = IrisPropValue{std::string("assets/icons/health.png")};
-    const auto Node = MakeNode(IrisElementTag::Image, Props);
+    ChaosProps Props;
+    Props["src"] = ChaosPropValue{std::string("assets/icons/health.png")};
+    const auto Node = MakeNode(ChaosElementTag::Image, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{}); // no ImageBackend/SdlRenderer
     const auto* AsImage = dynamic_cast<ImageWidget*>(Built.get());
@@ -160,9 +160,9 @@ void TestImageBuildsWithoutLoadingWhenNoBackendProvided() {
 }
 
 void TestIconBuildsWithIconNameEvenWithoutBackendProvided() {
-    IrisProps Props;
-    Props["icon"] = IrisPropValue{std::string("chevron-down")};
-    const auto Node = MakeNode(IrisElementTag::Icon, Props);
+    ChaosProps Props;
+    Props["icon"] = ChaosPropValue{std::string("chevron-down")};
+    const auto Node = MakeNode(ChaosElementTag::Icon, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{}); // no IconBackend
     const auto* AsIcon = dynamic_cast<IconWidget*>(Built.get());
@@ -178,9 +178,9 @@ void TestIconPicksUpIconBackendFromBuildContext() {
         void DrawIcon(Penumbra::Render::Renderer&, std::string_view, Penumbra::Rect, Penumbra::Render::Color) override {}
     } Backend;
 
-    IrisProps Props;
-    Props["icon"] = IrisPropValue{std::string("chevron-down")};
-    const auto Node = MakeNode(IrisElementTag::Icon, Props);
+    ChaosProps Props;
+    Props["icon"] = ChaosPropValue{std::string("chevron-down")};
+    const auto Node = MakeNode(ChaosElementTag::Icon, Props);
 
     BuildContext Context;
     Context.IconBackend = &Backend;
@@ -192,13 +192,13 @@ void TestIconPicksUpIconBackendFromBuildContext() {
 
 void TestClickOnAnIconReachesTheFrameAroundIt() {
     int Releases = 0;
-    IrisProps IconProps;
-    IconProps["icon"] = IrisPropValue{std::string("close")};
-    IrisProps FrameProps;
-    FrameProps["onRelease"] = IrisPropValue{std::function<void()>([&Releases]() { ++Releases; })};
+    ChaosProps IconProps;
+    IconProps["icon"] = ChaosPropValue{std::string("close")};
+    ChaosProps FrameProps;
+    FrameProps["onRelease"] = ChaosPropValue{std::function<void()>([&Releases]() { ++Releases; })};
     std::vector<Component> Children;
-    Children.push_back(MakeNode(IrisElementTag::Icon, IconProps));
-    const auto Node = MakeNode(IrisElementTag::Frame, FrameProps, std::move(Children));
+    Children.push_back(MakeNode(ChaosElementTag::Icon, IconProps));
+    const auto Node = MakeNode(ChaosElementTag::Frame, FrameProps, std::move(Children));
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     auto* Frame = dynamic_cast<Penumbra::Widgets::Box*>(Built.get());
@@ -225,10 +225,10 @@ void TestClickOnAnIconReachesTheFrameAroundIt() {
 }
 
 void TestIconSizeOverridesTheDefault() {
-    IrisProps Props;
-    Props["icon"] = IrisPropValue{std::string("chevron-down")};
-    Props["size"] = IrisPropValue{14.0f};
-    const auto Node = MakeNode(IrisElementTag::Icon, Props);
+    ChaosProps Props;
+    Props["icon"] = ChaosPropValue{std::string("chevron-down")};
+    Props["size"] = ChaosPropValue{14.0f};
+    const auto Node = MakeNode(ChaosElementTag::Icon, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsIcon = dynamic_cast<IconWidget*>(Built.get());
@@ -237,9 +237,9 @@ void TestIconSizeOverridesTheDefault() {
 }
 
 void TestIconWithNoSizePropKeepsTheDefault() {
-    IrisProps Props;
-    Props["icon"] = IrisPropValue{std::string("chevron-down")};
-    const auto Node = MakeNode(IrisElementTag::Icon, Props);
+    ChaosProps Props;
+    Props["icon"] = ChaosPropValue{std::string("chevron-down")};
+    const auto Node = MakeNode(ChaosElementTag::Icon, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsIcon = dynamic_cast<IconWidget*>(Built.get());
@@ -249,12 +249,12 @@ void TestIconWithNoSizePropKeepsTheDefault() {
 
 void TestScrollBuildsAScrollablePanelWithChildrenAndWheelStep() {
     std::vector<Component> RowChildren;
-    RowChildren.push_back(MakeNode(IrisElementTag::Frame));
-    RowChildren.push_back(MakeNode(IrisElementTag::Frame));
+    RowChildren.push_back(MakeNode(ChaosElementTag::Frame));
+    RowChildren.push_back(MakeNode(ChaosElementTag::Frame));
 
-    IrisProps Props;
-    Props["wheelStep"] = IrisPropValue{24.0f};
-    const auto Node = MakeNode(IrisElementTag::Scroll, Props, RowChildren);
+    ChaosProps Props;
+    Props["wheelStep"] = ChaosPropValue{24.0f};
+    const auto Node = MakeNode(ChaosElementTag::Scroll, Props, RowChildren);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsScroll = dynamic_cast<ScrollablePanel*>(Built.get());
@@ -266,7 +266,7 @@ void TestScrollBuildsAScrollablePanelWithChildrenAndWheelStep() {
 }
 
 void TestScrollWithNoWheelStepKeepsTheDefault() {
-    const auto Node = MakeNode(IrisElementTag::Scroll);
+    const auto Node = MakeNode(ChaosElementTag::Scroll);
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsScroll = dynamic_cast<ScrollablePanel*>(Built.get());
     Expect(AsScroll != nullptr && AsScroll->WheelStepLogical == 0.0f,
@@ -274,10 +274,10 @@ void TestScrollWithNoWheelStepKeepsTheDefault() {
 }
 
 void TestInputBuildsATextInputWithTextAndPreferredWidth() {
-    IrisProps Props;
-    Props["text"] = IrisPropValue{std::string("hello")};
-    Props["preferredWidth"] = IrisPropValue{200.0f};
-    const auto Node = MakeNode(IrisElementTag::Input, Props);
+    ChaosProps Props;
+    Props["text"] = ChaosPropValue{std::string("hello")};
+    Props["preferredWidth"] = ChaosPropValue{200.0f};
+    const auto Node = MakeNode(ChaosElementTag::Input, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsInput = dynamic_cast<TextInput*>(Built.get());
@@ -296,7 +296,7 @@ void TestInputPicksUpFocusAndClipboardFromBuildContext() {
         std::string GetClipboardText() const override { return {}; }
     } Clipboard;
 
-    const auto Node = MakeNode(IrisElementTag::Input);
+    const auto Node = MakeNode(ChaosElementTag::Input);
     BuildContext Context;
     Context.Focus = &Focus;
     Context.Clipboard = &Clipboard;
@@ -308,11 +308,11 @@ void TestInputPicksUpFocusAndClipboardFromBuildContext() {
 
 void TestInputOnTextChangeReachesTextInputOnTextChanged() {
     std::string LastValue;
-    IrisProps   Props;
-    Props["onTextChange"] = IrisPropValue{std::function<void(std::string)>([&LastValue](std::string NewText) {
+    ChaosProps   Props;
+    Props["onTextChange"] = ChaosPropValue{std::function<void(std::string)>([&LastValue](std::string NewText) {
         LastValue = std::move(NewText);
     })};
-    const auto Node = MakeNode(IrisElementTag::Input, Props);
+    const auto Node = MakeNode(ChaosElementTag::Input, Props);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsInput = dynamic_cast<TextInput*>(Built.get());
@@ -327,14 +327,14 @@ void TestInputOnTextChangeReachesTextInputOnTextChanged() {
 void TestTextAreaBuildsATextAreaWithItsProps() {
     Penumbra::Widgets::FocusState Focus;
     std::string                   LastValue;
-    IrisProps                     Props;
-    Props["text"] = IrisPropValue{std::string("line one\nline two")};
-    Props["preferredWidth"] = IrisPropValue{320.0f};
-    Props["wheelStep"] = IrisPropValue{24.0f};
-    Props["onTextChange"] = IrisPropValue{std::function<void(std::string)>([&LastValue](std::string NewText) {
+    ChaosProps                     Props;
+    Props["text"] = ChaosPropValue{std::string("line one\nline two")};
+    Props["preferredWidth"] = ChaosPropValue{320.0f};
+    Props["wheelStep"] = ChaosPropValue{24.0f};
+    Props["onTextChange"] = ChaosPropValue{std::function<void(std::string)>([&LastValue](std::string NewText) {
         LastValue = std::move(NewText);
     })};
-    const auto Node = MakeNode(IrisElementTag::TextArea, Props);
+    const auto Node = MakeNode(ChaosElementTag::TextArea, Props);
 
     BuildContext Context;
     Context.Focus = &Focus;
@@ -354,11 +354,11 @@ void TestTextAreaBuildsATextAreaWithItsProps() {
 }
 
 void TestTextAreaOnTextChangeDiffReachesTheLiveTextArea() {
-    const auto Node = MakeNode(IrisElementTag::TextArea);
+    const auto Node = MakeNode(ChaosElementTag::TextArea);
     PenumbraWidget Wrapper(BuildWidgetTree(Node, BuildContext{}));
     std::string    LastValue;
 
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.OnTextChange = std::function<void(std::string)>([&LastValue](std::string NewText) { LastValue = NewText; });
     Wrapper.ApplyPropDiff(Diff);
 
@@ -370,18 +370,18 @@ void TestTextAreaOnTextChangeDiffReachesTheLiveTextArea() {
 }
 
 void TestSplitBuildsASplitPanelWithBothPanesAndProps() {
-    IrisProps Props;
-    Props["axis"] = IrisPropValue{std::string("vertical")};
-    Props["ratio"] = IrisPropValue{0.3f};
-    Props["minPaneSize"] = IrisPropValue{50.0f};
-    Props["handleThickness"] = IrisPropValue{6.0f};
+    ChaosProps Props;
+    Props["axis"] = ChaosPropValue{std::string("vertical")};
+    Props["ratio"] = ChaosPropValue{0.3f};
+    Props["minPaneSize"] = ChaosPropValue{50.0f};
+    Props["handleThickness"] = ChaosPropValue{6.0f};
 
     std::vector<Component> Panes;
-    Panes.push_back(MakeNode(IrisElementTag::Frame));
-    IrisProps SecondPaneProps;
-    SecondPaneProps["text"] = IrisPropValue{std::string("second-pane")};
-    Panes.push_back(MakeNode(IrisElementTag::Text, SecondPaneProps));
-    const auto Node = MakeNode(IrisElementTag::Split, Props, Panes);
+    Panes.push_back(MakeNode(ChaosElementTag::Frame));
+    ChaosProps SecondPaneProps;
+    SecondPaneProps["text"] = ChaosPropValue{std::string("second-pane")};
+    Panes.push_back(MakeNode(ChaosElementTag::Text, SecondPaneProps));
+    const auto Node = MakeNode(ChaosElementTag::Split, Props, Panes);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsSplit = dynamic_cast<SplitPanel*>(Built.get());
@@ -402,9 +402,9 @@ void TestSplitBuildsASplitPanelWithBothPanesAndProps() {
 
 void TestSplitWithNoPropsKeepsDefaults() {
     std::vector<Component> Panes;
-    Panes.push_back(MakeNode(IrisElementTag::Frame));
-    Panes.push_back(MakeNode(IrisElementTag::Frame));
-    const auto Node = MakeNode(IrisElementTag::Split, {}, Panes);
+    Panes.push_back(MakeNode(ChaosElementTag::Frame));
+    Panes.push_back(MakeNode(ChaosElementTag::Frame));
+    const auto Node = MakeNode(ChaosElementTag::Split, {}, Panes);
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     const auto* AsSplit = dynamic_cast<SplitPanel*>(Built.get());
@@ -424,8 +424,8 @@ void TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase() {
     // here purely to satisfy that, even though Build() is only ever actually invoked once.
     auto SharedWrapped = std::make_shared<std::unique_ptr<PenumbraWidget>>(std::move(Wrapped));
 
-    Component Node = MakeNode(IrisElementTag::Native);
-    Node.NativeBuilder = Iris::MakeNativeBuilder(
+    Component Node = MakeNode(ChaosElementTag::Native);
+    Node.NativeBuilder = Chaos::MakeNativeBuilder(
         [SharedWrapped]() -> std::unique_ptr<Umbra::IWidget> { return std::move(*SharedWrapped); });
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
@@ -434,7 +434,7 @@ void TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase() {
 }
 
 void TestNativeWithNoBuilderProducesNoWidget() {
-    const auto Node = MakeNode(IrisElementTag::Native);
+    const auto Node = MakeNode(ChaosElementTag::Native);
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     Expect(Built == nullptr,
            "<Native> with no build prop (malformed -- Codegen itself already rejects this) builds to nullptr, "
@@ -443,15 +443,15 @@ void TestNativeWithNoBuilderProducesNoWidget() {
 
 void TestNativeBuildReturningNonPenumbraWidgetProducesNoWidget() {
     struct FakeNonPenumbraWidget : Umbra::IWidget {
-        void                             ApplyPropDiff(const Umbra::IrisPropDiff&) override {}
+        void                             ApplyPropDiff(const Umbra::ChaosPropDiff&) override {}
         std::size_t                     GetChildCount() const override { return 0; }
         Umbra::IWidget*                 GetChildAt(std::size_t) const override { return nullptr; }
         void                             InsertChildAt(std::size_t, std::unique_ptr<Umbra::IWidget>) override {}
         std::unique_ptr<Umbra::IWidget> RemoveChildAt(std::size_t) override { return nullptr; }
     };
 
-    Component Node = MakeNode(IrisElementTag::Native);
-    Node.NativeBuilder = Iris::MakeNativeBuilder(
+    Component Node = MakeNode(ChaosElementTag::Native);
+    Node.NativeBuilder = Chaos::MakeNativeBuilder(
         []() -> std::unique_ptr<Umbra::IWidget> { return std::make_unique<FakeNonPenumbraWidget>(); });
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
@@ -465,14 +465,14 @@ void TestNestedTreeBuildsRecursively() {
     // the spec §9 PartyScreen shape, since <HealthBar> itself is a component invocation
     // Codegen resolves away before this walker ever sees an Component tree.
     std::vector<Component> Inner;
-    IrisProps                   TextProps;
-    TextProps["text"] = IrisPropValue{std::string("42/100")};
-    Inner.push_back(MakeNode(IrisElementTag::Text, TextProps));
+    ChaosProps                   TextProps;
+    TextProps["text"] = ChaosPropValue{std::string("42/100")};
+    Inner.push_back(MakeNode(ChaosElementTag::Text, TextProps));
 
     std::vector<Component> Outer;
-    Outer.push_back(MakeNode(IrisElementTag::Frame, {}, std::move(Inner)));
+    Outer.push_back(MakeNode(ChaosElementTag::Frame, {}, std::move(Inner)));
 
-    const auto Node = MakeNode(IrisElementTag::Frame, {}, std::move(Outer));
+    const auto Node = MakeNode(ChaosElementTag::Frame, {}, std::move(Outer));
     const auto Built = BuildWidgetTree(Node, BuildContext{});
 
     Expect(Built != nullptr && Built->GetChildCount() == 1, "outer Frame has one child");
@@ -486,11 +486,11 @@ void TestNestedTreeBuildsRecursively() {
 
 void TestRefTaggedNodeIsRecordedInOutRefs() {
     std::vector<Component> Children;
-    Component               InnerText = MakeNode(IrisElementTag::Text);
-    InnerText.Ref = IrisPropValue{std::string("trigger-icon")};
+    Component               InnerText = MakeNode(ChaosElementTag::Text);
+    InnerText.Ref = ChaosPropValue{std::string("trigger-icon")};
     Children.push_back(std::move(InnerText));
 
-    const auto Node = MakeNode(IrisElementTag::Frame, {}, std::move(Children));
+    const auto Node = MakeNode(ChaosElementTag::Frame, {}, std::move(Children));
 
     PenumbraUiBackend::RefMap Refs;
     const auto                Built = BuildWidgetTree(Node, BuildContext{}, /*OutTags=*/nullptr, &Refs);
@@ -502,7 +502,7 @@ void TestRefTaggedNodeIsRecordedInOutRefs() {
 }
 
 void TestNoRefLeavesOutRefsEmpty() {
-    const auto Node = MakeNode(IrisElementTag::Frame);
+    const auto Node = MakeNode(ChaosElementTag::Frame);
 
     PenumbraUiBackend::RefMap Refs;
     BuildWidgetTree(Node, BuildContext{}, /*OutTags=*/nullptr, &Refs);
@@ -524,12 +524,12 @@ struct FakeLifecycle : Umbra::IWidgetLifecycle {
 };
 
 // A Component with a real ComponentInstance whose Lifecycle field points at Lifecycle --
-// the same shape `iris::RegisterLifecycle` produces inside a real component body, built
+// the same shape `chaos::RegisterLifecycle` produces inside a real component body, built
 // by hand here since these tests build a Component tree directly rather than going
 // through Codegen.
-Component MakeNodeWithLifecycle(IrisElementTag Tag, Umbra::IWidgetLifecycle* Lifecycle) {
+Component MakeNodeWithLifecycle(ChaosElementTag Tag, Umbra::IWidgetLifecycle* Lifecycle) {
     Component Node = MakeNode(Tag);
-    Node.Instance = std::make_shared<iris::ComponentInstance>();
+    Node.Instance = std::make_shared<chaos::ComponentInstance>();
     Node.Instance->Lifecycle = Lifecycle;
     return Node;
 }
@@ -540,7 +540,7 @@ void TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet() {
     BuildContext Context;
     Context.LifecycleHost = &Host;
 
-    const auto Node = MakeNodeWithLifecycle(IrisElementTag::Frame, &Lifecycle);
+    const auto Node = MakeNodeWithLifecycle(ChaosElementTag::Frame, &Lifecycle);
     const auto Built = BuildWidgetTree(Node, Context);
 
     Expect(Lifecycle.MountCount == 1,
@@ -557,7 +557,7 @@ void TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed() {
     BuildContext Context;
     Context.LifecycleHost = &Host;
 
-    const auto Node = MakeNodeWithLifecycle(IrisElementTag::Frame, &Lifecycle);
+    const auto Node = MakeNodeWithLifecycle(ChaosElementTag::Frame, &Lifecycle);
     auto Built = BuildWidgetTree(Node, Context);
     Expect(Lifecycle.UnmountCount == 0, "not yet unmounted while the built widget is still alive");
 
@@ -598,7 +598,7 @@ void TestUmbraLifecycleBridgeAbortsWhenInnerLifecycleIsDestroyedFirst() {
         std::unique_ptr<Penumbra::Widgets::WidgetBase> Built;
         {
             FakeLifecycle Lifecycle;
-            Built = BuildWidgetTree(MakeNodeWithLifecycle(IrisElementTag::Frame, &Lifecycle), Context);
+            Built = BuildWidgetTree(MakeNodeWithLifecycle(ChaosElementTag::Frame, &Lifecycle), Context);
         } // Lifecycle destroyed here -- Built (and Host's registration of its bridge) is still alive.
 
         Host.Tick(0.1f); // Should AssertAlive() -> abort(), not dereference a dangling Lifecycle.
@@ -615,7 +615,7 @@ void TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance() {
     FakeLifecycle Lifecycle;
     BuildContext  Context; // LifecycleHost left null, the default
 
-    const auto Node = MakeNodeWithLifecycle(IrisElementTag::Frame, &Lifecycle);
+    const auto Node = MakeNodeWithLifecycle(ChaosElementTag::Frame, &Lifecycle);
     const auto Built = BuildWidgetTree(Node, Context);
 
     Expect(Lifecycle.MountCount == 0,
@@ -628,7 +628,7 @@ void TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost() {
     BuildContext                Context;
     Context.LifecycleHost = &Host;
 
-    const auto Node = MakeNode(IrisElementTag::Frame); // Node.Instance left unset
+    const auto Node = MakeNode(ChaosElementTag::Frame); // Node.Instance left unset
     const auto Built = BuildWidgetTree(Node, Context);
     Expect(Built != nullptr, "builds normally with no Instance at all -- registration is purely opt-in");
 }
@@ -636,7 +636,7 @@ void TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost() {
 void TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle() {
     // A plain nested <ChildComponent .../> (no <Slot>) still gets its own
     // Component::Instance from MountComponentInstance, inline in the same tree --
-    // confirmed by reading Iris/Component.h directly. The registration check has to
+    // confirmed by reading Chaos/Component.h directly. The registration check has to
     // happen at every node BuildWidgetTreeInternal visits, not just the outer Node
     // BuildWidgetTree itself was called with.
     FakeLifecycle OuterLifecycle;
@@ -645,11 +645,11 @@ void TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle() {
     BuildContext Context;
     Context.LifecycleHost = &Host;
 
-    Component Inner = MakeNodeWithLifecycle(IrisElementTag::Frame, &InnerLifecycle);
+    Component Inner = MakeNodeWithLifecycle(ChaosElementTag::Frame, &InnerLifecycle);
     std::vector<Component> Children;
     Children.push_back(std::move(Inner));
 
-    Component Outer = MakeNodeWithLifecycle(IrisElementTag::Frame, &OuterLifecycle);
+    Component Outer = MakeNodeWithLifecycle(ChaosElementTag::Frame, &OuterLifecycle);
     Outer.Children = std::move(Children);
 
     const auto Built = BuildWidgetTree(Outer, Context);
@@ -703,12 +703,12 @@ void TestApplicationRegisterLifecycleStillForwardsToItsOwnLifecycleRegistry() {
 
 // docs/next_steps.md's "a Nyx-authored OnMount/OnTick has no way to reach its own
 // component's ref'd widgets" ask. Unlike the hand-built-Component lifecycle tests above,
-// GetRef needs a real `Iris::NyxDriverState` (a real nyx::host::NyxRuntime::NyxScope with a
-// real Environment) behind Node.Instance->DriverState -- only IrisNyxDriver::MountRoot
-// produces that, so these tests go through the real `.irisx` -> IrisIrDocument -> Component
-// pipeline end to end, the same way iris-proto's own IrisNyxDriverTests.cpp verifies
+// GetRef needs a real `Chaos::NyxDriverState` (a real nyx::host::NyxRuntime::NyxScope with a
+// real Environment) behind Node.Instance->DriverState -- only ChaosNyxDriver::MountRoot
+// produces that, so these tests go through the real `.chaos` -> ChaosIrDocument -> Component
+// pipeline end to end, the same way Chaos's own ChaosNyxDriverTests.cpp verifies
 // `auto OnTick = ...` itself. TempProject mirrors that file's own test helper exactly (a
-// real on-disk fixture, not a hand-built IrisIrDocument).
+// real on-disk fixture, not a hand-built ChaosIrDocument).
 class TempProject {
 public:
     TempProject() {
@@ -730,16 +730,16 @@ private:
     std::filesystem::path Root_;
 };
 
-Iris::IrisConfig UmbraConfig() {
-    Iris::IrisConfig Config;
-    Config.Target      = Iris::IrisBuildTarget::UmbraEngine;
+Chaos::ChaosConfig UmbraConfig() {
+    Chaos::ChaosConfig Config;
+    Config.Target      = Chaos::ChaosBuildTarget::UmbraEngine;
     Config.SearchPaths = {"demo"};
     return Config;
 }
 
 void TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef() {
     TempProject       Project;
-    const std::string AppPath = Project.Write("RefTicker.irisx",
+    const std::string AppPath = Project.Write("RefTicker.chaos",
                                                "void RefTicker() {\n"
                                                "    auto OnTick = (float dt) -> {\n"
                                                "        auto handle = GetRef(\"label\");\n"
@@ -753,11 +753,11 @@ void TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef() {
                                                "    }\n"
                                                "}\n");
 
-    Iris::IrisNyxDriver Driver(UmbraConfig(), Project.RootPath());
+    Chaos::ChaosNyxDriver Driver(UmbraConfig(), Project.RootPath());
     const Component      Root = Driver.MountRoot(AppPath, "RefTicker");
     Expect(Driver.Errors().empty(), "the RefTicker fixture compiles and mounts with no errors");
     Expect(Root.Instance != nullptr && Root.Instance->Lifecycle != nullptr,
-           "the `auto OnTick = ...` local wires a real Instance->Lifecycle, same as iris-proto's own test");
+           "the `auto OnTick = ...` local wires a real Instance->Lifecycle, same as Chaos's own test");
 
     BuildContext Context;
     Context.NyxHost = &Driver.Runtime();
@@ -782,7 +782,7 @@ void TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef() {
 
 void TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle() {
     TempProject       Project;
-    const std::string AppPath = Project.Write("NoHostTicker.irisx",
+    const std::string AppPath = Project.Write("NoHostTicker.chaos",
                                                "void NoHostTicker() {\n"
                                                "    auto OnTick = (float dt) -> {\n"
                                                "        auto handle = GetRef(\"label\");\n"
@@ -794,7 +794,7 @@ void TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle() {
                                                "    }\n"
                                                "}\n");
 
-    Iris::IrisNyxDriver Driver(UmbraConfig(), Project.RootPath());
+    Chaos::ChaosNyxDriver Driver(UmbraConfig(), Project.RootPath());
     const Component      Root = Driver.MountRoot(AppPath, "NoHostTicker");
     Expect(Driver.Errors().empty(), "the NoHostTicker fixture compiles and mounts with no errors");
 
@@ -862,12 +862,12 @@ void RunWalkerTests() {
 
 void RunPenumbraWidgetAdapterTests();      // tests/PenumbraWidgetAdapterTests.cpp
 void RunSlotWiringTests();                 // tests/SlotWiringTests.cpp
-void RunLustreStyleApplierTests();         // tests/LustreStyleApplierTests.cpp
+void RunCosmosStyleApplierTests();         // tests/CosmosStyleApplierTests.cpp
 void RunStyleWiringTests();                // tests/StyleWiringTests.cpp
 void RunStyleMismatchDiagnosticTests();    // tests/StyleMismatchDiagnosticTests.cpp
 void RunStylesheetLoaderTests();           // tests/StylesheetLoaderTests.cpp
 void RunNyxApplicationBridgeTests();       // tests/NyxApplicationBridgeTests.cpp
-void RunIrisApplicationTests();            // tests/IrisApplicationTests.cpp
+void RunChaosApplicationTests();            // tests/ChaosApplicationTests.cpp
 void RunStackFillAndScrollbarTests();
 void RunRelativeSizingTests();
 void RunErrorReportingTests();
@@ -875,11 +875,11 @@ void RunChartTests();
 
 int main() {
     RunNyxApplicationBridgeTests();
-    RunIrisApplicationTests();
+    RunChaosApplicationTests();
     RunWalkerTests();
     RunPenumbraWidgetAdapterTests();
     RunSlotWiringTests();
-    RunLustreStyleApplierTests();
+    RunCosmosStyleApplierTests();
     RunStyleWiringTests();
     RunStyleMismatchDiagnosticTests();
     RunStylesheetLoaderTests();

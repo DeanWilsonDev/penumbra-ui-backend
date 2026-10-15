@@ -1,23 +1,23 @@
-#include "PenumbraUiBackend/Lustre/StyleResolution.h"
+#include "PenumbraUiBackend/Cosmos/StyleResolution.h"
 
 #include <algorithm>
 
-namespace PenumbraUiBackend::Lustre {
+namespace PenumbraUiBackend::Cosmos {
 
-::Lustre::ResolvedStyle ResolveStyle(const ::Lustre::IStyleTarget& Target, const ::Lustre::StylesheetSet& Sheets,
-                                       std::vector<::Lustre::ResolveDiagnostic>* OutDiagnostics) {
-    std::vector<::Lustre::ResolveDiagnostic> LocalDiagnostics;
-    std::vector<::Lustre::ResolveDiagnostic>& Diagnostics = OutDiagnostics ? *OutDiagnostics : LocalDiagnostics;
-    return ::Lustre::ResolveStyle(Target, Sheets, Diagnostics);
+::Cosmos::ResolvedStyle ResolveStyle(const ::Cosmos::IStyleTarget& Target, const ::Cosmos::StylesheetSet& Sheets,
+                                       std::vector<::Cosmos::ResolveDiagnostic>* OutDiagnostics) {
+    std::vector<::Cosmos::ResolveDiagnostic> LocalDiagnostics;
+    std::vector<::Cosmos::ResolveDiagnostic>& Diagnostics = OutDiagnostics ? *OutDiagnostics : LocalDiagnostics;
+    return ::Cosmos::ResolveStyle(Target, Sheets, Diagnostics);
 }
 
-void BindAttributes(::Lustre::ResolvedStyle& Style, const NumberPropLookup& Lookup) {
-    for (const ::Lustre::AttrBinding& Binding : Style.AttrBindings) {
+void BindAttributes(::Cosmos::ResolvedStyle& Style, const NumberPropLookup& Lookup) {
+    for (const ::Cosmos::AttrBinding& Binding : Style.AttrBindings) {
         const std::optional<float> Value = Lookup(Binding.Attribute);
         if (!Value) {
             continue;
         }
-        const ::Lustre::Length Pixels{*Value, ::Lustre::LengthUnit::Px};
+        const ::Cosmos::Length Pixels{*Value, ::Cosmos::LengthUnit::Px};
         const std::string&     Property = Binding.Property;
         if (Property == "width") {
             Style.Width = Pixels;
@@ -39,7 +39,7 @@ void BindAttributes(::Lustre::ResolvedStyle& Style, const NumberPropLookup& Look
             Style.BorderRadius = *Value;
         }
     }
-    for (const std::shared_ptr<::Lustre::ResolvedStyle>& Overlay :
+    for (const std::shared_ptr<::Cosmos::ResolvedStyle>& Overlay :
          {Style.Hover, Style.Active, Style.Disabled, Style.Starting}) {
         if (Overlay) {
             BindAttributes(*Overlay, Lookup);
@@ -47,4 +47,4 @@ void BindAttributes(::Lustre::ResolvedStyle& Style, const NumberPropLookup& Look
     }
 }
 
-} // namespace PenumbraUiBackend::Lustre
+} // namespace PenumbraUiBackend::Cosmos

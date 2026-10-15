@@ -1,4 +1,4 @@
-#include "PenumbraUiBackend/Lustre/StyleApplier.h"
+#include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 
 #include "PenumbraUiBackend/ChartNodes.h"
 
@@ -14,29 +14,29 @@
 
 #include <vector>
 
-namespace PenumbraUiBackend::Lustre {
+namespace PenumbraUiBackend::Cosmos {
 
 namespace {
 
-Penumbra::Render::Color ToPenumbraColor(const ::Lustre::Color& C) { return {C.R, C.G, C.B, C.A}; }
+Penumbra::Render::Color ToPenumbraColor(const ::Cosmos::Color& C) { return {C.R, C.G, C.B, C.A}; }
 
-Penumbra::Widgets::EdgeInsets ToPenumbraEdgeInsets(const ::Lustre::EdgeInsets& E) {
+Penumbra::Widgets::EdgeInsets ToPenumbraEdgeInsets(const ::Cosmos::EdgeInsets& E) {
     return {E.Left, E.Top, E.Right, E.Bottom};
 }
 
-Penumbra::Widgets::Length ToPenumbraLength(const ::Lustre::Length& L) {
+Penumbra::Widgets::Length ToPenumbraLength(const ::Cosmos::Length& L) {
     switch (L.Unit) {
-        case ::Lustre::LengthUnit::Px: return Penumbra::Widgets::Length::Logical(L.Value);
-        case ::Lustre::LengthUnit::Percent: return Penumbra::Widgets::Length::Percent(L.Value);
-        case ::Lustre::LengthUnit::Vw: return Penumbra::Widgets::Length::ViewportWidth(L.Value);
-        case ::Lustre::LengthUnit::Vh: return Penumbra::Widgets::Length::ViewportHeight(L.Value);
+        case ::Cosmos::LengthUnit::Px: return Penumbra::Widgets::Length::Logical(L.Value);
+        case ::Cosmos::LengthUnit::Percent: return Penumbra::Widgets::Length::Percent(L.Value);
+        case ::Cosmos::LengthUnit::Vw: return Penumbra::Widgets::Length::ViewportWidth(L.Value);
+        case ::Cosmos::LengthUnit::Vh: return Penumbra::Widgets::Length::ViewportHeight(L.Value);
     }
     return Penumbra::Widgets::Length::Logical(L.Value);
 }
 
-Penumbra::Render::FontStyle ToPenumbraFontStyle(const ::Lustre::ResolvedStyle& Style) {
+Penumbra::Render::FontStyle ToPenumbraFontStyle(const ::Cosmos::ResolvedStyle& Style) {
     Penumbra::Render::FontStyle Out;
-    Out.Italic = Style.FontStyleMode == ::Lustre::FontStyle::Italic;
+    Out.Italic = Style.FontStyleMode == ::Cosmos::FontStyle::Italic;
     if (Style.TextDecorationLine) {
         Out.Underline = Style.TextDecorationLine->Underline;
         Out.Strikethrough = Style.TextDecorationLine->LineThrough;
@@ -44,22 +44,22 @@ Penumbra::Render::FontStyle ToPenumbraFontStyle(const ::Lustre::ResolvedStyle& S
     return Out;
 }
 
-Penumbra::Widgets::CrossAlign ToPenumbraCrossAlign(::Lustre::Align A) {
+Penumbra::Widgets::CrossAlign ToPenumbraCrossAlign(::Cosmos::Align A) {
     switch (A) {
-        case ::Lustre::Align::Start: return Penumbra::Widgets::CrossAlign::Start;
-        case ::Lustre::Align::Center: return Penumbra::Widgets::CrossAlign::Center;
-        case ::Lustre::Align::End: return Penumbra::Widgets::CrossAlign::End;
-        case ::Lustre::Align::Stretch: return Penumbra::Widgets::CrossAlign::Stretch;
+        case ::Cosmos::Align::Start: return Penumbra::Widgets::CrossAlign::Start;
+        case ::Cosmos::Align::Center: return Penumbra::Widgets::CrossAlign::Center;
+        case ::Cosmos::Align::End: return Penumbra::Widgets::CrossAlign::End;
+        case ::Cosmos::Align::Stretch: return Penumbra::Widgets::CrossAlign::Stretch;
     }
     return Penumbra::Widgets::CrossAlign::Start;
 }
 
-Penumbra::Widgets::Justify ToPenumbraJustify(::Lustre::Justify J) {
+Penumbra::Widgets::Justify ToPenumbraJustify(::Cosmos::Justify J) {
     switch (J) {
-        case ::Lustre::Justify::Start: return Penumbra::Widgets::Justify::Start;
-        case ::Lustre::Justify::Center: return Penumbra::Widgets::Justify::Center;
-        case ::Lustre::Justify::End: return Penumbra::Widgets::Justify::End;
-        case ::Lustre::Justify::SpaceBetween: return Penumbra::Widgets::Justify::SpaceBetween;
+        case ::Cosmos::Justify::Start: return Penumbra::Widgets::Justify::Start;
+        case ::Cosmos::Justify::Center: return Penumbra::Widgets::Justify::Center;
+        case ::Cosmos::Justify::End: return Penumbra::Widgets::Justify::End;
+        case ::Cosmos::Justify::SpaceBetween: return Penumbra::Widgets::Justify::SpaceBetween;
     }
     return Penumbra::Widgets::Justify::Start;
 }
@@ -73,12 +73,12 @@ Penumbra::Widgets::Justify ToPenumbraJustify(::Lustre::Justify J) {
 // accepted", per Penumbra's own Box.cpp) -- any container that should
 // actually size around its children needs `display: stack` for that reason,
 // not just for visual flex-direction control.
-void ApplyLayout(Penumbra::Widgets::Box& Target, const ::Lustre::ResolvedStyle& Style) {
+void ApplyLayout(Penumbra::Widgets::Box& Target, const ::Cosmos::ResolvedStyle& Style) {
     if (Style.DisplayMode) {
-        if (*Style.DisplayMode == ::Lustre::Display::Inline) {
+        if (*Style.DisplayMode == ::Cosmos::Display::Inline) {
             Target.Layout = Penumbra::Widgets::LayoutMode::None;
         } else {
-            const bool Row = !Style.FlexDirectionMode || *Style.FlexDirectionMode == ::Lustre::FlexDirection::Row;
+            const bool Row = !Style.FlexDirectionMode || *Style.FlexDirectionMode == ::Cosmos::FlexDirection::Row;
             Target.Layout = Row ? Penumbra::Widgets::LayoutMode::HorizontalStack
                                  : Penumbra::Widgets::LayoutMode::VerticalStack;
         }
@@ -94,21 +94,21 @@ void ApplyLayout(Penumbra::Widgets::Box& Target, const ::Lustre::ResolvedStyle& 
     }
 }
 
-Penumbra::Anim::Easing ToPenumbraEasing(::Lustre::Easing Curve) {
+Penumbra::Anim::Easing ToPenumbraEasing(::Cosmos::Easing Curve) {
     switch (Curve) {
-        case ::Lustre::Easing::Linear: return Penumbra::Anim::Easing::Linear;
-        case ::Lustre::Easing::EaseIn: return Penumbra::Anim::Easing::EaseIn;
-        case ::Lustre::Easing::EaseInOut: return Penumbra::Anim::Easing::EaseInOut;
+        case ::Cosmos::Easing::Linear: return Penumbra::Anim::Easing::Linear;
+        case ::Cosmos::Easing::EaseIn: return Penumbra::Anim::Easing::EaseIn;
+        case ::Cosmos::Easing::EaseInOut: return Penumbra::Anim::Easing::EaseInOut;
         // CSS's default `ease` starts briskly and settles slowly, closest to ease-out.
-        case ::Lustre::Easing::Ease:
-        case ::Lustre::Easing::EaseOut: return Penumbra::Anim::Easing::EaseOut;
+        case ::Cosmos::Easing::Ease:
+        case ::Cosmos::Easing::EaseOut: return Penumbra::Anim::Easing::EaseOut;
     }
     return Penumbra::Anim::Easing::EaseOut;
 }
 
-// The Box values a Lustre `transition` entry can ease, by CSS property name. `all`
+// The Box values a Cosmos `transition` entry can ease, by CSS property name. `all`
 // covers every one; a property Box can't ease (border-radius, say) is left out.
-std::vector<Penumbra::Widgets::Transition> ToPenumbraTransitions(const std::vector<::Lustre::Transition>& Entries) {
+std::vector<Penumbra::Widgets::Transition> ToPenumbraTransitions(const std::vector<::Cosmos::Transition>& Entries) {
     using Penumbra::Widgets::TransitionProperty;
     static const std::unordered_map<std::string, TransitionProperty> kProperties{
         {"width", TransitionProperty::Width},
@@ -118,7 +118,7 @@ std::vector<Penumbra::Widgets::Transition> ToPenumbraTransitions(const std::vect
         {"opacity", TransitionProperty::Opacity}};
 
     std::vector<Penumbra::Widgets::Transition> Out;
-    for (const ::Lustre::Transition& Entry : Entries) {
+    for (const ::Cosmos::Transition& Entry : Entries) {
         const Penumbra::Anim::Easing Curve = ToPenumbraEasing(Entry.Curve);
         if (Entry.Property == "all") {
             for (const auto& [Name, Property] : kProperties) {
@@ -133,8 +133,8 @@ std::vector<Penumbra::Widgets::Transition> ToPenumbraTransitions(const std::vect
 
 // The chart properties, plus `color` for the labels, onto a chart's own slots. Its box
 // (background, padding, size) goes through ApplyBoxStyle like any Box's.
-void ApplyChartStyle(Penumbra::Widgets::ChartStyle& Target, const ::Lustre::ResolvedStyle& Style) {
-    const ::Lustre::ChartProperties& Chart = Style.Chart;
+void ApplyChartStyle(Penumbra::Widgets::ChartStyle& Target, const ::Cosmos::ResolvedStyle& Style) {
+    const ::Cosmos::ChartProperties& Chart = Style.Chart;
     if (Style.TextColor) {
         Target.ColorLabel = ToPenumbraColor(*Style.TextColor);
     }
@@ -163,7 +163,7 @@ void ApplyChartStyle(Penumbra::Widgets::ChartStyle& Target, const ::Lustre::Reso
     Target.TransitionSeconds        = Chart.ChangeSeconds.value_or(Target.TransitionSeconds);
 }
 
-void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::ResolvedStyle& Style) {
+void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Cosmos::ResolvedStyle& Style) {
     if (Style.BackgroundColor) {
         Target.ColorBackground = ToPenumbraColor(*Style.BackgroundColor);
     }
@@ -218,16 +218,16 @@ void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Lustre::Resolved
 
 } // namespace
 
-LustreStyleApplier::LustreStyleApplier(Penumbra::Render::IFontBackend* FontBackend, float DpiScaleFactor)
+CosmosStyleApplier::CosmosStyleApplier(Penumbra::Render::IFontBackend* FontBackend, float DpiScaleFactor)
     : FontBackend_(FontBackend), DpiScaleFactor_(DpiScaleFactor) {}
 
-void LustreStyleApplier::SetDpiScaleFactor(float DpiScaleFactor) {
+void CosmosStyleApplier::SetDpiScaleFactor(float DpiScaleFactor) {
     if (DpiScaleFactor == DpiScaleFactor_) return;
     DpiScaleFactor_ = DpiScaleFactor;
     FontCache_.clear();
 }
 
-Penumbra::Render::FontHandle LustreStyleApplier::ResolveFont(const ::Lustre::FontRequest& Request,
+Penumbra::Render::FontHandle CosmosStyleApplier::ResolveFont(const ::Cosmos::FontRequest& Request,
                                                              Penumbra::Render::FontStyle   FontStyle) const {
     std::string CacheKey = Request.Path + "@" + std::to_string(Request.SizeLogical);
     if (FontStyle.Italic) CacheKey += "#i";
@@ -242,14 +242,14 @@ Penumbra::Render::FontHandle LustreStyleApplier::ResolveFont(const ::Lustre::Fon
     return Handle;
 }
 
-std::optional<::Lustre::FontRequest> LustreStyleApplier::EffectiveFont(const ::Lustre::ResolvedStyle& Style) const {
+std::optional<::Cosmos::FontRequest> CosmosStyleApplier::EffectiveFont(const ::Cosmos::ResolvedStyle& Style) const {
     if (Style.Font) return Style.Font;
     if (!DefaultFont_) return std::nullopt;
-    return ::Lustre::FontRequest{Style.FontFamily.value_or(DefaultFont_->Path),
+    return ::Cosmos::FontRequest{Style.FontFamily.value_or(DefaultFont_->Path),
                                  Style.FontSizeLogical.value_or(DefaultFont_->SizeLogical)};
 }
 
-void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lustre::ResolvedStyle& Style) const {
+void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Cosmos::ResolvedStyle& Style) const {
     using Penumbra::Widgets::Box;
     using Penumbra::Widgets::Checkbox;
     using Penumbra::Widgets::IconWidget;
@@ -257,7 +257,7 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
 
     // <Icon> (IconWidget) is a WidgetBase direct subclass, not a Box -- same
     // as ImageWidget below -- so it has to be handled before the Box-only
-    // early return rather than after it. No dedicated `icon-color` Lustre
+    // early return rather than after it. No dedicated `icon-color` Cosmos
     // property exists (or needs to): this reuses the same `color` property
     // Label's ColorText branch below already resolves from TextColor, same
     // "foreground color" concept CSS's own `color` (and `currentColor`)
@@ -312,7 +312,7 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
 
     if (Style.MaxWidth) {
         auto* AsTruncatingLabel = dynamic_cast<Label*>(&Widget);
-        if (AsTruncatingLabel && Style.MaxWidth->Unit == ::Lustre::LengthUnit::Px) {
+        if (AsTruncatingLabel && Style.MaxWidth->Unit == ::Cosmos::LengthUnit::Px) {
             AsTruncatingLabel->MaxWidthLogical = Style.MaxWidth->Value;
         } else {
             AsBox->Style.MaxWidth = ToPenumbraLength(*Style.MaxWidth);
@@ -364,7 +364,7 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
     // decorative element, not a second background, so this reuses the same
     // `color` property Label/IconWidget's TextColor branches already resolve
     // rather than inventing a component-specific `handle-color` (no such
-    // property exists in Lustre, deliberately). SplitPanel keeps its handle
+    // property exists in Cosmos, deliberately). SplitPanel keeps its handle
     // colours private, poured in only via ApplyStyle(SplitPanelStyle), which
     // assigns the whole BoxStyle slice wholesale (SplitPanel.cpp) rather than
     // field-by-field like ApplyBoxStyle above -- so this seeds HandleStyle from
@@ -415,10 +415,10 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
             AsLabel->Font = ResolveFont(*Font, ToPenumbraFontStyle(Style));
         }
         if (Style.TextOverflowMode) {
-            AsLabel->TruncateWithEllipsis = (*Style.TextOverflowMode == ::Lustre::TextOverflow::Ellipsis);
+            AsLabel->TruncateWithEllipsis = (*Style.TextOverflowMode == ::Cosmos::TextOverflow::Ellipsis);
         }
         if (Style.WhiteSpaceMode) {
-            AsLabel->Wrap = (*Style.WhiteSpaceMode == ::Lustre::WhiteSpace::Normal);
+            AsLabel->Wrap = (*Style.WhiteSpaceMode == ::Cosmos::WhiteSpace::Normal);
         }
     }
 
@@ -476,4 +476,4 @@ void LustreStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Lu
     }
 }
 
-} // namespace PenumbraUiBackend::Lustre
+} // namespace PenumbraUiBackend::Cosmos

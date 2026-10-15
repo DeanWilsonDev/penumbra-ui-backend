@@ -10,15 +10,15 @@
 
 namespace PenumbraUiBackend {
 
-// Iris's chart primitives (`Iris/IrisElementTag.h`'s BarChart..Slice) on Penumbra. A
+// Chaos's chart primitives (`Chaos/ChaosElementTag.h`'s BarChart..Slice) on Penumbra. A
 // chart's data is its children: one `<Series>` per series of a bar or line chart, one
 // `<Slice>` per slice of a donut. Those build to the two leaf nodes below, which draw
-// nothing and only hold their data and colour (Lustre's `color`, applied by
-// LustreStyleApplier). The charts are Penumbra's own, extended to copy that data in from
+// nothing and only hold their data and colour (Cosmos's `color`, applied by
+// CosmosStyleApplier). The charts are Penumbra's own, extended to copy that data in from
 // their children at the start of every layout -- so whatever the reconciler does to the
 // children (a `<Slot>`'s list of series growing, a series' values changing) reaches the
 // chart without anything else keeping the two in step. Header-only on purpose: the
-// Lustre bridge target needs the node types too, and it doesn't link `iris`.
+// Cosmos bridge target needs the node types too, and it doesn't link `chaos`.
 
 namespace Detail {
 

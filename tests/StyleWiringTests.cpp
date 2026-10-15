@@ -1,10 +1,10 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Iris/Reconciler.h"
-#include "Iris/Signal.h"
-#include "Iris/SlotResolution.h"
-#include "Lustre/Parser.h"
+#include "Chaos/Reconciler.h"
+#include "Chaos/Signal.h"
+#include "Chaos/SlotResolution.h"
+#include "Cosmos/Parser.h"
 
 #include "Penumbra/Render/Renderer.h"
 #include "Penumbra/Widgets/Box.h"
@@ -34,54 +34,54 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-using Iris::Component;
-using Iris::IrisElementTag;
-using Iris::IrisProps;
-using Iris::IrisPropValue;
+using Chaos::Component;
+using Chaos::ChaosElementTag;
+using Chaos::ChaosProps;
+using Chaos::ChaosPropValue;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::BuildWidgetTree;
 using PenumbraUiBackend::PenumbraWidget;
 using PenumbraUiBackend::PrimitiveTagMap;
 using PenumbraUiBackend::WrapExistingTree;
-using PenumbraUiBackend::Lustre::LustreStyleApplier;
+using PenumbraUiBackend::Cosmos::CosmosStyleApplier;
 using Penumbra::Widgets::Box;
 using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::Label;
 using Penumbra::Widgets::WidgetBase;
 
-Component MakeNode(IrisElementTag Tag, IrisProps Props = {}, std::vector<Component> Children = {}) {
+Component MakeNode(ChaosElementTag Tag, ChaosProps Props = {}, std::vector<Component> Children = {}) {
     return Component(Tag, std::move(Props), std::move(Children), nullptr);
 }
 
-IrisProps WithClass(const std::string& ClassName) {
-    IrisProps Props;
-    Props["class"] = IrisPropValue{ClassName};
+ChaosProps WithClass(const std::string& ClassName) {
+    ChaosProps Props;
+    Props["class"] = ChaosPropValue{ClassName};
     return Props;
 }
 
-::Lustre::Stylesheet ParseOrDie(const std::string& Source, const std::string& FilePath) {
-    ::Lustre::Parser Parser(Source, FilePath);
-    ::Lustre::ParseResult Result = Parser.Parse();
+::Cosmos::Stylesheet ParseOrDie(const std::string& Source, const std::string& FilePath) {
+    ::Cosmos::Parser Parser(Source, FilePath);
+    ::Cosmos::ParseResult Result = Parser.Parse();
     Expect(Result.Errors.empty() && Result.Sheet.has_value(), "test fixture stylesheet `" + FilePath + "` parses cleanly");
-    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Lustre::Stylesheet{};
+    return Result.Sheet.has_value() ? std::move(*Result.Sheet) : ::Cosmos::Stylesheet{};
 }
 
 void TestMountAppliesResolvedStyleToABuiltWidget() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .bar-critical {
     background-color: #E8593C;
     border-radius: 8px;
 }
 )",
-                                                            "HealthBar.lustre");
+                                                            "HealthBar.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("bar-critical"));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("bar-critical"));
     const auto Built = BuildWidgetTree(Node, Context);
 
     if (Built == nullptr) {
@@ -96,7 +96,7 @@ void TestMountAppliesResolvedStyleToABuiltWidget() {
 }
 
 void TestMountLeavesStyleUntouchedWhenNoContextIsSupplied() {
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("bar-critical"));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("bar-critical"));
     const auto Built = BuildWidgetTree(Node, BuildContext{}); // Style/StyleApplier both null
 
     const auto* AsBox = dynamic_cast<Box*>(Built.get());
@@ -105,24 +105,24 @@ void TestMountLeavesStyleUntouchedWhenNoContextIsSupplied() {
 }
 
 void TestMountResolvesADescendantSelectorAcrossRealAncestry() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .card {
     .card-title {
         color: #FFFFFF;
     }
 }
 )",
-                                                            "Card.lustre");
+                                                            "Card.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
     std::vector<Component> Children;
-    Children.push_back(MakeNode(IrisElementTag::Text, WithClass("card-title")));
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("card"), std::move(Children));
+    Children.push_back(MakeNode(ChaosElementTag::Text, WithClass("card-title")));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("card"), std::move(Children));
 
     const auto Built = BuildWidgetTree(Node, Context);
     const auto* AsBox = dynamic_cast<Box*>(Built.get());
@@ -135,21 +135,21 @@ void TestMountResolvesADescendantSelectorAcrossRealAncestry() {
 }
 
 void TestMountMergesGlobalAndComponentLayers() {
-    const ::Lustre::Stylesheet GlobalSheet = ParseOrDie(".card { background-color: #000000; }", "global.lustre");
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(".card { border-radius: 4px; }", "Card.lustre");
+    const ::Cosmos::Stylesheet GlobalSheet = ParseOrDie(".card { background-color: #000000; }", "global.cosmos");
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(".card { border-radius: 4px; }", "Card.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{&GlobalSheet, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{&GlobalSheet, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("card"));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("card"));
     const auto Built = BuildWidgetTree(Node, Context);
     const auto* AsBox = dynamic_cast<Box*>(Built.get());
 
     Expect(AsBox != nullptr && AsBox->Style.ColorBackground.A == 0xFF,
-           "global.lustre's background-color still applies even though the component file doesn't set it");
+           "global.cosmos's background-color still applies even though the component file doesn't set it");
     Expect(AsBox != nullptr && AsBox->Style.BorderRadius == 4.0F,
            "the component file's own border-radius applies alongside global's background-color");
 }
@@ -157,48 +157,48 @@ void TestMountMergesGlobalAndComponentLayers() {
 void TestMountMergesGradientAcrossGlobalAndComponentLayers() {
     // Regression test for the MergeInto() gap where BackgroundGradientStart/
     // End weren't copied field-by-field alongside BackgroundColor et al., so a
-    // gradient set only in global.lustre silently vanished once a component
+    // gradient set only in global.cosmos silently vanished once a component
     // sheet was also merged in.
-    const ::Lustre::Stylesheet GlobalSheet =
-        ParseOrDie(".card { background-gradient-start: #4A90FF; background-gradient-end: #000000; }", "global.lustre");
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(".card { border-radius: 4px; }", "Card.lustre");
+    const ::Cosmos::Stylesheet GlobalSheet =
+        ParseOrDie(".card { background-gradient-start: #4A90FF; background-gradient-end: #000000; }", "global.cosmos");
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(".card { border-radius: 4px; }", "Card.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{&GlobalSheet, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{&GlobalSheet, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("card"));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("card"));
     const auto Built = BuildWidgetTree(Node, Context);
     const auto* AsBox = dynamic_cast<Box*>(Built.get());
 
     Expect(AsBox != nullptr && AsBox->Style.GradientTop.R == 0x4A && AsBox->Style.GradientTop.B == 0xFF,
-           "global.lustre's background-gradient-start still applies once merged with a component layer");
+           "global.cosmos's background-gradient-start still applies once merged with a component layer");
     Expect(AsBox != nullptr && AsBox->Style.BorderRadius == 4.0F,
            "the component file's own border-radius applies alongside global's gradient");
 }
 
-// lustre_core_spec.md §1.7: color/font inherit from the nearest ancestor that sets them.
+// cosmos_core_spec.md §1.7: color/font inherit from the nearest ancestor that sets them.
 // Proves inheritance reaches a real Penumbra widget through an actual BuildWidgetTree
-// call (not just a synthetic lustre-level Resolver test) -- an <Icon> reuses the same
+// call (not just a synthetic cosmos-level Resolver test) -- an <Icon> reuses the same
 // `color` property Label's ColorText does (docs/next_steps.md's 2026-07-23 second-pass
 // entry), so it's the concrete scenario a follow-up question about this session's
 // <Split> handle-color work raised: is a nested leaf's foreground color tied to an
 // ancestor's, or independently controllable? Answer: independently controllable by
 // default (its own `color` rule always wins), but it now inherits when it sets none.
 void TestColorInheritsFromAnAncestorFrameToANestedIconWithNoClass() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(".row { color: #FFFFFF; }", "test.lustre");
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(".row { color: #FFFFFF; }", "test.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
     std::vector<Component> Children;
-    Children.push_back(MakeNode(IrisElementTag::Icon)); // no class of its own
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("row"), std::move(Children));
+    Children.push_back(MakeNode(ChaosElementTag::Icon)); // no class of its own
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("row"), std::move(Children));
 
     const auto Built = BuildWidgetTree(Node, Context);
     const auto* AsBox = dynamic_cast<Box*>(Built.get());
@@ -214,18 +214,18 @@ void TestColorInheritsFromAnAncestorFrameToANestedIconWithNoClass() {
 // Companion to the test above -- proves inheritance is scoped to color/font only (§1.7),
 // not every property, through the same real BuildWidgetTree path.
 void TestBackgroundColorDoesNotInheritToANestedChildWithNoClass() {
-    const ::Lustre::Stylesheet ComponentSheet =
-        ParseOrDie(".row { background-color: #FF0000; color: #FFFFFF; }", "test.lustre");
+    const ::Cosmos::Stylesheet ComponentSheet =
+        ParseOrDie(".row { background-color: #FF0000; color: #FFFFFF; }", "test.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
     std::vector<Component> Children;
-    Children.push_back(MakeNode(IrisElementTag::Frame)); // a plain child Box, no class
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("row"), std::move(Children));
+    Children.push_back(MakeNode(ChaosElementTag::Frame)); // a plain child Box, no class
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("row"), std::move(Children));
 
     const auto Built = BuildWidgetTree(Node, Context);
     const auto* AsBox = dynamic_cast<Box*>(Built.get());
@@ -238,7 +238,7 @@ void TestBackgroundColorDoesNotInheritToANestedChildWithNoClass() {
 }
 
 void TestClassChangeReResolvesAndAppliesTheNewStyle() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .bar-normal {
     background-color: #4CAF50;
     padding: 8px;
@@ -248,15 +248,15 @@ void TestClassChangeReResolvesAndAppliesTheNewStyle() {
     background-color: #E8593C;
 }
 )",
-                                                            "HealthBar.lustre");
+                                                            "HealthBar.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("bar-normal"));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("bar-normal"));
     auto Built = BuildWidgetTree(Node, Context);
     auto Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr, Context.Style, Context.StyleApplier);
 
@@ -265,7 +265,7 @@ void TestClassChangeReResolvesAndAppliesTheNewStyle() {
            "mount resolves .bar-normal's own green background");
     Expect(AsBoxBefore != nullptr && AsBoxBefore->Style.Padding.Left == 8.0F, "and .bar-normal's own padding");
 
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.ClassName = "bar-critical";
     Wrapper->ApplyPropDiff(Diff);
 
@@ -277,11 +277,11 @@ void TestClassChangeReResolvesAndAppliesTheNewStyle() {
 }
 
 void TestClassChangeIsANoOpWithoutStyleContext() {
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("bar-normal"));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("bar-normal"));
     auto Built = BuildWidgetTree(Node, BuildContext{});
     auto Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr); // no style context at all
 
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.ClassName = "bar-critical";
     Wrapper->ApplyPropDiff(Diff); // must not crash
 
@@ -293,24 +293,24 @@ void TestClassChangeIsANoOpWithoutStyleContext() {
 }
 
 void TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .card {
     .card-title {
         color: #FFFFFF;
     }
 }
 )",
-                                                            "Card.lustre");
+                                                            "Card.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
     std::vector<Component> Children;
-    Children.push_back(MakeNode(IrisElementTag::Text));
-    const auto Node = MakeNode(IrisElementTag::Frame, WithClass("card"), std::move(Children));
+    Children.push_back(MakeNode(ChaosElementTag::Text));
+    const auto Node = MakeNode(ChaosElementTag::Frame, WithClass("card"), std::move(Children));
 
     auto Built = BuildWidgetTree(Node, Context);
     auto Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr, Context.Style, Context.StyleApplier);
@@ -321,7 +321,7 @@ void TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree() {
         return;
     }
 
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.ClassName = "card-title";
     ChildWrapper->ApplyPropDiff(Diff);
 
@@ -338,7 +338,7 @@ void TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree() {
 // giving `grid { }` and `frame { }` deliberately different colors and confirming the
 // *grid* one still applies after a class change forces re-resolution.
 void TestClassChangeStillResolvesAGridPrimitiveSelectorCorrectly() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 grid {
     background-color: #00FF00;
 }
@@ -347,15 +347,15 @@ frame {
     background-color: #FF0000;
 }
 )",
-                                                            "Grid.lustre");
+                                                            "Grid.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto    Node = MakeNode(IrisElementTag::Grid);
+    const auto    Node = MakeNode(ChaosElementTag::Grid);
     PrimitiveTagMap Tags;
     auto Built = BuildWidgetTree(Node, Context, &Tags);
     auto Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr, Context.Style, Context.StyleApplier, &Tags);
@@ -365,7 +365,7 @@ frame {
            "mount resolves the grid { } primitive selector (green, not frame's red)");
     Expect(Wrapper->GetPrimitiveTag() == "Grid", "the wrapper's own GetPrimitiveTag() reports the real tag");
 
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.ClassName = ""; // trigger re-resolution -- a primitive selector doesn't care what it is
     Wrapper->ApplyPropDiff(Diff);
 
@@ -378,21 +378,21 @@ frame {
 // degrades to the old dynamic_cast-based guess rather than crashing or leaving the tag
 // empty; documented as "Frame" for a plain Box, matching InferPrimitiveTag's own comment.
 void TestClassChangeFallsBackToFrameGuessWithoutAPrimitiveTagMap() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie("frame { background-color: #4CAF50; }", "test.lustre");
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie("frame { background-color: #4CAF50; }", "test.cosmos");
 
-    const LustreStyleApplier Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    const CosmosStyleApplier Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext Context;
     Context.Style = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node = MakeNode(IrisElementTag::Grid); // really a Grid, but no map to say so
+    const auto Node = MakeNode(ChaosElementTag::Grid); // really a Grid, but no map to say so
     auto       Built = BuildWidgetTree(Node, Context); // no OutTags
     auto       Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr, Context.Style, Context.StyleApplier); // no Tags
 
     Expect(Wrapper->GetPrimitiveTag().empty(), "with no PrimitiveTagMap, GetPrimitiveTag() is empty, not guessed eagerly");
 
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.ClassName = "";
     Wrapper->ApplyPropDiff(Diff);
 
@@ -437,11 +437,11 @@ private:
     bool                       Ready_{false};
 };
 
-// docs/next_steps.md's "Animate layout and colour from Lustre" acceptance: a Frame whose
+// docs/next_steps.md's "Animate layout and colour from Cosmos" acceptance: a Frame whose
 // class goes from g-0 to g-60 under `transition: flex-grow 0.6s ease-out` eases there
 // over 0.6s, with nothing done per frame by the app.
-void TestAClassChangeEasesFlexGrowUnderALustreTransition() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+void TestAClassChangeEasesFlexGrowUnderACosmosTransition() {
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .track { display: stack; flex-direction: row; }
 .grow { transition: flex-grow 0.6s ease-out; }
 .g-0 { flex-grow: 0; }
@@ -449,17 +449,17 @@ void TestAClassChangeEasesFlexGrowUnderALustreTransition() {
 .g-60 { flex-grow: 60; }
 .g-100 { flex-grow: 100; }
 )",
-                                                            "Stats.lustre");
-    const LustreStyleApplier      Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+                                                            "Stats.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext                  Context;
     Context.Style        = &Sheets;
     Context.StyleApplier = &Applier;
 
     PrimitiveTagMap Tags;
-    const auto      Node = MakeNode(IrisElementTag::Frame, WithClass("track"),
-                                    {MakeNode(IrisElementTag::Frame, WithClass("grow g-0")),
-                                     MakeNode(IrisElementTag::Frame, WithClass("grow g-100"))});
+    const auto      Node = MakeNode(ChaosElementTag::Frame, WithClass("track"),
+                                    {MakeNode(ChaosElementTag::Frame, WithClass("grow g-0")),
+                                     MakeNode(ChaosElementTag::Frame, WithClass("grow g-100"))});
     auto Wrapper = WrapExistingTree(BuildWidgetTree(Node, Context, &Tags), nullptr, nullptr, &Sheets, &Applier, &Tags);
 
     FrameStepper Frames;
@@ -474,10 +474,10 @@ void TestAClassChangeEasesFlexGrowUnderALustreTransition() {
     Frames.Step(Root, 0.1F);
     Expect(Bar->GetArrangedRect().W == 0.0F, "the g-0 bar starts with no width");
 
-    Umbra::IrisPropDiff ToBar;
+    Umbra::ChaosPropDiff ToBar;
     ToBar.ClassName = "grow g-60";
     Wrapper->GetChildAt(0)->ApplyPropDiff(ToBar);
-    Umbra::IrisPropDiff ToRest;
+    Umbra::ChaosPropDiff ToRest;
     ToRest.ClassName = "grow g-40";
     Wrapper->GetChildAt(1)->ApplyPropDiff(ToRest);
 
@@ -496,7 +496,7 @@ void TestAClassChangeEasesFlexGrowUnderALustreTransition() {
 }
 
 void TestAStartingStyleGrowsANewlyMountedBarIn() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .track { display: stack; flex-direction: row; }
 .bar {
     flex-grow: 1;
@@ -505,16 +505,16 @@ void TestAStartingStyleGrowsANewlyMountedBarIn() {
 }
 .rest { flex-grow: 1; }
 )",
-                                                            "Bars.lustre");
-    const LustreStyleApplier      Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+                                                            "Bars.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext                  Context;
     Context.Style        = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto Node  = MakeNode(IrisElementTag::Frame, WithClass("track"),
-                                {MakeNode(IrisElementTag::Frame, WithClass("bar")),
-                                 MakeNode(IrisElementTag::Frame, WithClass("rest"))});
+    const auto Node  = MakeNode(ChaosElementTag::Frame, WithClass("track"),
+                                {MakeNode(ChaosElementTag::Frame, WithClass("bar")),
+                                 MakeNode(ChaosElementTag::Frame, WithClass("rest"))});
     auto       Built = BuildWidgetTree(Node, Context);
     auto*      Track = dynamic_cast<Box*>(Built.get());
     FrameStepper Frames;
@@ -537,21 +537,21 @@ void TestAStartingStyleGrowsANewlyMountedBarIn() {
            "and grows in toward its own flex-grow");
 }
 
-void TestLustreOpacityAndTransitionsReachBoxStyle() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+void TestCosmosOpacityAndTransitionsReachBoxStyle() {
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .faded {
     opacity: 0.5;
     transition: opacity 0.3s ease-in, all 0.2s linear, border-radius 1s;
 }
 )",
-                                                            "Faded.lustre");
-    const LustreStyleApplier      Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+                                                            "Faded.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext                  Context;
     Context.Style        = &Sheets;
     Context.StyleApplier = &Applier;
 
-    const auto  Built = BuildWidgetTree(MakeNode(IrisElementTag::Frame, WithClass("faded")), Context);
+    const auto  Built = BuildWidgetTree(MakeNode(ChaosElementTag::Frame, WithClass("faded")), Context);
     const auto* AsBox = dynamic_cast<const Box*>(Built.get());
     if (AsBox == nullptr) {
         Expect(false, "<Frame class=\"faded\"> builds a Box");
@@ -568,39 +568,39 @@ void TestLustreOpacityAndTransitionsReachBoxStyle() {
     Expect(!AsBox->StartingStyle.has_value(), "no @starting-style leaves Box::StartingStyle unset");
 }
 
-IrisProps WithClassAndFill(const std::string& ClassName, float Fill) {
-    IrisProps Props = WithClass(ClassName);
-    Props["fill"]   = IrisPropValue{Fill};
+ChaosProps WithClassAndFill(const std::string& ClassName, float Fill) {
+    ChaosProps Props = WithClass(ClassName);
+    Props["fill"]   = ChaosPropValue{Fill};
     return Props;
 }
 
-// `flex-grow: attr(fill)` follows a Frame's `fill` prop all the way through: an
-// iris::Signal changes, iris::Tick re-renders the Slot, the reconciler's prop diff
+// `flex-grow: attr(fill)` follows a Frame's `fill` prop all the way through: a
+// chaos::Signal changes, chaos::Tick re-renders the Slot, the reconciler's prop diff
 // carries the new number, and the bar eases to it under its transition.
 void TestAnAttrBindingFollowsItsPropThroughTheReconciler() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .track { display: stack; flex-direction: row; }
 .share { flex-grow: attr(fill); transition: flex-grow 0.6s ease-out; }
 )",
-                                                            "Share.lustre");
-    const LustreStyleApplier      Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+                                                            "Share.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext                  Context;
     Context.Style        = &Sheets;
     Context.StyleApplier = &Applier;
-    const iris::MountFn Mount = PenumbraUiBackend::MakeMountFn(Context);
+    const chaos::MountFn Mount = PenumbraUiBackend::MakeMountFn(Context);
 
-    iris::Signal<float> Fill = 0.0F;
+    chaos::Signal<float> Fill = 0.0F;
     const Component     RootNode =
-        MakeNode(IrisElementTag::Frame, WithClass("track"),
-                 {Component(IrisElementTag::Slot, {}, {}, Iris::MakeSlotCallable([&]() -> Component {
-                                return MakeNode(IrisElementTag::Frame, WithClassAndFill("share", Fill.get()));
+        MakeNode(ChaosElementTag::Frame, WithClass("track"),
+                 {Component(ChaosElementTag::Slot, {}, {}, Chaos::MakeSlotCallable([&]() -> Component {
+                                return MakeNode(ChaosElementTag::Frame, WithClassAndFill("share", Fill.get()));
                             })),
-                  Component(IrisElementTag::Slot, {}, {}, Iris::MakeSlotCallable([&]() -> Component {
-                                return MakeNode(IrisElementTag::Frame, WithClassAndFill("share", 100.0F - Fill.get()));
+                  Component(ChaosElementTag::Slot, {}, {}, Chaos::MakeSlotCallable([&]() -> Component {
+                                return MakeNode(ChaosElementTag::Frame, WithClassAndFill("share", 100.0F - Fill.get()));
                             }))});
     std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
-    auto                            Slots = iris::ResolveSlots(*Root, RootNode, Mount);
+    auto                            Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
     auto* Track = dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
 
     FrameStepper Frames;
@@ -613,7 +613,7 @@ void TestAnAttrBindingFollowsItsPropThroughTheReconciler() {
     Expect(Bar->GetArrangedRect().W == 0.0F, "the bar's flex-grow comes from its fill prop through attr(): 0 to start");
 
     Fill.set(60.0F);
-    iris::Tick();
+    chaos::Tick();
     Frames.Step(*Track, 0.1F);
     for (int Frame = 0; Frame < 3; ++Frame) {
         Frames.Step(*Track, 0.1F);
@@ -627,29 +627,29 @@ void TestAnAttrBindingFollowsItsPropThroughTheReconciler() {
 }
 
 void TestAClassChangeKeepsAnAttrBoundValue() {
-    const ::Lustre::Stylesheet ComponentSheet = ParseOrDie(R"(
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
 .bar { flex-grow: attr(fill); }
 .bar-tall { height: 40px; }
 )",
-                                                            "Bar.lustre");
-    const LustreStyleApplier      Applier;
-    const ::Lustre::StylesheetSet Sheets{nullptr, &ComponentSheet};
+                                                            "Bar.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
     BuildContext                  Context;
     Context.Style        = &Sheets;
     Context.StyleApplier = &Applier;
 
     std::unique_ptr<Umbra::IWidget> Wrapper =
-        PenumbraUiBackend::MakeMountFn(Context)(MakeNode(IrisElementTag::Frame, WithClassAndFill("bar", 30.0F)));
+        PenumbraUiBackend::MakeMountFn(Context)(MakeNode(ChaosElementTag::Frame, WithClassAndFill("bar", 30.0F)));
     auto* AsBox = Wrapper ? dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Wrapper.get())->RawWidget()) : nullptr;
     Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 30.0F, "attr(fill) sets flex-grow from the prop at mount");
 
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.ClassName = "bar bar-tall";
     Wrapper->ApplyPropDiff(Diff);
     Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 30.0F && AsBox->Style.Height.IsSet(),
            "a class change re-resolves the style and still fills attr(fill) from the prop the wrapper recorded");
 
-    Umbra::IrisPropDiff NewFill;
+    Umbra::ChaosPropDiff NewFill;
     NewFill.Numbers["fill"] = 45.0F;
     Wrapper->ApplyPropDiff(NewFill);
     Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 45.0F && AsBox->Style.Height.IsSet(),
@@ -669,8 +669,8 @@ void RunStyleWiringTests() {
     TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree();
     TestClassChangeStillResolvesAGridPrimitiveSelectorCorrectly();
     TestClassChangeFallsBackToFrameGuessWithoutAPrimitiveTagMap();
-    TestLustreOpacityAndTransitionsReachBoxStyle();
-    TestAClassChangeEasesFlexGrowUnderALustreTransition();
+    TestCosmosOpacityAndTransitionsReachBoxStyle();
+    TestAClassChangeEasesFlexGrowUnderACosmosTransition();
     TestAStartingStyleGrowsANewlyMountedBarIn();
     TestAnAttrBindingFollowsItsPropThroughTheReconciler();
     TestAClassChangeKeepsAnAttrBoundValue();

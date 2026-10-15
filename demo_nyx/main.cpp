@@ -16,7 +16,7 @@ std::unique_ptr<PenumbraUiBackend::NyxApplicationBridge> Bridge;
 } // namespace
 
 Penumbra::Application* CreateApplication() {
-    Iris::IrisConfig Config{Iris::IrisBuildTarget::UmbraEngine, "1", {"."}};
+    Chaos::ChaosConfig Config{Chaos::ChaosBuildTarget::UmbraEngine, "1", {"."}};
     Bridge = std::make_unique<PenumbraUiBackend::NyxApplicationBridge>(Config, ".");
     nyx::host::NyxRuntime& Runtime = Bridge->Runtime();
     auto WidgetDescriptor = std::make_shared<const nyx::runtime::TypeDescriptor*>(nullptr);

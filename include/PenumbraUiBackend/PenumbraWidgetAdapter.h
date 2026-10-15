@@ -2,7 +2,7 @@
 
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Iris/SlotRuntime.h"
+#include "Chaos/SlotRuntime.h"
 #include "Umbra/IWidget.h"
 
 #include "Penumbra/Backends/IImageBackend.h"
@@ -19,7 +19,7 @@
 namespace PenumbraUiBackend {
 
 // Wraps a `Penumbra::Widgets::WidgetBase` to satisfy `Umbra::IWidget` — the bridge
-// Iris's Stage 3 reconciler (`iris::ReconcileWidget`/`ReconcileChildren`, in the `iris`
+// Chaos's Stage 3 reconciler (`chaos::ReconcileWidget`/`ReconcileChildren`, in the `chaos`
 // repo) needs to update a real Penumbra widget tree without ever naming a Penumbra type
 // itself (docs/iris_stage3_implementation_decision.md's "What remains deliberately
 // deferred", now closed).
@@ -34,7 +34,7 @@ namespace PenumbraUiBackend {
 // hands it to the returned wrapper, which becomes owning again — exactly the state a
 // widget needs to be back in before it can be `InsertChildAt`'d somewhere else, which is
 // exactly what the reconciler's extract-then-reinsert list-diff strategy
-// (`iris::ReconcileList`) does on every pass. This dual-mode design is what lets a
+// (`chaos::ReconcileList`) does on every pass. This dual-mode design is what lets a
 // `PenumbraWidget*` stay a stable identity across reconciliation even though the *real*
 // Penumbra ownership underneath it moves between `Box::Children` and this wrapper as
 // children get inserted, removed, and reordered.
@@ -54,7 +54,7 @@ public:
     // docs/iris_stage3_implementation_decision.md).
     std::unique_ptr<Penumbra::Widgets::WidgetBase> DetachOwnership();
 
-    void ApplyPropDiff(const Umbra::IrisPropDiff& Diff) override;
+    void ApplyPropDiff(const Umbra::ChaosPropDiff& Diff) override;
 
     std::size_t                     GetChildCount() const override;
     Umbra::IWidget*                 GetChildAt(std::size_t Index) const override;
@@ -69,24 +69,24 @@ public:
     // through every call site by hand.
     void SetImageContext(Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer);
 
-    // Same propagation pattern as SetImageContext above, for the Lustre style context
+    // Same propagation pattern as SetImageContext above, for the Cosmos style context
     // ApplyPropDiff needs to re-resolve and re-apply style on a class change (see that
     // method's own comment). Either pointer may be null -- a wrapper with no style
     // context configured simply skips re-styling on every class change, unchanged
     // behavior from before this wiring existed.
-    void SetStyleContext(const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier);
+    void SetStyleContext(const ::Cosmos::StylesheetSet* Sheets, const Cosmos::IStyleApplier* StyleApplier);
 
     // This wrapper's parent in the *wrapper* tree (not the real Penumbra `Box::Children`
     // ownership graph, which InsertChildAt/RemoveChildAt already juggle separately) --
     // nullptr for the root of whatever subtree this wrapper's own `WrapExistingTree`
-    // call started at. That root-ness is exactly docs/lustre_core_spec.md §1.2's
+    // call started at. That root-ness is exactly docs/cosmos_core_spec.md §1.2's
     // component-boundary signal for style resolution, the same way Walker.cpp's own
     // `IsComponentRoot` parameter marks a fresh `BuildWidgetTree()` call's root -- only
-    // as precise as Iris's current component model allows (see Walker.h's own
+    // as precise as Chaos's current component model allows (see Walker.h's own
     // `BuildWidgetTree` comment for the same caveat).
     PenumbraWidget* GetParent() const { return Parent_; }
 
-    // The real Lustre primitive tag ("Frame"/"Inline"/"Grid"/"Image"/"Text") this widget
+    // The real Cosmos primitive tag ("Frame"/"Inline"/"Grid"/"Image"/"Text") this widget
     // was originally built from, if `WrapExistingTree`/`AdoptChildrenFromRawTree` were
     // given a `PrimitiveTagMap` to look it up in -- empty string otherwise (a widget not
     // built via `BuildWidgetTree`, or wrapped without a map). See `PrimitiveTagMap`'s own
@@ -110,7 +110,7 @@ public:
     // it, as mounted right now, for the first one carrying Ref. Unlike GetByRef's
     // registry, the search only ever finds live wrappers: a ref'd widget a `<Slot>`
     // re-render dropped is simply gone from the tree, never a dangling entry. This is how
-    // IrisApplication::GetRef reaches refs inside Slot-mounted content, which the static
+    // ChaosApplication::GetRef reaches refs inside Slot-mounted content, which the static
     // build's own RefMap never saw.
     const std::string& GetRefName() const { return RefName_; }
     PenumbraWidget*    FindDescendantByRef(std::string_view Ref);
@@ -123,10 +123,10 @@ public:
     // `RawWidget()` returns, and everything reachable under it, changes.
     //
     // This is deliberately a plain method on the concrete class, not an override of any
-    // `Umbra::IWidget` virtual -- `Umbra::IWidget` (vendored via `vendor/iris/libs/
+    // `Umbra::IWidget` virtual -- `Umbra::IWidget` (vendored via `vendor/chaos/libs/
     // umbra-interfaces`, a different repo) has no such operation today, and adding one
     // there is exactly the cross-repo handoff-shape question this ask's own doc entry
-    // flags as still open with `iris-proto`'s reconciler side. Calling this today means
+    // flags as still open with Chaos's reconciler side. Calling this today means
     // going through a concrete `PenumbraWidget*` (e.g. one already obtained via
     // `GetByRef`), not through the backend-agnostic `Umbra::IWidget*` interface a real
     // reconciler would actually be holding -- a real, load-bearing gap, not an oversight;
@@ -165,7 +165,7 @@ public:
     // (found by walking up to the true mount root via `GetParent()`, since `RefRegistry_`
     // only ever lives there). This wrapper's own `SetImageContext`/`SetStyleContext`
     // values are propagated to the new children the same way `AdoptChildrenFromRawTree`
-    // already does for an initial wrap. Re-resolving this position's own Lustre style
+    // already does for an initial wrap. Re-resolving this position's own Cosmos style
     // (as opposed to its descendants', already covered by the recursive `AdoptChildren`
     // walk) is deliberately out of scope here -- unlike `ApplyPropDiff`'s `ClassName`
     // branch, a whole-widget swap has no single changed prop driving it, and whatever
@@ -187,12 +187,12 @@ private:
     // wrapper it just constructed. `ReverseRefs`/`RegistryRoot` (either both null or both
     // set together) are `WrapExistingTree`'s own ref bookkeeping -- see its comment.
     void AdoptChildrenFromRawTree(Penumbra::Backends::IImageBackend* ImageBackend, SDL_Renderer* SdlRenderer,
-                                   const ::Lustre::StylesheetSet* Sheets, const Lustre::IStyleApplier* StyleApplier,
+                                   const ::Cosmos::StylesheetSet* Sheets, const Cosmos::IStyleApplier* StyleApplier,
                                    const PrimitiveTagMap* Tags,
                                    const std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::string>* ReverseRefs,
                                    PenumbraWidget* RegistryRoot, const NumberPropMap* Numbers);
 
-    // Re-resolves and re-applies this widget's Lustre style -- on a class change, or a
+    // Re-resolves and re-applies this widget's Cosmos style -- on a class change, or a
     // change to a number prop an attr() binding may read.
     void Restyle(Penumbra::Widgets::WidgetBase& Widget);
 
@@ -210,8 +210,8 @@ private:
     Penumbra::Backends::IImageBackend* ImageBackend_{nullptr};
     SDL_Renderer*                       SdlRenderer_{nullptr};
 
-    const ::Lustre::StylesheetSet* Sheets_{nullptr};
-    const Lustre::IStyleApplier*    StyleApplier_{nullptr};
+    const ::Cosmos::StylesheetSet* Sheets_{nullptr};
+    const Cosmos::IStyleApplier*    StyleApplier_{nullptr};
 
     // Only ever non-empty on a mount's root wrapper (Parent_ == nullptr) -- see
     // GetByRef()'s own comment for why a non-root wrapper still works transparently.
@@ -219,8 +219,8 @@ private:
 
     friend std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widgets::WidgetBase>,
                                                               Penumbra::Backends::IImageBackend*, SDL_Renderer*,
-                                                              const ::Lustre::StylesheetSet*,
-                                                              const Lustre::IStyleApplier*, const PrimitiveTagMap*,
+                                                              const ::Cosmos::StylesheetSet*,
+                                                              const Cosmos::IStyleApplier*, const PrimitiveTagMap*,
                                                               const RefMap*, const NumberPropMap*);
 };
 
@@ -231,7 +231,7 @@ private:
 // split matters. `ImageBackend`/`SdlRenderer` are propagated to every wrapper so a
 // nested `<Image>`'s later `src` prop changes can re-decode correctly; `Sheets`/
 // `StyleApplier` (either may be null) the same way, so a later class change anywhere in
-// the subtree can re-resolve and re-apply its Lustre style (`ApplyPropDiff` below). `Tags`
+// the subtree can re-resolve and re-apply its Cosmos style (`ApplyPropDiff` below). `Tags`
 // (also optional), if the caller built one via `BuildWidgetTree`'s own `OutTags`
 // parameter, seeds each wrapper's `GetPrimitiveTag()` with the real originating tag.
 // `Refs` (also optional), if the caller built one via `BuildWidgetTree`'s own `OutRefs`
@@ -243,24 +243,24 @@ private:
 std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widgets::WidgetBase> Root,
                                                   Penumbra::Backends::IImageBackend*             ImageBackend,
                                                   SDL_Renderer*                                   SdlRenderer,
-                                                  const ::Lustre::StylesheetSet* Sheets = nullptr,
-                                                  const Lustre::IStyleApplier*    StyleApplier = nullptr,
+                                                  const ::Cosmos::StylesheetSet* Sheets = nullptr,
+                                                  const Cosmos::IStyleApplier*    StyleApplier = nullptr,
                                                   const PrimitiveTagMap*          Tags = nullptr,
                                                   const RefMap*                   Refs = nullptr,
                                                   const NumberPropMap*            Numbers = nullptr);
 
 // Applies a chart primitive's props from Diff onto Widget, if it's a chart or one of a
 // chart's <Series>/<Slice> data nodes (ChartNodes.h); a no-op for anything else. Used at
-// mount (with a diff of every prop, iris::ComputePropDiff({}, Props)) and on every
+// mount (with a diff of every prop, chaos::ComputePropDiff({}, Props)) and on every
 // reconcile, so both read the props the same way: `labels`, `min`, `max`,
 // `orientation`, `centre`, `caption`, a series' `name` and `values`, a slice's `label`
 // and `value`. `stacked` and `showAxes` are read at mount only.
-void ApplyChartProps(Penumbra::Widgets::WidgetBase& Widget, const Umbra::IrisPropDiff& Diff);
+void ApplyChartProps(Penumbra::Widgets::WidgetBase& Widget, const Umbra::ChaosPropDiff& Diff);
 
-// Builds an `iris::MountFn` (`Iris/SlotRuntime.h`, in the `iris` repo) combining Stage
+// Builds a `chaos::MountFn` (`Chaos/SlotRuntime.h`, in the `chaos` repo) combining Stage
 // 2's `BuildWidgetTree` with `WrapExistingTree` above — what Stage 3's reconciler calls
 // whenever it needs a whole fresh subtree built from scratch (the "no old to diff
 // against" mounting path, docs/iris_stage3_implementation_decision.md).
-iris::MountFn MakeMountFn(BuildContext Context);
+chaos::MountFn MakeMountFn(BuildContext Context);
 
 } // namespace PenumbraUiBackend

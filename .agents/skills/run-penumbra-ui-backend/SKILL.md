@@ -1,10 +1,10 @@
 ---
 name: run-penumbra-ui-backend
-description: Build, run, and screenshot penumbra-ui-backend's demo (the Lustre Style Wiring Demo, a native SDL3/Penumbra desktop GUI app). Use when asked to run this repo's demo, start it, take a screenshot of it, verify a Lustre/style-wiring change visually, or interact with the running app.
+description: Build, run, and screenshot penumbra-ui-backend's demo (the Cosmos Style Wiring Demo, a native SDL3/Penumbra desktop GUI app). Use when asked to run this repo's demo, start it, take a screenshot of it, verify a Cosmos/style-wiring change visually, or interact with the running app.
 ---
 
 A native SDL3/Penumbra desktop GUI app (no Electron, no browser) that recreates
-`docs/lustre_core_spec.md` §4's HealthBar worked example — driven, screenshotted, and
+`docs/cosmos_core_spec.md` §4's HealthBar worked example — driven, screenshotted, and
 click-simulated entirely by the app itself via built-in env-var hooks (`demo/main.cpp`).
 No `xdotool`/`import`/`scrot`/Xvfb needed anywhere in this path: the app screenshots
 itself with SDL3's own `SDL_RenderReadPixels`/`SDL_SaveBMP`, and simulates the click by
@@ -47,7 +47,7 @@ env vars, converts the BMP output to PNG, and exits automatically:
 This produces two screenshots in `output-dir`: `before.png` (mount-time render, the
 green `.bar-normal` state) and `after.png` (after an automated click, the red
 `.bar-critical` state) — proving both wiring points
-`docs/penumbra_ui_backend_lustre_bridge_decision.md` describes: `Walker.cpp` resolving
+`docs/penumbra_ui_backend_cosmos_bridge_decision.md` describes: `Walker.cpp` resolving
 style at mount, and `PenumbraWidgetAdapter::ApplyPropDiff` re-resolving it on a class
 change. **Look at both PNGs** — a solid black frame means the capture raced the window
 not yet being composited (see Gotchas); the driver already works around the one race
@@ -87,7 +87,7 @@ Opens a real window. Click anywhere to toggle the health bar's class between
 ```
 
 69 assertions across `WalkerTests.cpp`, `PenumbraWidgetAdapterTests.cpp`,
-`SlotWiringTests.cpp`, `LustreStyleApplierTests.cpp`, and `StyleWiringTests.cpp`. All
+`SlotWiringTests.cpp`, `CosmosStyleApplierTests.cpp`, and `StyleWiringTests.cpp`. All
 pass on a clean build as of this writing (`0 failure(s)`).
 
 ## Gotchas

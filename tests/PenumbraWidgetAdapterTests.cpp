@@ -1,7 +1,7 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
-#include "Iris/Reconciler.h"
-#include "Iris/Signal.h"
+#include "Chaos/Reconciler.h"
+#include "Chaos/Signal.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
@@ -25,10 +25,10 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-using Iris::Component;
-using Iris::IrisElementTag;
-using Iris::IrisProps;
-using Iris::IrisPropValue;
+using Chaos::Component;
+using Chaos::ChaosElementTag;
+using Chaos::ChaosProps;
+using Chaos::ChaosPropValue;
 using PenumbraUiBackend::BuildContext;
 using PenumbraUiBackend::MakeMountFn;
 using PenumbraUiBackend::PenumbraWidget;
@@ -41,10 +41,10 @@ using Penumbra::Widgets::TextInput;
 using Penumbra::Widgets::WidgetBase;
 
 Component MakeFrame(const std::string& ClassName, std::vector<Component> Children = {},
-                         std::optional<IrisPropValue> Key = std::nullopt) {
-    IrisProps Props;
-    Props["class"] = IrisPropValue{ClassName};
-    Component Node(IrisElementTag::Frame, Props, std::move(Children), nullptr);
+                         std::optional<ChaosPropValue> Key = std::nullopt) {
+    ChaosProps Props;
+    Props["class"] = ChaosPropValue{ClassName};
+    Component Node(ChaosElementTag::Frame, Props, std::move(Children), nullptr);
     Node.Key = std::move(Key);
     return Node;
 }
@@ -54,7 +54,7 @@ void TestWrapExistingTreeMirrorsRealTreeStructure() {
     Inner.push_back(MakeFrame("child"));
     const Component Root = MakeFrame("parent", std::move(Inner));
 
-    const iris::MountFn Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
 
     Expect(Wrapped != nullptr, "MakeMountFn produces a wrapper for a real subtree");
@@ -69,11 +69,11 @@ void TestWrapExistingTreeMirrorsRealTreeStructure() {
 }
 
 void TestApplyPropDiffReachesRealWidgetBaseFields() {
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("initial"));
 
     bool Pressed = false;
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.ClassName = "updated";
     Diff.OnPress = std::function<void()>([&Pressed]() { Pressed = true; });
     Wrapped->ApplyPropDiff(Diff);
@@ -87,12 +87,12 @@ void TestApplyPropDiffReachesRealWidgetBaseFields() {
 }
 
 void TestApplyPropDiffOnTextChangeReachesRealTextInput() {
-    const iris::MountFn Mount = MakeMountFn(BuildContext{});
-    const Component     InputNode(IrisElementTag::Input, IrisProps{}, {}, nullptr);
+    const chaos::MountFn Mount = MakeMountFn(BuildContext{});
+    const Component     InputNode(ChaosElementTag::Input, ChaosProps{}, {}, nullptr);
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(InputNode);
 
     std::string          LastValue;
-    Umbra::IrisPropDiff Diff;
+    Umbra::ChaosPropDiff Diff;
     Diff.OnTextChange = std::function<void(std::string)>([&LastValue](std::string NewText) {
         LastValue = std::move(NewText);
     });
@@ -109,11 +109,11 @@ void TestApplyPropDiffOnTextChangeReachesRealTextInput() {
 }
 
 void TestReconcilerChangesAReusedIconsGlyph() {
-    const iris::MountFn Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn Mount = MakeMountFn(BuildContext{});
     auto MakeIcon = [](const std::string& Name) {
-        IrisProps Props;
-        Props["icon"] = IrisPropValue{Name};
-        return Component(IrisElementTag::Icon, Props, {}, nullptr);
+        ChaosProps Props;
+        Props["icon"] = ChaosPropValue{Name};
+        return Component(ChaosElementTag::Icon, Props, {}, nullptr);
     };
 
     const Component Old = MakeIcon("bolt");
@@ -123,7 +123,7 @@ void TestReconcilerChangesAReusedIconsGlyph() {
     Expect(AsIcon != nullptr && AsIcon->IconName == "bolt", "a mounted <Icon> starts with its icon prop's name");
 
     const Component New = MakeIcon("layers");
-    iris::ReconcileWidget(Widget, Old, New, Mount);
+    chaos::ReconcileWidget(Widget, Old, New, Mount);
 
     AsIcon = dynamic_cast<IconWidget*>(dynamic_cast<PenumbraWidget*>(Widget.get())->RawWidget());
     Expect(AsIcon == OriginalIconAddress, "reconciling an <Icon> to a new icon name reuses the real IconWidget");
@@ -131,15 +131,15 @@ void TestReconcilerChangesAReusedIconsGlyph() {
 }
 
 void TestReconcilerUpdatesRealWidgetTreeInPlace() {
-    const iris::MountFn Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn Mount = MakeMountFn(BuildContext{});
 
-    const Component Old = MakeFrame("a", {}, IrisPropValue(1));
+    const Component Old = MakeFrame("a", {}, ChaosPropValue(1));
     std::unique_ptr<Umbra::IWidget> Widget = Mount(Old);
     auto*                            AsBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Widget.get())->RawWidget());
     const Box*                       OriginalBoxAddress = AsBox;
 
-    const Component New = MakeFrame("b", {}, IrisPropValue(1));
-    iris::ReconcileWidget(Widget, Old, New, Mount);
+    const Component New = MakeFrame("b", {}, ChaosPropValue(1));
+    chaos::ReconcileWidget(Widget, Old, New, Mount);
 
     AsBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Widget.get())->RawWidget());
     Expect(AsBox == OriginalBoxAddress,
@@ -148,7 +148,7 @@ void TestReconcilerUpdatesRealWidgetTreeInPlace() {
 }
 
 void TestReconcilerAddsRealChildToRealParentBox() {
-    const iris::MountFn Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn Mount = MakeMountFn(BuildContext{});
 
     const Component Old = MakeFrame("parent");
     std::unique_ptr<Umbra::IWidget> Widget = Mount(Old);
@@ -156,7 +156,7 @@ void TestReconcilerAddsRealChildToRealParentBox() {
     std::vector<Component> NewChildren;
     NewChildren.push_back(MakeFrame("child"));
     const Component New = MakeFrame("parent", std::move(NewChildren));
-    iris::ReconcileWidget(Widget, Old, New, Mount);
+    chaos::ReconcileWidget(Widget, Old, New, Mount);
 
     Expect(Widget->GetChildCount() == 1, "the wrapper now reports one child");
     auto* AsBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Widget.get())->RawWidget());
@@ -166,19 +166,19 @@ void TestReconcilerAddsRealChildToRealParentBox() {
 }
 
 void TestSignalDrivesRealPenumbraTreeThroughFullStack() {
-    const iris::MountFn Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn Mount = MakeMountFn(BuildContext{});
 
-    iris::Signal<std::string> ClassName("initial");
-    auto Callable = Iris::MakeSlotCallable([&]() -> Component { return MakeFrame(ClassName.get()); });
-    iris::SlotState Slot(Callable, Mount);
+    chaos::Signal<std::string> ClassName("initial");
+    auto Callable = Chaos::MakeSlotCallable([&]() -> Component { return MakeFrame(ClassName.get()); });
+    chaos::SlotState Slot(Callable, Mount);
     Slot.Reconcile(); // mount
 
     ClassName.set("changed");
-    iris::Tick();
+    chaos::Tick();
 
     // No direct accessor exists on SlotState for its widget (by design — see
     // docs/iris_stage3_implementation_decision.md), so this test only confirms the full
-    // stack (Signal -> IrisRuntime -> SlotState -> Reconciler -> PenumbraWidget -> real
+    // stack (Signal -> ChaosRuntime -> SlotState -> Reconciler -> PenumbraWidget -> real
     // Penumbra Box) runs end to end without error. Direct widget-state assertions are
     // covered by TestReconcilerUpdatesRealWidgetTreeInPlace above, which drives the same
     // ReconcileWidget path SlotState itself calls internally.
@@ -188,11 +188,11 @@ void TestSignalDrivesRealPenumbraTreeThroughFullStack() {
 void TestGetByRefFindsARefTaggedDescendant() {
     std::vector<Component> Inner;
     Component               InnerFrame = MakeFrame("child");
-    InnerFrame.Ref = IrisPropValue{std::string("target")};
+    InnerFrame.Ref = ChaosPropValue{std::string("target")};
     Inner.push_back(std::move(InnerFrame));
     const Component Root = MakeFrame("parent", std::move(Inner));
 
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
 
     auto*            AsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
@@ -207,7 +207,7 @@ void TestGetByRefFindsARefTaggedDescendant() {
 }
 
 void TestGetByRefOnAnUnknownNameReturnsNull() {
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("root"));
 
     auto* AsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
@@ -218,11 +218,11 @@ void TestGetByRefOnAnUnknownNameReturnsNull() {
 void TestGetByRefIsCallableFromANonRootWrapper() {
     std::vector<Component> Inner;
     Component               InnerFrame = MakeFrame("child");
-    InnerFrame.Ref = IrisPropValue{std::string("target")};
+    InnerFrame.Ref = ChaosPropValue{std::string("target")};
     Inner.push_back(std::move(InnerFrame));
     const Component Root = MakeFrame("parent", std::move(Inner));
 
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
 
     Umbra::IWidget* Child = Wrapped->GetChildAt(0);
@@ -236,15 +236,15 @@ void TestGetByRefIsCallableFromANonRootWrapper() {
 // checked `dynamic_cast<Box*>`, which silently *succeeds* for a SplitPanel (SplitPanel :
 // Box) and writes into its inherited-but-unused Box::Children vector instead of its real
 // First/Second slots. Exercises the exact RemoveChildAt-then-InsertChildAt pattern
-// `iris::ReconcileChildrenAt`'s own doc comment (Reconciler.h) says a structural
+// `chaos::ReconcileChildrenAt`'s own doc comment (Reconciler.h) says a structural
 // replacement actually uses.
 void TestRemoveThenInsertOnASplitPanelParentSwapsTheFirstPaneWithoutTouchingBoxChildren() {
     std::vector<Component> Panes;
     Panes.push_back(MakeFrame("first-old"));
     Panes.push_back(MakeFrame("second"));
-    const Component Root(IrisElementTag::Split, IrisProps{}, std::move(Panes), nullptr);
+    const Component Root(ChaosElementTag::Split, ChaosProps{}, std::move(Panes), nullptr);
 
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
 
     auto* AsSplit = dynamic_cast<SplitPanel*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
@@ -279,7 +279,7 @@ void TestReplaceRawWidgetOnABoxParentHandsBackTheOldWidgetIntact() {
     Inner.push_back(MakeFrame("child-old"));
     const Component Root = MakeFrame("parent", std::move(Inner));
 
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
 
     auto* ChildWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(0));
@@ -308,9 +308,9 @@ void TestReplaceRawWidgetOnASplitPanelParentSwapsTheFirstPane() {
     std::vector<Component> Panes;
     Panes.push_back(MakeFrame("first-old"));
     Panes.push_back(MakeFrame("second"));
-    const Component Root(IrisElementTag::Split, IrisProps{}, std::move(Panes), nullptr);
+    const Component Root(ChaosElementTag::Split, ChaosProps{}, std::move(Panes), nullptr);
 
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
 
     auto* RootAsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
@@ -336,9 +336,9 @@ void TestReplaceRawWidgetOnASplitPanelParentSwapsTheSecondPane() {
     std::vector<Component> Panes;
     Panes.push_back(MakeFrame("first"));
     Panes.push_back(MakeFrame("second-old"));
-    const Component Root(IrisElementTag::Split, IrisProps{}, std::move(Panes), nullptr);
+    const Component Root(ChaosElementTag::Split, ChaosProps{}, std::move(Panes), nullptr);
 
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
 
     auto* AsSplit = dynamic_cast<SplitPanel*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
@@ -355,7 +355,7 @@ void TestReplaceRawWidgetOnASplitPanelParentSwapsTheSecondPane() {
 
 // The mount-root path -- no real parent container exists to thread through at all.
 void TestReplaceRawWidgetOnTheMountRootSwapsItsOwnWidget() {
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("root-old", {MakeFrame("stale-child")}));
 
     auto*       AsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
@@ -377,14 +377,14 @@ void TestReplaceRawWidgetOnTheMountRootSwapsItsOwnWidget() {
 // must become reachable via GetByRef from the *mount root* afterward, same as an
 // initial WrapExistingTree wrap already guarantees.
 void TestReplaceRawWidgetSeedsTagsAndRefsForTheNewSubtree() {
-    const iris::MountFn             Mount = MakeMountFn(BuildContext{});
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
     std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("parent", {MakeFrame("native-slot-old")}));
 
     auto* SlotWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(0));
     Expect(SlotWrapper != nullptr, "the swap position wraps a real PenumbraWidget");
 
     Component RefChild = MakeFrame("inner");
-    RefChild.Ref = IrisPropValue{std::string("swapped-in")};
+    RefChild.Ref = ChaosPropValue{std::string("swapped-in")};
     std::vector<Component> NewChildren;
     NewChildren.push_back(std::move(RefChild));
     const Component NewContent = MakeFrame("new-content", std::move(NewChildren));
