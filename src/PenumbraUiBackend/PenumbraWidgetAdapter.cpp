@@ -13,6 +13,7 @@
 #include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
+#include "Penumbra/Widgets/TextSelection.h"
 
 #include <algorithm>
 #include <optional>
@@ -173,6 +174,9 @@ void ResetStyleableFields(WidgetBase& Widget) {
         AsScroll->ColorScrollbarThumb = {};
         AsScroll->ColorScrollbarThumbHovered = {};
         AsScroll->ColorScrollbarTrack = {};
+    }
+    if (auto* AsBox = dynamic_cast<Box*>(&Widget); AsBox && AsBox->GetTextSelection()) {
+        AsBox->GetTextSelection()->ColorSelection = Penumbra::Widgets::TextSelection{}.ColorSelection;
     }
 }
 

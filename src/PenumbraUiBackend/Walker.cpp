@@ -18,6 +18,7 @@
 #include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
+#include "Penumbra/Widgets/TextSelection.h"
 
 #include "host/marshal.hpp"
 #include "runtime/callable.hpp"
@@ -85,7 +86,8 @@ bool ResolvedStyleIsEmpty(const ::Cosmos::ResolvedStyle& Style) {
            !Style.TransformScale &&
            !Style.TextOverflowMode && !Style.FlexGrow && !Style.ScrollbarThumbColor && !Style.ScrollbarTrackColor &&
            !Style.ScrollbarWidthLogical && !Style.JustifyContent && !Style.WhiteSpaceMode && !Style.ShadowColor &&
-           !Style.ShadowBlurRadiusLogical && !Style.Opacity && !Style.Starting && Style.AttrBindings.empty();
+           !Style.ShadowBlurRadiusLogical && !Style.Opacity && !Style.Starting && Style.AttrBindings.empty() &&
+           !Style.SelectionColor;
 }
 
 // `Node.Ref` mirrors `Node.Key` exactly (both `std::optional<ChaosPropValue>`,
@@ -893,6 +895,12 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
             break;
         default:
             break; // unreachable -- None/Slot returned above, every other tag handled
+    }
+
+    if (auto* AsBox = dynamic_cast<Box*>(Built.get()); AsBox && GetBoolProp(Node.Props, "selectable").value_or(false)) {
+        Penumbra::Widgets::TextSelection& Selection = AsBox->EnableTextSelection();
+        Selection.Focus = Context.Focus;
+        Selection.Clipboard = Context.Clipboard;
     }
 
     if (Built && Context.Style != nullptr && Context.StyleApplier != nullptr) {

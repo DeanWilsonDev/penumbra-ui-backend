@@ -11,6 +11,7 @@
 #include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
+#include "Penumbra/Widgets/TextSelection.h"
 
 #include <vector>
 
@@ -301,6 +302,9 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
     }
     ApplyBoxStyle(AsBox->Style, Style);
     ApplyLayout(*AsBox, Style);
+    if (Penumbra::Widgets::TextSelection* Selection = AsBox->GetTextSelection(); Selection && Style.SelectionColor) {
+        Selection->ColorSelection = ToPenumbraColor(*Style.SelectionColor);
+    }
 
     // @starting-style: the Box's own style with the starting values laid over it, which
     // is what Box::StartingStyle wants (it reads every transitioned value from it).
@@ -432,6 +436,9 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
                 AsTextInput->CaretWidthLogical = 1.0f;
             }
         }
+        if (Style.SelectionColor) {
+            AsTextInput->ColorSelection = ToPenumbraColor(*Style.SelectionColor);
+        }
         if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
             AsTextInput->FontBackend = FontBackend_;
             AsTextInput->Font = ResolveFont(*Font, ToPenumbraFontStyle(Style));
@@ -447,6 +454,9 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
             if (AsTextArea->CaretWidthLogical <= 0.0f) {
                 AsTextArea->CaretWidthLogical = 1.0f;
             }
+        }
+        if (Style.SelectionColor) {
+            AsTextArea->ColorSelection = ToPenumbraColor(*Style.SelectionColor);
         }
         if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
             AsTextArea->FontBackend = FontBackend_;
