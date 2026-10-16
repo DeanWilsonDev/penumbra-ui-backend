@@ -178,6 +178,21 @@ void ResetStyleableFields(WidgetBase& Widget) {
 
 } // namespace
 
+std::vector<Penumbra::Widgets::TextAreaSpan> TextAreaSpansFromProps(const std::vector<float>&       Ranges,
+                                                                     const std::vector<std::string>& Classes) {
+    std::vector<Penumbra::Widgets::TextAreaSpan> Spans;
+    const std::size_t Count = std::min(Ranges.size() / 2, Classes.size());
+    Spans.reserve(Count);
+    for (std::size_t I = 0; I < Count; ++I) {
+        Penumbra::Widgets::TextAreaSpan Span;
+        Span.Start = static_cast<std::size_t>(std::max(0.0F, Ranges[2 * I]));
+        Span.End = static_cast<std::size_t>(std::max(0.0F, Ranges[2 * I + 1]));
+        Span.ClassName = Classes[I];
+        Spans.push_back(std::move(Span));
+    }
+    return Spans;
+}
+
 void ApplyChartProps(WidgetBase& Widget, const Umbra::ChaosPropDiff& Diff) {
     const auto Find = [](const auto& Map, const char* Name) {
         const auto It = Map.find(Name);
@@ -345,9 +360,11 @@ void PenumbraPortalWidget::PreparePortalUnmount() {
     if (Anchor_) Anchor_->PreparePortalUnmount();
 }
 
-PenumbraWidget::PenumbraWidget(std::unique_ptr<WidgetBase> Widget) : OwnedWidget_(std::move(Widget)) {}
+PenumbraWidget::PenumbraWidget(std::unique_ptr<WidgetBase> Widget) : OwnedWidget_(std::move(Widget)) {
+    SeedSpanProps();
+}
 
-PenumbraWidget::PenumbraWidget(WidgetBase* AttachedWidget) : AttachedWidget_(AttachedWidget) {}
+PenumbraWidget::PenumbraWidget(WidgetBase* AttachedWidget) : AttachedWidget_(AttachedWidget) { SeedSpanProps(); }
 
 WidgetBase* PenumbraWidget::RawWidget() const { return OwnedWidget_ ? OwnedWidget_.get() : AttachedWidget_; }
 
@@ -400,10 +417,22 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::ChaosPropDiff& Diff) {
     if (Diff.ClassName) {
         Widget->ClassName = *Diff.ClassName;
     }
-    // A changed number prop may be one an attr() binding reads; re-resolving is cheap
-    // enough not to track which.
     if (Diff.ClassName || !Diff.Numbers.empty()) {
         Restyle(*Widget);
+    }
+    if (auto* AsTextArea = dynamic_cast<TextArea*>(Widget)) {
+        const auto Ranges = Diff.NumberLists.find("spanRanges");
+        const auto Classes = Diff.StringLists.find("spanClasses");
+        if (Ranges != Diff.NumberLists.end()) {
+            SpanRanges_ = Ranges->second;
+        }
+        if (Classes != Diff.StringLists.end()) {
+            SpanClasses_ = Classes->second;
+        }
+        if (Ranges != Diff.NumberLists.end() || Classes != Diff.StringLists.end()) {
+            AsTextArea->SetSpans(TextAreaSpansFromProps(SpanRanges_, SpanClasses_));
+            StyleSpans(*AsTextArea);
+        }
     }
     if (Diff.OnPress) {
         Widget->OnPressed = *Diff.OnPress;
@@ -464,6 +493,29 @@ void PenumbraWidget::Restyle(WidgetBase& Widget) {
         return It == NumberProps_.end() ? std::nullopt : std::optional<float>(It->second);
     });
     StyleApplier_->Apply(Widget, Resolved);
+    if (auto* AsTextArea = dynamic_cast<TextArea*>(&Widget)) {
+        Cosmos::StyleTextAreaSpans(*AsTextArea, *Chain.front(), *Sheets_, *StyleApplier_);
+    }
+}
+
+void PenumbraWidget::StyleSpans(TextArea& Field) {
+    if (Sheets_ == nullptr || StyleApplier_ == nullptr) {
+        return;
+    }
+    const std::vector<std::unique_ptr<ReconcileStyleElement>> Chain = BuildReconcileStyleChain(*this);
+    Cosmos::StyleTextAreaSpans(Field, *Chain.front(), *Sheets_, *StyleApplier_);
+}
+
+void PenumbraWidget::SeedSpanProps() {
+    SpanRanges_.clear();
+    SpanClasses_.clear();
+    if (const auto* AsTextArea = dynamic_cast<const TextArea*>(RawWidget())) {
+        for (const Penumbra::Widgets::TextAreaSpan& Span : AsTextArea->GetSpans()) {
+            SpanRanges_.push_back(static_cast<float>(Span.Start));
+            SpanRanges_.push_back(static_cast<float>(Span.End));
+            SpanClasses_.push_back(Span.ClassName);
+        }
+    }
 }
 
 std::size_t PenumbraWidget::GetChildCount() const { return Children_.size(); }
@@ -648,6 +700,7 @@ std::unique_ptr<WidgetBase> PenumbraWidget::ReplaceRawWidget(std::unique_ptr<Wid
             NumberProps_ = It->second;
         }
     }
+    SeedSpanProps();
 
     // This wrapper's own Children_ pointed into the now-detached old subtree -- rebuild
     // from NewRaw's real structure, same as WrapExistingTree's own initial adoption

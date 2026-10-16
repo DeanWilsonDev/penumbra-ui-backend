@@ -3,6 +3,9 @@
 #include "Cosmos/Resolver.h"
 #include "Cosmos/ResolvedStyle.h"
 
+#include "Penumbra/Widgets/TextArea.h"
+#include "PenumbraUiBackend/Cosmos/StyleApplier.h"
+
 #include <functional>
 #include <optional>
 #include <string_view>
@@ -32,5 +35,8 @@ using NumberPropLookup = std::function<std::optional<float>(std::string_view Nam
 // prop, a length in logical pixels. A binding whose prop the element lacks leaves the
 // property unset, as CSS treats an attr() with no attribute and no fallback.
 void BindAttributes(::Cosmos::ResolvedStyle& Style, const NumberPropLookup& Lookup);
+
+void StyleTextAreaSpans(Penumbra::Widgets::TextArea& Field, const ::Cosmos::IStyleTarget& FieldTarget,
+                        const ::Cosmos::StylesheetSet& Sheets, const IStyleApplier& Applier);
 
 } // namespace PenumbraUiBackend::Cosmos

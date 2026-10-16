@@ -777,6 +777,12 @@ std::unique_ptr<WidgetBase> BuildTextArea(const Component& Node, const BuildCont
         std::function<void(std::string)> Callback = *OnTextChange;
         Built->OnTextChanged = [Callback](const std::string& NewText) { Callback(NewText); };
     }
+    const Umbra::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
+    const auto Ranges = Props.NumberLists.find("spanRanges");
+    const auto Classes = Props.StringLists.find("spanClasses");
+    if (Ranges != Props.NumberLists.end() && Classes != Props.StringLists.end()) {
+        Built->SetSpans(TextAreaSpansFromProps(Ranges->second, Classes->second));
+    }
     Built->FontBackend = Context.FontBackend;
     Built->Font = Context.Font;
     Built->Focus = Context.Focus;
@@ -893,6 +899,9 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
         auto Resolved = Cosmos::ResolveStyle(ThisStyleElement, *Context.Style);
         Cosmos::BindAttributes(Resolved, [&Node](std::string_view Name) { return GetNumberProp(Node.Props, Name); });
         Context.StyleApplier->Apply(*Built, Resolved);
+        if (auto* AsTextArea = dynamic_cast<TextArea*>(Built.get())) {
+            Cosmos::StyleTextAreaSpans(*AsTextArea, ThisStyleElement, *Context.Style, *Context.StyleApplier);
+        }
         if (Records.Stats != nullptr && !ThisStyleElement.ClassName().empty()) {
             ++Records.Stats->ClassedNodes;
             if (!ResolvedStyleIsEmpty(Resolved)) {

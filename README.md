@@ -55,6 +55,7 @@ Mapping (`docs/iris_core_spec.md` §3.1, cross-checked against the real Penumbra
 | `Grid` | `Box` (`LayoutMode::HorizontalStack`) | stub — Penumbra has no real grid layout yet |
 | `Image` | `ImageWidget` | leaf; `LoadFrom()` called separately via `BuildContext` |
 | `Text` | `Label` | `FontBackend`/`Font` set from `BuildContext` (no Builder method for either) |
+| `TextArea` | `TextArea` | `spanRanges` (start/end byte pairs) and `spanClasses` style parts of the text: each span's classes resolve as a child of the field, to a font, `color` and `background-color` |
 | `Slot` | `nullptr` during this static build | see "`<Slot>` wiring" below — resolved separately, afterward |
 | `BarChart` / `LineChart` / `DonutChart` | `BarChart` / `LineChart` / `DonutChart` | `ChartNodes.h`: each copies its data in from its children at every layout; styled by Cosmos's chart properties |
 | `Series` / `Slice` | `SeriesNode` / `SliceNode` | data leaves that draw nothing; their colour is Cosmos's `color` |

@@ -476,4 +476,16 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
     }
 }
 
+void CosmosStyleApplier::ApplySpan(Penumbra::Widgets::TextAreaSpan& Span, const ::Cosmos::ResolvedStyle& Style) const {
+    Span.Font.reset();
+    if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
+        Span.Font = ResolveFont(*Font, ToPenumbraFontStyle(Style));
+    }
+    Span.ColorText.reset();
+    if (Style.TextColor) {
+        Span.ColorText = ToPenumbraColor(*Style.TextColor);
+    }
+    Span.ColorBackground = Style.BackgroundColor ? ToPenumbraColor(*Style.BackgroundColor) : Penumbra::Render::Color{};
+}
+
 } // namespace PenumbraUiBackend::Cosmos

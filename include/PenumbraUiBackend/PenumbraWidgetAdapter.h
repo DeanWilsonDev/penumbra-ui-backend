@@ -6,6 +6,7 @@
 #include "Umbra/IWidget.h"
 
 #include "Penumbra/Backends/IImageBackend.h"
+#include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/WidgetBase.h"
 
 #include <SDL3/SDL.h>
@@ -192,9 +193,9 @@ private:
                                    const std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::string>* ReverseRefs,
                                    PenumbraWidget* RegistryRoot, const NumberPropMap* Numbers);
 
-    // Re-resolves and re-applies this widget's Cosmos style -- on a class change, or a
-    // change to a number prop an attr() binding may read.
     void Restyle(Penumbra::Widgets::WidgetBase& Widget);
+    void StyleSpans(Penumbra::Widgets::TextArea& Field);
+    void SeedSpanProps();
 
     std::unique_ptr<Penumbra::Widgets::WidgetBase> OwnedWidget_;
     Penumbra::Widgets::WidgetBase*                  AttachedWidget_{nullptr};
@@ -206,6 +207,9 @@ private:
     // The widget's number props as last built or diffed, for attr() bindings when its
     // style is re-resolved.
     std::unordered_map<std::string, float> NumberProps_;
+
+    std::vector<float>       SpanRanges_;
+    std::vector<std::string> SpanClasses_;
 
     Penumbra::Backends::IImageBackend* ImageBackend_{nullptr};
     SDL_Renderer*                       SdlRenderer_{nullptr};
@@ -256,6 +260,9 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widge
 // `orientation`, `centre`, `caption`, a series' `name` and `values`, a slice's `label`
 // and `value`. `stacked` and `showAxes` are read at mount only.
 void ApplyChartProps(Penumbra::Widgets::WidgetBase& Widget, const Umbra::ChaosPropDiff& Diff);
+
+std::vector<Penumbra::Widgets::TextAreaSpan> TextAreaSpansFromProps(const std::vector<float>&       Ranges,
+                                                                     const std::vector<std::string>& Classes);
 
 // Builds a `chaos::MountFn` (`Chaos/SlotRuntime.h`, in the `chaos` repo) combining Stage
 // 2's `BuildWidgetTree` with `WrapExistingTree` above — what Stage 3's reconciler calls

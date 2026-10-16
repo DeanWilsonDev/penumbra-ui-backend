@@ -872,6 +872,7 @@ void RunStackFillAndScrollbarTests();
 void RunRelativeSizingTests();
 void RunErrorReportingTests();
 void RunChartTests();
+void RunTextAreaSpanTests();
 
 int main() {
     RunNyxApplicationBridgeTests();
@@ -887,6 +888,7 @@ int main() {
     RunRelativeSizingTests();
     RunErrorReportingTests();
     RunChartTests();
+    RunTextAreaSpanTests();
 
     std::printf("\n%d failure(s)\n", Failures);
     return Failures == 0 ? 0 : 1;
