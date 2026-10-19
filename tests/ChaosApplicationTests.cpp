@@ -67,10 +67,10 @@ Chaos::ChaosConfig TestConfig() {
 void TestMountComponentAutoDiscoversItsOwnColocatedStylesheet() {
     TempProject Project;
     Project.Write("Solo.cosmos", ".foo { background-color: #FF0000; }");
-    Project.Write("Solo.chaos", "void Solo() {\n"
-                                 "    render {\n"
-                                 "        <Text ref=\"label\">hello</Text>\n"
-                                 "    }\n"
+    Project.Write("Solo.chaos", "Solo :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <text ref=\"label\">hello</text>\n"
+                                 "    );\n"
                                  "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -93,16 +93,16 @@ void TestMountComponentDiscoversAnImportedComponentsStylesheetInASeparateDirecto
     const std::filesystem::path NestedDir = std::filesystem::path(Project.RootPath()) / "nested";
     std::filesystem::create_directories(NestedDir);
     std::ofstream(NestedDir / "Child.cosmos") << ".child { background-color: #00FF00; }";
-    std::ofstream(NestedDir / "Child.chaos") << "void Child() {\n"
-                                                 "    render {\n"
-                                                 "        <Text>child</Text>\n"
-                                                 "    }\n"
+    std::ofstream(NestedDir / "Child.chaos") << "Child :: () -> Penumbra:::Component {\n"
+                                                 "    return (\n"
+                                                 "        <text>child</text>\n"
+                                                 "    );\n"
                                                  "}\n";
-    Project.Write("Parent.chaos", "import Child\n"
-                                   "void Parent() {\n"
-                                   "    render {\n"
+    Project.Write("Parent.chaos", "Child :: import Child;\n"
+                                   "Parent :: () -> Penumbra:::Component {\n"
+                                   "    return (\n"
                                    "        <Child />\n"
-                                   "    }\n"
+                                   "    );\n"
                                    "}\n");
 
     Chaos::ChaosConfig Config = TestConfig();
@@ -123,18 +123,18 @@ void TestMountComponentDiscoversAnImportedComponentsStylesheetInASeparateDirecto
 void TestStylesFromTwoIndependentMountsInSeparateDirectoriesAccumulateRatherThanReplace() {
     TempProject Project;
     Project.Write("First.cosmos", ".first { background-color: #FF0000; }");
-    Project.Write("First.chaos", "void First() {\n"
-                                  "    render {\n"
-                                  "        <Text>first</Text>\n"
-                                  "    }\n"
+    Project.Write("First.chaos", "First :: () -> Penumbra:::Component {\n"
+                                  "    return (\n"
+                                  "        <text>first</text>\n"
+                                  "    );\n"
                                   "}\n");
     const std::filesystem::path NestedDir = std::filesystem::path(Project.RootPath()) / "nested";
     std::filesystem::create_directories(NestedDir);
     std::ofstream(NestedDir / "Second.cosmos") << ".second { background-color: #0000FF; }";
-    std::ofstream(NestedDir / "Second.chaos") << "void Second() {\n"
-                                                  "    render {\n"
-                                                  "        <Text>second</Text>\n"
-                                                  "    }\n"
+    std::ofstream(NestedDir / "Second.chaos") << "Second :: () -> Penumbra:::Component {\n"
+                                                  "    return (\n"
+                                                  "        <text>second</text>\n"
+                                                  "    );\n"
                                                   "}\n";
 
     Chaos::ChaosConfig Config = TestConfig();
@@ -164,12 +164,12 @@ void TestGlobalCosmosLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponen
                                    "}\n"
                                    ".shared { border-radius: 4px; }\n");
     Project.Write("Solo.cosmos", ".foo { background-color: var(--accent); }");
-    Project.Write("Solo.chaos", "void Solo() {\n"
-                                 "    render {\n"
-                                 "        <Frame class=\"foo\" ref=\"box\">\n"
-                                 "            <Text>hello</Text>\n"
-                                 "        </Frame>\n"
-                                 "    }\n"
+    Project.Write("Solo.chaos", "Solo :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <frame class=\"foo\" ref=\"box\">\n"
+                                 "            <text>hello</text>\n"
+                                 "        </frame>\n"
+                                 "    );\n"
                                  "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -197,12 +197,12 @@ void TestRootVariablesInAComponentStylesheetAreKept() {
                                  "    --tint: #123456FF;\n"
                                  "}\n"
                                  ".foo { background-color: var(--tint); }\n");
-    Project.Write("Solo.chaos", "void Solo() {\n"
-                                 "    render {\n"
-                                 "        <Frame class=\"foo\" ref=\"box\">\n"
-                                 "            <Text>hello</Text>\n"
-                                 "        </Frame>\n"
-                                 "    }\n"
+    Project.Write("Solo.chaos", "Solo :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <frame class=\"foo\" ref=\"box\">\n"
+                                 "            <text>hello</text>\n"
+                                 "        </frame>\n"
+                                 "    );\n"
                                  "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -224,10 +224,10 @@ void TestRootVariablesInAComponentStylesheetAreKept() {
 
 void TestMountComponentBuildsAWidgetAndPopulatesRefMap() {
     TempProject Project;
-    Project.Write("Card.chaos", "void Card() {\n"
-                                 "    render {\n"
-                                 "        <Text ref=\"label\">hello</Text>\n"
-                                 "    }\n"
+    Project.Write("Card.chaos", "Card :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <text ref=\"label\">hello</text>\n"
+                                 "    );\n"
                                  "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -249,12 +249,12 @@ void TestMountedIconsGetTheBackendGivenToSetIconBackend() {
     } Backend;
 
     TempProject Project;
-    Project.Write("Glyph.chaos", "void Glyph() {\n"
-                                  "    render {\n"
-                                  "        <Frame>\n"
-                                  "            <Icon ref=\"glyph\" icon=\"close\" />\n"
-                                  "        </Frame>\n"
-                                  "    }\n"
+    Project.Write("Glyph.chaos", "Glyph :: () -> Penumbra:::Component {\n"
+                                  "    return (\n"
+                                  "        <frame>\n"
+                                  "            <icon ref=\"glyph\" icon=\"close\" />\n"
+                                  "        </frame>\n"
+                                  "    );\n"
                                   "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -270,10 +270,10 @@ void TestMountedIconsGetTheBackendGivenToSetIconBackend() {
 
 void TestMountAppRootWrapsInOverlayHostAndPopulatesGetRef() {
     TempProject Project;
-    Project.Write("Root.chaos", "void Root() {\n"
-                                 "    render {\n"
-                                 "        <Frame ref=\"content\"></Frame>\n"
-                                 "    }\n"
+    Project.Write("Root.chaos", "Root :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <frame ref=\"content\"></frame>\n"
+                                 "    );\n"
                                  "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -295,13 +295,13 @@ void TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard() {
     TempProject Project;
     Project.Write("Fields.cosmos", ".fields { display: stack; flex-direction: column; }\n"
                                     ".editor { width: 200px; height: 100px; }\n");
-    Project.Write("Fields.chaos", "void Fields() {\n"
-                                   "    render {\n"
-                                   "        <Frame class=\"fields\">\n"
-                                   "            <Input ref=\"field\" />\n"
-                                   "            <TextArea ref=\"editor\" class=\"editor\" />\n"
-                                   "        </Frame>\n"
-                                   "    }\n"
+    Project.Write("Fields.chaos", "Fields :: () -> Penumbra:::Component {\n"
+                                   "    return (\n"
+                                   "        <frame class=\"fields\">\n"
+                                   "            <input ref=\"field\" />\n"
+                                   "            <textArea ref=\"editor\" class=\"editor\" />\n"
+                                   "        </frame>\n"
+                                   "    );\n"
                                    "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -342,24 +342,24 @@ void TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard() {
 
 void TestGetRefFindsRefsInsideSlotMountedContent() {
     TempProject Project;
-    Project.Write("Board.chaos", "void Board() {\n"
-                                  "    render {\n"
-                                  "        <Frame ref=\"board\">\n"
-                                  "            <Slot>\n"
-                                  "                !{() -> <Frame ref=\"lane-todo\" />}\n"
-                                  "            </Slot>\n"
-                                  "            <Frame ref=\"content\"></Frame>\n"
-                                  "        </Frame>\n"
-                                  "    }\n"
+    Project.Write("Board.chaos", "Board :: () -> Penumbra:::Component {\n"
+                                  "    return (\n"
+                                  "        <frame ref=\"board\">\n"
+                                  "            <slot>\n"
+                                  "                !{() -> <frame ref=\"lane-todo\" />}\n"
+                                  "            </slot>\n"
+                                  "            <frame ref=\"content\"></frame>\n"
+                                  "        </frame>\n"
+                                  "    );\n"
                                   "}\n");
-    Project.Write("Panel.chaos", "void Panel() {\n"
-                                  "    render {\n"
-                                  "        <Frame ref=\"panel-static\">\n"
-                                  "            <Slot>\n"
-                                  "                !{() -> <Frame ref=\"panel-slot\" />}\n"
-                                  "            </Slot>\n"
-                                  "        </Frame>\n"
-                                  "    }\n"
+    Project.Write("Panel.chaos", "Panel :: () -> Penumbra:::Component {\n"
+                                  "    return (\n"
+                                  "        <frame ref=\"panel-static\">\n"
+                                  "            <slot>\n"
+                                  "                !{() -> <frame ref=\"panel-slot\" />}\n"
+                                  "            </slot>\n"
+                                  "        </frame>\n"
+                                  "    );\n"
                                   "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -385,36 +385,36 @@ void TestGetRefFindsRefsInsideSlotMountedContent() {
 
 void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
     TempProject Project;
-    Project.Write("Root.chaos", "void Root() {\n"
-                                 "    render {\n"
-                                 "        <Frame ref=\"content\"></Frame>\n"
-                                 "    }\n"
+    Project.Write("Root.chaos", "Root :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <frame ref=\"content\"></frame>\n"
+                                 "    );\n"
                                  "}\n");
     Project.Write("CardListThree.chaos",
-                   "void CardListThree() {\n"
-                   "    render {\n"
-                   "        <Frame>\n"
-                   "            <Slot>\n"
+                   "CardListThree :: () -> Penumbra:::Component {\n"
+                   "    return (\n"
+                   "        <frame>\n"
+                   "            <slot>\n"
                    "                !{() -> {\n"
-                   "                    Array<string> names = [\"Ann\", \"Bo\", \"Cy\"];\n"
-                   "                    return names.Map((string item) -> <Frame class={item} />);\n"
+                   "                    names: Array<string> = [\"Ann\", \"Bo\", \"Cy\"];\n"
+                   "                    return names.map((item: string) -> <frame class={item} />);\n"
                    "                }}\n"
-                   "            </Slot>\n"
-                   "        </Frame>\n"
-                   "    }\n"
+                   "            </slot>\n"
+                   "        </frame>\n"
+                   "    );\n"
                    "}\n");
     Project.Write("CardListTwo.chaos",
-                   "void CardListTwo() {\n"
-                   "    render {\n"
-                   "        <Frame>\n"
-                   "            <Slot>\n"
+                   "CardListTwo :: () -> Penumbra:::Component {\n"
+                   "    return (\n"
+                   "        <frame>\n"
+                   "            <slot>\n"
                    "                !{() -> {\n"
-                   "                    Array<string> names = [\"Dee\", \"Eff\"];\n"
-                   "                    return names.Map((string item) -> <Frame class={item} />);\n"
+                   "                    names: Array<string> = [\"Dee\", \"Eff\"];\n"
+                   "                    return names.map((item: string) -> <frame class={item} />);\n"
                    "                }}\n"
-                   "            </Slot>\n"
-                   "        </Frame>\n"
-                   "    }\n"
+                   "            </slot>\n"
+                   "        </frame>\n"
+                   "    );\n"
                    "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -449,15 +449,15 @@ void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
 
 void TestMountReconciledComponentFailsForAnUnknownTargetRef() {
     TempProject Project;
-    Project.Write("Root.chaos", "void Root() {\n"
-                                 "    render {\n"
-                                 "        <Frame ref=\"content\"></Frame>\n"
-                                 "    }\n"
+    Project.Write("Root.chaos", "Root :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <frame ref=\"content\"></frame>\n"
+                                 "    );\n"
                                  "}\n");
-    Project.Write("Card.chaos", "void Card() {\n"
-                                 "    render {\n"
-                                 "        <Text>hello</Text>\n"
-                                 "    }\n"
+    Project.Write("Card.chaos", "Card :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <text>hello</text>\n"
+                                 "    );\n"
                                  "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -514,8 +514,9 @@ void TestBridgedChaosApplicationExposesInheritedMethodsToNyx() {
     PenumbraUiBackend::ChaosApplicationBridge Bridge(TestConfig(), ".");
 
     PenumbraUiBackend::ChaosApplication* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    bool OnStart() override {\n"
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    OnStart~: () -> bool override {\n"
         "        return this.MountAppRoot(\"BridgedRoot.chaos\", \"BridgedRoot\");\n"
         "    }\n"
         "}\n",
@@ -531,10 +532,11 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
     PenumbraUiBackend::ChaosApplicationBridge Bridge(TestConfig(), ".");
 
     PenumbraUiBackend::ChaosApplication* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    int LastValue = 0;\n"
-        "    void Record(int value) { this.LastValue = value; }\n"
-        "    int GetLastValue() { return this.LastValue; }\n"
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    LastValue~ i32 = 0;\n"
+        "    Record~: (value: i32) -> void { this.LastValue = value; }\n"
+        "    GetLastValue :: () -> i32 { return this.LastValue; }\n"
         "}\n",
         "forwarder-test.nyx", "TestApplication");
 
@@ -542,7 +544,8 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
     if (!Application) return;
 
     int PreDispatchCalls = 0;
-    PenumbraUiBackend::RegisterInstanceForwarders(Bridge.Runtime(), Bridge, *Application, {"Record"},
+    PenumbraUiBackend::RegisterInstanceForwarders(Bridge.Runtime(), Bridge, *Application,
+                                                   {{"Record", "(value: i32) -> void"}},
                                                    [&PreDispatchCalls] { ++PreDispatchCalls; });
 
     // RegisterFunction stores the registered lambda directly as a NyxCallable's own

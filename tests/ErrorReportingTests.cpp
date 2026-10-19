@@ -89,22 +89,21 @@ Chaos::ChaosConfig TestConfig() {
 
 void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
     TempProject Project;
-    Project.Write("Root.chaos", "string Explode() {\n"
-                                 "    string s = \"text\";\n"
-                                 "    bool b = !s;\n"
-                                 "    return \"never\";\n"
+    Project.Write("Root.chaos", "Explode :: () -> string {\n"
+                                 "    none: Array<string> = [];\n"
+                                 "    return none[0];\n"
                                  "}\n"
                                  "\n"
-                                 "void Root() {\n"
-                                 "    @signal int count = 0;\n"
+                                 "Root :: () -> Penumbra:::Component {\n"
+                                 "    @signal count~ i32 = 0;\n"
                                  "\n"
-                                 "    render {\n"
-                                 "        <Frame ref=\"button\" onPress={() -> { count = count + 1; }}>\n"
-                                 "            <Slot>\n"
-                                 "                !{() -> count == 0 ? <Frame class=\"ok\" /> : <Frame class={Explode()} />}\n"
-                                 "            </Slot>\n"
-                                 "        </Frame>\n"
-                                 "    }\n"
+                                 "    return (\n"
+                                 "        <frame ref=\"button\" onPress={() -> { count = count + 1; }}>\n"
+                                 "            <slot>\n"
+                                 "                !{() -> count == 0 ? <frame class=\"ok\" /> : <frame class={Explode()} />}\n"
+                                 "            </slot>\n"
+                                 "        </frame>\n"
+                                 "    );\n"
                                  "}\n");
 
     Chaos::ChaosNyxDriver Driver(TestConfig(), Project.RootPath());
@@ -122,7 +121,7 @@ void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
     Button->OnPressed();
     const std::string TickOutput = CaptureStderr([&]() { App.TickChaos(); });
     Expect(Contains(TickOutput, "[ChaosApplication]") && Contains(TickOutput, "Root.chaos") &&
-               Contains(TickOutput, "bool"),
+               Contains(TickOutput, "array index out of range"),
            "TickChaos reports a Nyx error raised while a <Slot> re-renders, with its file");
 
     const std::string SecondTickOutput = CaptureStderr([&]() { App.TickChaos(); });
@@ -136,15 +135,15 @@ void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
 void TestChaosApplicationBridgeReportsLifecycleHookErrors() {
     PenumbraUiBackend::ChaosApplicationBridge Bridge(TestConfig(), ".");
     PenumbraUiBackend::ChaosApplication* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    bool OnStart() override {\n"
-        "        string s = \"start\";\n"
-        "        bool b = !s;\n"
-        "        return true;\n"
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    OnStart~: () -> bool override {\n"
+        "        none: Array<string> = [];\n"
+        "        return none[0] == \"start\";\n"
         "    }\n"
-        "    void OnUpdate(float deltaSeconds) override {\n"
-        "        string s = \"update\";\n"
-        "        bool b = !s;\n"
+        "    OnUpdate~: (deltaSeconds: f32) -> void override {\n"
+        "        none: Array<string> = [];\n"
+        "        if none[0] == \"update\" { this.RequestQuit(); }\n"
         "    }\n"
         "}\n",
         "hook-error-test.nyx", "TestApplication");
@@ -167,10 +166,11 @@ void TestChaosApplicationBridgeReportsLifecycleHookErrors() {
 void TestNyxApplicationBridgeReportsLifecycleHookErrors() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
     Penumbra::Application* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    void OnShutdown() override {\n"
-        "        string s = \"shutdown\";\n"
-        "        bool b = !s;\n"
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    OnShutdown~: () -> void override {\n"
+        "        none: Array<string> = [];\n"
+        "        if none[0] == \"shutdown\" { this.RequestQuit(); }\n"
         "    }\n"
         "}\n",
         "plain-hook-error-test.nyx", "TestApplication");

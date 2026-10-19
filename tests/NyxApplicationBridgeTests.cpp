@@ -7,6 +7,8 @@
 #include "Penumbra/Widgets/Box.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -31,8 +33,7 @@ void TestBridgeConstructsChaosDriverAgainstItsOwnedRuntime() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
 
     Bridge.Runtime().RegisterFunction(
-        "BridgeIdentityMarker",
-        [](std::vector<nyx::runtime::Value>) -> nyx::runtime::Value { return nyx::runtime::Value(true); });
+        "BridgeIdentityMarker", []() -> bool { return true; });
 
     ExpectBridge(&Bridge.ChaosDriver().Runtime() == &Bridge.Runtime(),
                  "NyxApplicationBridge constructs ChaosNyxDriver against the bridge-owned runtime");
@@ -43,8 +44,7 @@ void TestBridgeConstructsChaosDriverAgainstItsOwnedRuntime() {
 void TestBridgeRuntimeIsIsolatedFromASelfOwnedChaosDriver() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
     Bridge.Runtime().RegisterFunction(
-        "BridgeOnlyMarker",
-        [](std::vector<nyx::runtime::Value>) -> nyx::runtime::Value { return nyx::runtime::Value(true); });
+        "BridgeOnlyMarker", []() -> bool { return true; });
 
     Chaos::ChaosNyxDriver SelfOwnedDriver(TestConfig(), ".");
 
@@ -57,12 +57,13 @@ void TestBridgeRuntimeIsIsolatedFromASelfOwnedChaosDriver() {
 void TestBridgeLoadsNyxApplicationAgainstSharedRuntime() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
     Bridge.Runtime().RegisterFunction(
-        "HostStartResult", [](std::vector<nyx::runtime::Value>) -> nyx::runtime::Value {
-            return nyx::host::ToValue(false);
-        });
+        "HostStartResult", []() -> bool { return false; });
 
     Penumbra::Application* Application = Bridge.LoadApplication(
-        "class TestApplication : Application { bool OnStart() override { return HostStartResult(); } }",
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    OnStart~: () -> bool override { return HostStartResult(); }\n"
+        "}\n",
         "bridge-test.nyx", "TestApplication");
 
     ExpectBridge(Application != nullptr, "NyxApplicationBridge loads a Nyx Application subclass");
@@ -87,8 +88,9 @@ void TestBridgeAppliesNyxConfigureOverrideToApplicationConfig() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
 
     Penumbra::Application* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    void Configure() override {\n"
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    Configure~: () -> void override {\n"
         "        this.SetWindowTitle(\"Configured Title\");\n"
         "        this.SetWindowSize(640, 480);\n"
         "    }\n"
@@ -111,8 +113,9 @@ void TestBridgeCallApplicationMethodInvokesACustomNyxMethod() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
 
     Penumbra::Application* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    int Double(int value) { return value * 2; }\n"
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    Double :: (value: i32) -> i32 { return value * 2; }\n"
         "}\n",
         "custom-method-test.nyx", "TestApplication");
 
@@ -143,28 +146,34 @@ void TestBridgeCallApplicationMethodInvokesACustomNyxMethod() {
 void TestGetApplicationInstanceValueLetsAnotherScopeCallCustomMethodsDirectly() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
 
-    Penumbra::Application* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    int counter = 0;\n"
-        "    void Bump() { this.counter = this.counter + 1; }\n"
-        "    int GetCounter() { return this.counter; }\n"
-        "}\n",
-        "instance-value-test.nyx", "TestApplication");
+    const std::filesystem::path Directory = std::filesystem::temp_directory_path() / "pub-instance-value-test";
+    std::filesystem::create_directories(Directory);
+    {
+        std::ofstream File(Directory / "test-application.nyx");
+        File << "TestApplication :: class : Application {\n"
+                "public:\n"
+                "    counter~ i32 = 0;\n"
+                "    Bump~: () -> void { this.counter = this.counter + 1; }\n"
+                "    GetCounter :: () -> i32 { return this.counter; }\n"
+                "}\n";
+    }
+    Bridge.Runtime().SetImportSearchPaths({Directory});
+    Penumbra::Application* Application =
+        Bridge.LoadApplicationFromFile(Directory / "test-application.nyx", "TestApplication");
 
     ExpectBridge(Application != nullptr, "NyxApplicationBridge loads a Nyx Application with custom instance methods");
     if (!Application) return;
 
-    Bridge.Runtime().RegisterFunction("GetApp", [&Bridge, Application](std::vector<nyx::runtime::Value>) {
+    Bridge.Runtime().RegisterFunction("GetApp", "() -> Application", [&Bridge, Application](std::vector<nyx::runtime::Value>) {
         return Bridge.GetApplicationInstanceValue(*Application);
     });
 
-    // A second scope, parsed and interpreted independently of the one TestApplication was
-    // declared in (mirrors Chaos's own per-.chaos-file GetFileScope) -- it never mentions
-    // TestApplication in its own source at all.
-    nyx::host::NyxRuntime::NyxScope CallerScope = Bridge.Runtime().CreateScope("", "caller.nyx");
-    Bridge.Runtime().EvaluateInScope(CallerScope, "GetApp().Bump()");
-    Bridge.Runtime().EvaluateInScope(CallerScope, "GetApp().Bump()");
-    nyx::runtime::Value CounterResult = Bridge.Runtime().EvaluateInScope(CallerScope, "GetApp().GetCounter()");
+    nyx::host::NyxRuntime::NyxScope CallerScope =
+        Bridge.Runtime().CreateScope("Test :: import TestApplication;\n", "caller.nyx");
+    Bridge.Runtime().EvaluateInScope(CallerScope, "(GetApp() is Test).Bump()");
+    Bridge.Runtime().EvaluateInScope(CallerScope, "(GetApp() is Test).Bump()");
+    nyx::runtime::Value CounterResult =
+        Bridge.Runtime().EvaluateInScope(CallerScope, "(GetApp() is Test).GetCounter()");
 
     ExpectBridge(nyx::host::FromValue<std::int32_t>(CounterResult) == 2,
                  "a Value from GetApplicationInstanceValue is callable from a different Nyx scope "
@@ -176,11 +185,12 @@ void TestNyxApplicationCanReadPointerStateAndHitTestAWidget() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
 
     Penumbra::Application* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    float MouseX() { return this.GetMouseX(); }\n"
-        "    float MouseY() { return this.GetMouseY(); }\n"
-        "    bool MouseDown() { return this.IsMouseButtonDown(); }\n"
-        "    bool RootContains(float x, float y) { return this.GetRootWidget().ContainsPoint(x, y); }\n"
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    MouseX :: () -> f32 { return this.GetMouseX(); }\n"
+        "    MouseY :: () -> f32 { return this.GetMouseY(); }\n"
+        "    MouseDown :: () -> bool { return this.IsMouseButtonDown(); }\n"
+        "    RootContains :: (x: f32, y: f32) -> bool { return this.GetRootWidget()!.ContainsPoint(x, y); }\n"
         "}\n",
         "pointer-test.nyx", "TestApplication");
 
@@ -217,16 +227,17 @@ void TestNyxApplicationCanCallApplicationAccessorsAndShowOrHideAWidget() {
     PenumbraUiBackend::NyxApplicationBridge Bridge(TestConfig(), ".");
 
     Penumbra::Application* Application = Bridge.LoadApplication(
-        "class TestApplication : Application {\n"
-        "    float WindowWidth() { return this.GetWindowLogicalSize().X(); }\n"
-        "    float WindowHeight() { return this.GetWindowLogicalSize().Y(); }\n"
-        "    float Dpi() { return this.GetDpiScaleFactor(); }\n"
-        "    bool HasFontBackend() { return this.GetFontBackend() != null; }\n"
-        "    bool HasLifecycleRegistry() { return this.GetLifecycleRegistry() != null; }\n"
-        "    void HideRoot() { this.GetRootWidget().SetVisible(false); }\n"
-        "    bool RootVisible() { return this.GetRootWidget().IsVisible(); }\n"
-        "    float RootRight() { PenumbraWidget root = this.GetRootWidget(); return root.GetX() + root.GetWidth(); }\n"
-        "    float RootBottom() { PenumbraWidget root = this.GetRootWidget(); return root.GetY() + root.GetHeight(); }\n"
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    WindowWidth :: () -> f32 { return this.GetWindowLogicalSize()!.X(); }\n"
+        "    WindowHeight :: () -> f32 { return this.GetWindowLogicalSize()!.Y(); }\n"
+        "    Dpi :: () -> f32 { return this.GetDpiScaleFactor(); }\n"
+        "    HasFontBackend :: () -> bool { return this.GetFontBackend() != null; }\n"
+        "    HasLifecycleRegistry :: () -> bool { return this.GetLifecycleRegistry() != null; }\n"
+        "    HideRoot~: () -> void { this.GetRootWidget()!.SetVisible(false); }\n"
+        "    RootVisible :: () -> bool { return this.GetRootWidget()!.IsVisible(); }\n"
+        "    RootRight :: () -> f32 { guard root := this.GetRootWidget() return 0.0f; return root.GetX() + root.GetWidth(); }\n"
+        "    RootBottom :: () -> f32 { guard root := this.GetRootWidget() return 0.0f; return root.GetY() + root.GetHeight(); }\n"
         "}\n",
         "accessor-test.nyx", "TestApplication");
 

@@ -34,7 +34,7 @@ void ReportHookError(const std::string& Hook, const runtime::Value& Error, std::
 template <>
 class NyxBridge<Penumbra::Application> : public Penumbra::Application, public NyxBridgeBase {
 public:
-    Penumbra::Point* GetWindowLogicalSizeForNyx() {
+    Penumbra::Point* GetWindowLogicalSizeForNyx() const {
         WindowLogicalSize = Penumbra::Application::GetWindowLogicalSize();
         return &WindowLogicalSize;
     }
@@ -112,7 +112,7 @@ private:
         return Result;
     }
 
-    Penumbra::Point WindowLogicalSize;
+    mutable Penumbra::Point WindowLogicalSize;
     Penumbra::ApplicationConfig* PendingConfig_ = nullptr;
     std::string LastHookError_;
 };
@@ -120,7 +120,7 @@ private:
 template <>
 class NyxBridge<PenumbraUiBackend::ChaosApplication> : public PenumbraUiBackend::ChaosApplication, public NyxBridgeBase {
 public:
-    Penumbra::Point* GetWindowLogicalSizeForNyx() {
+    Penumbra::Point* GetWindowLogicalSizeForNyx() const {
         WindowLogicalSize = PenumbraUiBackend::ChaosApplication::GetWindowLogicalSize();
         return &WindowLogicalSize;
     }
@@ -190,7 +190,7 @@ private:
         return Result;
     }
 
-    Penumbra::Point WindowLogicalSize;
+    mutable Penumbra::Point WindowLogicalSize;
     Penumbra::ApplicationConfig* PendingConfig_ = nullptr;
     std::string LastHookError_;
 };
@@ -205,23 +205,23 @@ float PointX(const Penumbra::Point& Value) { return Value.X; }
 float PointY(const Penumbra::Point& Value) { return Value.Y; }
 
 template <typename AppBaseT>
-Penumbra::Point* GetWindowLogicalSizeForNyx(AppBaseT& Self) {
-    return static_cast<nyx::host::NyxBridge<AppBaseT>&>(Self).GetWindowLogicalSizeForNyx();
+Penumbra::Point* GetWindowLogicalSizeForNyx(const AppBaseT& Self) {
+    return static_cast<const nyx::host::NyxBridge<AppBaseT>&>(Self).GetWindowLogicalSizeForNyx();
 }
 
 template <typename AppBaseT>
-float GetMouseXForNyx(AppBaseT& Self) {
-    return static_cast<nyx::host::NyxBridge<AppBaseT>&>(Self).GetMouseXForNyx();
+float GetMouseXForNyx(const AppBaseT& Self) {
+    return static_cast<const nyx::host::NyxBridge<AppBaseT>&>(Self).GetMouseXForNyx();
 }
 
 template <typename AppBaseT>
-float GetMouseYForNyx(AppBaseT& Self) {
-    return static_cast<nyx::host::NyxBridge<AppBaseT>&>(Self).GetMouseYForNyx();
+float GetMouseYForNyx(const AppBaseT& Self) {
+    return static_cast<const nyx::host::NyxBridge<AppBaseT>&>(Self).GetMouseYForNyx();
 }
 
 template <typename AppBaseT>
-bool IsMouseButtonDownForNyx(AppBaseT& Self) {
-    return static_cast<nyx::host::NyxBridge<AppBaseT>&>(Self).IsMouseButtonDownForNyx();
+bool IsMouseButtonDownForNyx(const AppBaseT& Self) {
+    return static_cast<const nyx::host::NyxBridge<AppBaseT>&>(Self).IsMouseButtonDownForNyx();
 }
 
 bool WidgetContainsPoint(const Penumbra::Widgets::WidgetBase& Widget, float X, float Y) {
@@ -241,13 +241,13 @@ float WidgetWidth(const Penumbra::Widgets::WidgetBase& Widget) { return Widget.G
 float WidgetHeight(const Penumbra::Widgets::WidgetBase& Widget) { return Widget.GetArrangedRect().H; }
 
 template <typename AppBaseT>
-Penumbra::Render::IFontBackend* GetFontBackendForNyx(AppBaseT& Self) {
-    return &Self.GetFontBackend();
+Penumbra::Render::IFontBackend* GetFontBackendForNyx(const AppBaseT& Self) {
+    return &const_cast<AppBaseT&>(Self).GetFontBackend();
 }
 
 template <typename AppBaseT>
-Penumbra::LifecycleRegistry* GetLifecycleRegistryForNyx(AppBaseT& Self) {
-    return &Self.GetLifecycleRegistry();
+Penumbra::LifecycleRegistry* GetLifecycleRegistryForNyx(const AppBaseT& Self) {
+    return &const_cast<AppBaseT&>(Self).GetLifecycleRegistry();
 }
 
 template <typename AppBaseT>
@@ -276,7 +276,9 @@ const nyx::runtime::TypeDescriptor* RegisterOpaqueType(nyx::host::NyxRuntime& Ru
 
 template <typename AppBaseT>
 NyxApplicationBridgeT<AppBaseT>::NyxApplicationBridgeT(Chaos::ChaosConfig Config, std::string ProjectRoot)
-    : Runtime_(), ChaosDriver_(std::move(Config), ProjectRoot, Runtime_), ProjectRoot_(std::move(ProjectRoot)) {}
+    : Runtime_(), ChaosDriver_(std::move(Config), ProjectRoot, Runtime_), ProjectRoot_(std::move(ProjectRoot)) {
+    ChaosDriver_.RegisterElementType("Penumbra::Component");
+}
 
 template <typename AppBaseT>
 nyx::host::NyxRuntime& NyxApplicationBridgeT<AppBaseT>::Runtime() { return Runtime_; }

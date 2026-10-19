@@ -117,16 +117,24 @@ using ChaosApplicationBridge = NyxApplicationBridgeT<ChaosApplication>;
 // `chaos::Signal` at exactly the point Chaos's Stage-3 reconciler needs that read to happen
 // for dependency tracking to work (an app's own reactivity concern, not a generic one --
 // see the call site, not this helper, for why a particular call needs it).
+struct InstanceForwarder {
+    const char* Name;
+    const char* Signature;
+};
+
 template <typename AppBaseT>
 void RegisterInstanceForwarders(nyx::host::NyxRuntime& Runtime, NyxApplicationBridgeT<AppBaseT>& Bridge,
-                                 AppBaseT& App, std::initializer_list<const char*> Names,
+                                 AppBaseT& App, std::initializer_list<InstanceForwarder> Forwarders,
                                  std::function<void()> PreDispatch = nullptr) {
-    for (const char* Name : Names) {
-        Runtime.RegisterFunction(Name, [&Bridge, &App, Name, PreDispatch](std::vector<nyx::runtime::Value> Args) {
-            if (PreDispatch) PreDispatch();
-            std::optional<nyx::runtime::Value> Result = Bridge.CallApplicationMethod(App, Name, std::move(Args));
-            return Result ? *Result : nyx::runtime::Value();
-        });
+    for (const InstanceForwarder& Forwarder : Forwarders) {
+        const char* Name = Forwarder.Name;
+        Runtime.RegisterFunction(Name, Forwarder.Signature,
+                                 [&Bridge, &App, Name, PreDispatch](std::vector<nyx::runtime::Value> Args) {
+                                     if (PreDispatch) PreDispatch();
+                                     std::optional<nyx::runtime::Value> Result =
+                                         Bridge.CallApplicationMethod(App, Name, std::move(Args));
+                                     return Result ? *Result : nyx::runtime::Value();
+                                 });
     }
 }
 

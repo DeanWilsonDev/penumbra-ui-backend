@@ -193,21 +193,21 @@ void TestAChaosChartMountsFromNyxArraysAndDraws() {
 .todo { color: #F0A046; }
 .doing { color: #6193FF; }
 )");
-    Project.Write("Stats.chaos", "void Stats() {\n"
-                                 "    Array<string> days = [\"Mon\", \"Tue\", \"Wed\"];\n"
-                                 "    Array<int> done = [3, 5, 2];\n"
-                                 "    render {\n"
-                                 "        <Frame class=\"page\">\n"
-                                 "            <BarChart ref=\"weekly\" class=\"weekly\" labels={days}>\n"
-                                 "                <Series name=\"Done\" values={done} class=\"done\" />\n"
-                                 "                <Series name=\"Added\" values={[4, 2, 6]} class=\"added\" />\n"
-                                 "            </BarChart>\n"
-                                 "            <DonutChart ref=\"status\" class=\"status\" centre={12} caption=\"tasks\">\n"
-                                 "                <Slice label=\"Todo\" value={7} class=\"todo\" />\n"
-                                 "                <Slice label=\"Doing\" value={5} class=\"doing\" />\n"
-                                 "            </DonutChart>\n"
-                                 "        </Frame>\n"
-                                 "    }\n"
+    Project.Write("Stats.chaos", "Stats :: () -> Penumbra:::Component {\n"
+                                 "    days: Array<string> = [\"Mon\", \"Tue\", \"Wed\"];\n"
+                                 "    done: Array<i32> = [3, 5, 2];\n"
+                                 "    return (\n"
+                                 "        <frame class=\"page\">\n"
+                                 "            <barChart ref=\"weekly\" class=\"weekly\" labels={days}>\n"
+                                 "                <series name=\"Done\" values={done} class=\"done\" />\n"
+                                 "                <series name=\"Added\" values={[4, 2, 6]} class=\"added\" />\n"
+                                 "            </barChart>\n"
+                                 "            <donutChart ref=\"status\" class=\"status\" centre={12} caption=\"tasks\">\n"
+                                 "                <slice label=\"Todo\" value={7} class=\"todo\" />\n"
+                                 "                <slice label=\"Doing\" value={5} class=\"doing\" />\n"
+                                 "            </donutChart>\n"
+                                 "        </frame>\n"
+                                 "    );\n"
                                  "}\n");
 
     Chaos::ChaosConfig Config;

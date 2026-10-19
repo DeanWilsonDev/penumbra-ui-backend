@@ -32,6 +32,7 @@ std::optional<std::string> ReadFileToString(const std::string& Path) {
 } // namespace
 
 void ChaosApplication::Attach(Chaos::ChaosNyxDriver& Driver, std::string UiDir) {
+    Driver.RegisterElementType("Penumbra::Component");
     Driver_             = &Driver;
     ReportedErrorCount_ = 0;
     UiDir_              = std::move(UiDir);
@@ -262,13 +263,18 @@ Penumbra::Widgets::WidgetBase* GetRefForNyx(ChaosApplication& Self, const std::s
     return Self.GetRef(Name);
 }
 
+bool MountReconciledComponentForNyx(ChaosApplication& Self, const std::string& File, const std::string& FunctionName,
+                                    const std::string& TargetRefName) {
+    return Self.MountReconciledComponent(File, FunctionName, {}, TargetRefName);
+}
+
 } // namespace
 
 void RegisterChaosApplicationMethods(nyx::host::InheritableTypeBuilder<ChaosApplication>& Builder,
                                      const nyx::runtime::TypeDescriptor* WidgetDescriptor) {
     Builder.Method("ReloadFont", &ChaosApplication::ReloadFont)
         .Method("MountAppRoot", &ChaosApplication::MountAppRoot)
-        .Method("MountReconciledComponent", &ChaosApplication::MountReconciledComponent)
+        .Method("MountReconciledComponent", &MountReconciledComponentForNyx)
         .Method("TeardownReconciledComponent", &ChaosApplication::TeardownReconciledComponent)
         .Method("TeardownRootWidget", &ChaosApplication::TeardownRootWidget)
         .Method("TickChaos", &ChaosApplication::TickChaos)
