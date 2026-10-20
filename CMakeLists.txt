@@ -25,9 +25,9 @@ endif()
 # inside an add_subdirectory().
 # ---------------------------------------------------------------------------
 include(FetchContent)
-add_subdirectory(vendor/chaos)
-add_subdirectory(vendor/penumbra)
-add_subdirectory(vendor/cosmos)
+add_subdirectory(external/chaos)
+add_subdirectory(external/penumbra)
+add_subdirectory(external/cosmos)
 
 # ---------------------------------------------------------------------------
 # The Cosmos style bridge: applies a Cosmos::ResolvedStyle (from `cosmos`,
@@ -116,7 +116,7 @@ set_target_properties(penumbra_ui_backend_tests PROPERTIES
 add_executable(penumbra_ui_backend_demo demo/main.cpp)
 target_link_libraries(penumbra_ui_backend_demo PRIVATE penumbra_ui_backend)
 target_compile_definitions(penumbra_ui_backend_demo PRIVATE
-    DEMO_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/vendor/penumbra/demo/assets")
+    DEMO_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/penumbra/demo/assets")
 set_target_properties(penumbra_ui_backend_demo PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/demo")
 

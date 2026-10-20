@@ -36,7 +36,7 @@ namespace PenumbraUiBackend {
 using PrimitiveTagMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::string>;
 
 // Maps a `ref`-tagged node's ref name (docs/next_steps.md's "GetByRef lookup on a
-// mounted tree" ask -- `chaos`'s own `Component::Ref` field, `vendor/chaos/include/
+// mounted tree" ask -- `chaos`'s own `Component::Ref` field, `external/chaos/include/
 // Chaos/Component.h`) to the widget built from it. Same "optional, populated only when
 // a caller passes a non-null map" convention as PrimitiveTagMap above, and populated at
 // exactly the same point in BuildWidgetTreeInternal's recursion for the same reason: by

@@ -301,7 +301,7 @@ private:
 // no `<Slot>` also carries its own Component::Instance, inline in the same tree).
 //
 // `LifecycleRegistry::RegisterLifecycle`/`UnregisterLifecycle` already call `OnMount()`/
-// `OnUnmount()` internally (`vendor/penumbra`'s `LifecycleRegistry.cpp`), so this function's
+// `OnUnmount()` internally (`external/penumbra`'s `LifecycleRegistry.cpp`), so this function's
 // only job is picking the right moments to call them. `WidgetBase::OnDestroyed`
 // (`Penumbra/Widgets/WidgetBase.h`) -- an existing, generic "this widget is being torn
 // down" hook, unused anywhere else in this repo -- fires from `~WidgetBase()`, giving
@@ -794,7 +794,7 @@ std::unique_ptr<WidgetBase> BuildTextArea(const Component& Node, const BuildCont
 
 // <Native> (docs/native_split_backend_wiring_gap.md) -- an opaque escape hatch whose
 // `build` prop already returns a live Umbra::IWidget handle, not more Component IR to
-// walk (Component::NativeBuilder, `vendor/chaos/include/Chaos/Component.h`). Every real
+// walk (Component::NativeBuilder, `external/chaos/include/Chaos/Component.h`). Every real
 // Umbra::IWidget in this stack is a PenumbraWidget -- this file and
 // PenumbraWidgetAdapter.cpp are the only two places one is ever constructed -- so this
 // downcasts to reclaim the real WidgetBase ownership via DetachOwnership(), the same

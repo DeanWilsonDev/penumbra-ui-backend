@@ -124,7 +124,7 @@ public:
     // `RawWidget()` returns, and everything reachable under it, changes.
     //
     // This is deliberately a plain method on the concrete class, not an override of any
-    // `Umbra::IWidget` virtual -- `Umbra::IWidget` (vendored via `vendor/chaos/libs/
+    // `Umbra::IWidget` virtual -- `Umbra::IWidget` (vendored via `external/chaos/libs/
     // umbra-interfaces`, a different repo) has no such operation today, and adding one
     // there is exactly the cross-repo handoff-shape question this ask's own doc entry
     // flags as still open with Chaos's reconciler side. Calling this today means
@@ -134,7 +134,7 @@ public:
     // see this method's own .cpp comment and docs/next_steps.md for the full picture.
     //
     // For a *Box*-backed parent, this is a thin wrapper over the already-existing
-    // `Box::ReplaceChild` (`vendor/penumbra`'s `Box.h`) -- which hands the replaced
+    // `Box::ReplaceChild` (`external/penumbra`'s `Box.h`) -- which hands the replaced
     // widget back intact rather than destroying it, letting the caller decide exactly
     // when its destructor cascade (and anything hooked to its `WidgetBase::OnDestroyed`,
     // e.g. a lifecycle unregistration, `Walker.cpp`'s `RegisterLifecycleIfPresent`) runs.
@@ -142,7 +142,7 @@ public:
     // side effect" contract for the Box case.
     //
     // For a *SplitPanel*-backed parent, that contract can NOT be honored today:
-    // `SplitPanel::SetFirst`/`SetSecond` (`vendor/penumbra`'s `SplitPanel.h`) are the only
+    // `SplitPanel::SetFirst`/`SetSecond` (`external/penumbra`'s `SplitPanel.h`) are the only
     // mutation surface `SplitPanel` exposes, and both destroy whatever they replace
     // immediately via plain `unique_ptr` move-assignment -- there is no
     // `SplitPanel::ReplaceFirst`/`ReplaceSecond` mirroring `Box::ReplaceChild`'s

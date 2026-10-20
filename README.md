@@ -122,7 +122,7 @@ a real Penumbra widget's style fields: the universal box-model slots for any `Bo
 widget, `:hover`/`:active`/`:disabled` overlays onto `Button`'s real interaction-state fields
 (the one widget type with them today), and `color`/`font-family`/`font-size` onto `Label`, with
 font-handle resolution cached by `(path, size)`. Deliberately its own target and its own vendored
-submodule (`vendor/cosmos`) rather than folded into `penumbra_ui_backend` — it needs nothing
+submodule (`external/cosmos`) rather than folded into `penumbra_ui_backend` — it needs nothing
 from `chaos` (it operates on plain `Penumbra::Widgets::WidgetBase&`, never `Component`), so a
 consumer that doesn't use Cosmos doesn't pull it in. See
 `docs/penumbra_ui_backend_cosmos_bridge_decision.md` for why this lives here rather than in a
