@@ -216,7 +216,7 @@ void TestAChaosChartMountsFromNyxArraysAndDraws() {
     Chaos::ChaosNyxDriver            Driver(Config, Project.RootPath());
     PenumbraUiBackend::ChaosApplication App;
     App.Attach(Driver, Project.UiDir());
-    Expect(App.MountAppRoot("Stats.chaos", "Stats") && Driver.Errors().empty(),
+    Expect(App.MountAppRoot("Stats.chaos", "Stats") && Driver.Diagnostics().empty(),
            "a .chaos with <BarChart>/<DonutChart>, Nyx arrays and Series/Slice children mounts with no errors");
 
     auto* Weekly = dynamic_cast<BarChart*>(App.GetRef("weekly"));

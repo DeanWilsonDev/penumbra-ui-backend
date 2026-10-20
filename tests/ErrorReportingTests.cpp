@@ -112,7 +112,7 @@ void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
 
     bool Mounted = false;
     const std::string MountOutput = CaptureStderr([&]() { Mounted = App.MountAppRoot("Root.chaos", "Root"); });
-    Expect(Mounted && !Contains(MountOutput, "[ChaosApplication]"), "a clean mount succeeds and reports no errors");
+    Expect(Mounted && !Contains(MountOutput, "error["), "a clean mount succeeds and reports no errors");
 
     Penumbra::Widgets::WidgetBase* Button = App.GetRef("button");
     Expect(Button != nullptr && Button->OnPressed != nullptr, "the mounted button carries its onPress handler");
@@ -120,12 +120,11 @@ void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
 
     Button->OnPressed();
     const std::string TickOutput = CaptureStderr([&]() { App.TickChaos(); });
-    Expect(Contains(TickOutput, "[ChaosApplication]") && Contains(TickOutput, "Root.chaos") &&
-               Contains(TickOutput, "array index out of range"),
-           "TickChaos reports a Nyx error raised while a <Slot> re-renders, with its file");
+    Expect(Contains(TickOutput, "error[CHA0560]: array index out of range") && Contains(TickOutput, "Root.chaos:12:74"),
+           "TickChaos reports a Nyx error raised while a <Slot> re-renders as its CHA diagnostic, where it is in its file");
 
     const std::string SecondTickOutput = CaptureStderr([&]() { App.TickChaos(); });
-    Expect(!Contains(SecondTickOutput, "[ChaosApplication]"), "an error already reported is not reported again on the next tick");
+    Expect(!Contains(SecondTickOutput, "error["), "an error already reported is not reported again on the next tick");
 
     bool Remounted = false;
     CaptureStderr([&]() { Remounted = App.MountAppRoot("Root.chaos", "Root"); });

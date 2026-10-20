@@ -3,6 +3,8 @@
 #include "PenumbraUiBackend/Cosmos/StylesheetLoader.h"
 #include "PenumbraUiBackend/Portal.h"
 
+#include "Chaos/Diagnostics/DiagnosticSink.h"
+#include "Chaos/Diagnostics/RenderText.h"
 #include "Chaos/ImportResolver.h"
 #include "Chaos/SlotResolution.h"
 #include "Chaos/SlotRuntime.h"
@@ -33,9 +35,9 @@ std::optional<std::string> ReadFileToString(const std::string& Path) {
 
 void ChaosApplication::Attach(Chaos::ChaosNyxDriver& Driver, std::string UiDir) {
     Driver.RegisterElementType("Penumbra::Component");
-    Driver_             = &Driver;
-    ReportedErrorCount_ = 0;
-    UiDir_              = std::move(UiDir);
+    Driver_                  = &Driver;
+    ReportedDiagnosticCount_ = 0;
+    UiDir_                   = std::move(UiDir);
 }
 
 void ChaosApplication::SetFontConfig(std::string FontPath, float FontSizeLogical) {
@@ -79,7 +81,11 @@ void ChaosApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath
         std::optional<std::string> Source = ReadFileToString(Path);
         if (!Source) continue;
         const std::vector<Chaos::ImportStatement>   Imports = Chaos::ScanImports(*Source, Path);
-        const Chaos::ImportResolutionResult Resolved = Chaos::ResolveImports(Imports, Driver_->Config(), Driver_->ProjectRoot());
+        // Only walking imports to find their stylesheets: the driver reports the same import
+        // diagnostics when it compiles the file, so these aren't reported again.
+        Chaos::DiagnosticSink               Ignored;
+        const Chaos::ImportResolutionResult Resolved =
+            Chaos::ResolveImports(Imports, Path, Driver_->Config(), Driver_->ProjectRoot(), Ignored);
         for (const Chaos::ResolvedImport& R : Resolved.Resolved) Worklist.push_back(R.ResolvedPath);
     }
 }
@@ -127,9 +133,9 @@ bool ChaosApplication::MountAppRoot(const std::string& File, const std::string& 
     AppRootSlots_.clear();
     AppRootWrapper_.reset();
 
-    const std::size_t ErrorsBefore = Driver_->Errors().size();
+    const std::size_t DiagnosticsBefore = Driver_->Diagnostics().size();
     AppRoot_ = Driver_->MountRoot(UiDir_ + "/" + File, FunctionName);
-    if (Driver_->Errors().size() > ErrorsBefore) {
+    if (Driver_->Diagnostics().size() > DiagnosticsBefore) {
         std::fprintf(stderr, "[ChaosApplication] %s mount failed\n", File.c_str());
         ReportNewErrors();
         return false;
@@ -211,9 +217,9 @@ bool ChaosApplication::MountReconciledComponent(const std::string& File, const s
     ReconciledMount& Mount = ReconciledMounts_[TargetRefName];
     ClearReconciledMount(Mount, Target);
 
-    const std::size_t ErrorsBefore = Driver_->Errors().size();
+    const std::size_t DiagnosticsBefore = Driver_->Diagnostics().size();
     MountResult Result = MountComponent(File, FunctionName, std::move(Args), Mount.Roots);
-    if (Driver_->Errors().size() > ErrorsBefore) {
+    if (Driver_->Diagnostics().size() > DiagnosticsBefore) {
         std::fprintf(stderr, "[ChaosApplication] %s mount failed\n", File.c_str());
         ReportNewErrors();
         Mount.Roots.clear();
@@ -248,12 +254,10 @@ void ChaosApplication::TickChaos() {
 
 void ChaosApplication::ReportNewErrors() {
     if (!Driver_) return;
-    const std::vector<Chaos::ChaosIrRuntimeError>& Errors = Driver_->Errors();
-    for (; ReportedErrorCount_ < Errors.size(); ++ReportedErrorCount_) {
-        const Chaos::ChaosIrRuntimeError& Error = Errors[ReportedErrorCount_];
-        std::fprintf(stderr, "[ChaosApplication] %s:%u:%u: %s\n", Error.Location.FilePath.c_str(),
-                     static_cast<unsigned>(Error.Location.Line), static_cast<unsigned>(Error.Location.Column),
-                     Error.Message.c_str());
+    const std::vector<Chaos::Diagnostic>& Diagnostics = Driver_->Diagnostics();
+    for (; ReportedDiagnosticCount_ < Diagnostics.size(); ++ReportedDiagnosticCount_) {
+        const std::string Rendered = Chaos::RenderText(Diagnostics[ReportedDiagnosticCount_], Driver_->Sources());
+        std::fprintf(stderr, "%s\n", Rendered.c_str());
     }
 }
 

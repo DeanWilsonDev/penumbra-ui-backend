@@ -83,7 +83,7 @@ void TestMountComponentAutoDiscoversItsOwnColocatedStylesheet() {
     std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
     App.MountComponent("Solo.chaos", "Solo", {}, KeepAlive);
 
-    Expect(Driver.Errors().empty(), "the Solo fixture compiles and mounts with no errors");
+    Expect(Driver.Diagnostics().empty(), "the Solo fixture compiles and mounts with no errors");
     Expect(App.ComposedStylesheet().Component != nullptr && !App.ComposedStylesheet().Component->Rules.empty(),
            "MountComponent auto-discovers Solo.chaos's own colocated Solo.cosmos with no explicit call");
 }
@@ -114,7 +114,7 @@ void TestMountComponentDiscoversAnImportedComponentsStylesheetInASeparateDirecto
     std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
     App.MountComponent("Parent.chaos", "Parent", {}, KeepAlive);
 
-    Expect(Driver.Errors().empty(), "Parent.chaos (importing Child from a separate directory) mounts with no errors");
+    Expect(Driver.Diagnostics().empty(), "Parent.chaos (importing Child from a separate directory) mounts with no errors");
     Expect(App.ComposedStylesheet().Component != nullptr && !App.ComposedStylesheet().Component->Rules.empty(),
            "mounting Parent.chaos also discovers Child.chaos's own directory (nested/, not demo/) via the import "
            "graph, before Child is ever actually invoked as a <Slot>-mediated child");
@@ -180,7 +180,7 @@ void TestGlobalCosmosLoadsIntoTheGlobalSlotAndItsRootVariablesReachEveryComponen
     PenumbraUiBackend::ChaosApplication::MountResult Result = App.MountComponent("Solo.chaos", "Solo", {}, KeepAlive);
 
     const ::Cosmos::StylesheetSet& Sheets = App.ComposedStylesheet();
-    Expect(Driver.Errors().empty(), "the global.cosmos fixture compiles and mounts with no errors");
+    Expect(Driver.Diagnostics().empty(), "the global.cosmos fixture compiles and mounts with no errors");
     Expect(Sheets.Global != nullptr && Sheets.Global->Root.has_value() && Sheets.Global->Root->Variables.size() == 1,
            "global.cosmos's :root variables land in the Global slot");
     Expect(Sheets.Global != nullptr && Sheets.Global->Rules.size() == 1 && Sheets.Component->Rules.size() == 1,
@@ -237,7 +237,7 @@ void TestMountComponentBuildsAWidgetAndPopulatesRefMap() {
     std::vector<std::shared_ptr<Chaos::Component>> KeepAlive;
     PenumbraUiBackend::ChaosApplication::MountResult Result = App.MountComponent("Card.chaos", "Card", {}, KeepAlive);
 
-    Expect(Driver.Errors().empty(), "the Card fixture compiles and mounts with no errors");
+    Expect(Driver.Diagnostics().empty(), "the Card fixture compiles and mounts with no errors");
     Expect(Result.Widget != nullptr, "MountComponent returns a real built widget");
     Expect(Result.Refs.count("label") == 1, "MountComponent's RefMap captures the ref=\"label\" node");
     Expect(KeepAlive.size() == 1, "MountComponent pushes exactly one Component onto the caller's KeepAlive vector");

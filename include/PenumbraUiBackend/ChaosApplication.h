@@ -141,7 +141,7 @@ public:
 
 protected:
     Chaos::ChaosNyxDriver* Driver_ = nullptr;
-    std::size_t           ReportedErrorCount_ = 0;
+    std::size_t           ReportedDiagnosticCount_ = 0;
     std::string           UiDir_;
     std::string           FontPath_;
     float                 FontSizeLogical_ = 14.0f;

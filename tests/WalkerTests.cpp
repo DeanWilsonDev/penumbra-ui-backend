@@ -755,7 +755,7 @@ void TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef() {
 
     Chaos::ChaosNyxDriver Driver(UmbraConfig(), Project.RootPath());
     const Component      Root = Driver.MountRoot(AppPath, "RefTicker");
-    Expect(Driver.Errors().empty(), "the RefTicker fixture compiles and mounts with no errors");
+    Expect(Driver.Diagnostics().empty(), "the RefTicker fixture compiles and mounts with no errors");
     Expect(Root.Instance != nullptr && Root.Instance->Lifecycle != nullptr,
            "the `auto OnTick = ...` local wires a real Instance->Lifecycle, same as Chaos's own test");
 
@@ -796,7 +796,7 @@ void TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle() {
 
     Chaos::ChaosNyxDriver Driver(UmbraConfig(), Project.RootPath());
     const Component      Root = Driver.MountRoot(AppPath, "NoHostTicker");
-    Expect(Driver.Errors().empty(), "the NoHostTicker fixture compiles and mounts with no errors");
+    Expect(Driver.Diagnostics().empty(), "the NoHostTicker fixture compiles and mounts with no errors");
 
     BuildContext Context; // NyxHost left null, the default
     PenumbraUiBackend::RefMap Refs;
