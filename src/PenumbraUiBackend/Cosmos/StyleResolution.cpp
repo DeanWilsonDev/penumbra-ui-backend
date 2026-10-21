@@ -59,6 +59,14 @@ void BindAttributes(::Cosmos::ResolvedStyle& Style, const NumberPropLookup& Look
             Style.BorderWidth = *Value;
         } else if (Property == "border-radius") {
             Style.BorderRadius = *Value;
+        } else if (Property == "top") {
+            Style.Top = ::Cosmos::Offset{.Auto = false, .Value = Pixels};
+        } else if (Property == "right") {
+            Style.Right = ::Cosmos::Offset{.Auto = false, .Value = Pixels};
+        } else if (Property == "bottom") {
+            Style.Bottom = ::Cosmos::Offset{.Auto = false, .Value = Pixels};
+        } else if (Property == "left") {
+            Style.Left = ::Cosmos::Offset{.Auto = false, .Value = Pixels};
         }
     }
     for (const std::shared_ptr<::Cosmos::ResolvedStyle>& Overlay :

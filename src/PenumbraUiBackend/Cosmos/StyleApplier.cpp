@@ -35,6 +35,26 @@ Penumbra::Widgets::Length ToPenumbraLength(const ::Cosmos::Length& L) {
     return Penumbra::Widgets::Length::Logical(L.Value);
 }
 
+Penumbra::Widgets::Position ToPenumbraPosition(::Cosmos::Position P) {
+    switch (P) {
+        case ::Cosmos::Position::Static: return Penumbra::Widgets::Position::Static;
+        case ::Cosmos::Position::Relative: return Penumbra::Widgets::Position::Relative;
+        case ::Cosmos::Position::Absolute: return Penumbra::Widgets::Position::Absolute;
+        case ::Cosmos::Position::Fixed: return Penumbra::Widgets::Position::Fixed;
+        case ::Cosmos::Position::Sticky: return Penumbra::Widgets::Position::Sticky;
+    }
+    return Penumbra::Widgets::Position::Static;
+}
+
+// An explicit `auto` (kept by Cosmos so a later rule or an overlay can reset an offset)
+// clears the offset, which is how Penumbra spells auto.
+std::optional<Penumbra::Widgets::Length> ToPenumbraOffset(const ::Cosmos::Offset& O) {
+    if (O.Auto) {
+        return std::nullopt;
+    }
+    return ToPenumbraLength(O.Value);
+}
+
 Penumbra::Render::FontStyle ToPenumbraFontStyle(const ::Cosmos::ResolvedStyle& Style) {
     Penumbra::Render::FontStyle Out;
     Out.Italic = Style.FontStyleMode == ::Cosmos::FontStyle::Italic;
@@ -204,6 +224,31 @@ void ApplyBoxStyle(Penumbra::Widgets::BoxStyle& Target, const ::Cosmos::Resolved
     }
     if (Style.Opacity) {
         Target.Opacity = *Style.Opacity;
+    }
+    if (Style.PositionMode) {
+        Target.PositionMode = ToPenumbraPosition(*Style.PositionMode);
+    }
+    if (Style.Top) {
+        Target.Top = ToPenumbraOffset(*Style.Top);
+    }
+    if (Style.Right) {
+        Target.Right = ToPenumbraOffset(*Style.Right);
+    }
+    if (Style.Bottom) {
+        Target.Bottom = ToPenumbraOffset(*Style.Bottom);
+    }
+    if (Style.Left) {
+        Target.Left = ToPenumbraOffset(*Style.Left);
+    }
+    if (Style.ZIndex) {
+        Target.ZIndex = Style.ZIndex->Auto ? std::nullopt : std::optional<int>(Style.ZIndex->Level);
+    }
+    // Cosmos has already inherited pointer-events down the tree, so each widget gets its
+    // own resolved value rather than Penumbra's Inherit.
+    if (Style.PointerEventsMode) {
+        Target.PointerEventsMode = *Style.PointerEventsMode == ::Cosmos::PointerEvents::None
+                                       ? Penumbra::Widgets::PointerEvents::None
+                                       : Penumbra::Widgets::PointerEvents::Auto;
     }
     if (!Style.Transitions.empty()) {
         Target.Transitions = ToPenumbraTransitions(Style.Transitions);

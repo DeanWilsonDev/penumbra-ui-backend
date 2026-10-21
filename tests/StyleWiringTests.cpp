@@ -656,6 +656,152 @@ void TestAClassChangeKeepsAnAttrBoundValue() {
            "a changed number prop alone re-resolves the style with the new value");
 }
 
+bool ArrangedAt(const WidgetBase* Widget, float X, float Y, float W, float H) {
+    if (Widget == nullptr) {
+        return false;
+    }
+    const Penumbra::Rect Rect = Widget->GetArrangedRect();
+    return std::abs(Rect.X - X) < 0.5F && std::abs(Rect.Y - Y) < 0.5F && std::abs(Rect.W - W) < 0.5F &&
+           std::abs(Rect.H - H) < 0.5F;
+}
+
+void LayOut(WidgetBase& Root, float Width, float Height) {
+    const Penumbra::Widgets::LayoutPass Pass;
+    Root.Measure({Width, Height});
+    Root.Arrange({0.0F, 0.0F, Width, Height});
+}
+
+// position, the offsets, z-index and pointer-events through a real mount, laid out as CSS
+// lays them out. No window size is set, so the outermost widget is the initial containing
+// block a fixed child is placed against.
+void TestPositionOffsetsZIndexAndPointerEventsLayOutAsInCss() {
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
+.screen { display: stack; flex-direction: column; width: 400px; height: 300px; }
+.spacer { height: 50px; }
+.panel { position: relative; top: 5px; left: 7px; width: 200px; height: 100px; }
+.pinned { position: absolute; top: 10px; left: 20px; width: 30px; height: 20px; z-index: 5; pointer-events: none; }
+.corner { position: fixed; right: 0px; bottom: 0px; width: 50px; height: 40px; }
+.no-top { top: auto; }
+.after { width: 100px; height: 30px; }
+.stuck { position: sticky; top: 0px; height: 10px; }
+)",
+                                                            "Positions.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    int        PanelPresses  = 0;
+    int        PinnedPresses = 0;
+    ChaosProps PanelProps    = WithClass("panel");
+    PanelProps["onPress"]    = ChaosPropValue{std::function<void()>([&PanelPresses]() { ++PanelPresses; })};
+    ChaosProps PinnedProps   = WithClass("pinned");
+    PinnedProps["onPress"]   = ChaosPropValue{std::function<void()>([&PinnedPresses]() { ++PinnedPresses; })};
+
+    std::vector<Component> PanelChildren;
+    PanelChildren.push_back(MakeNode(ChaosElementTag::Frame, PinnedProps, {MakeNode(ChaosElementTag::Frame)}));
+    PanelChildren.push_back(MakeNode(ChaosElementTag::Frame, WithClass("corner")));
+    PanelChildren.push_back(MakeNode(ChaosElementTag::Frame, WithClass("pinned no-top")));
+    std::vector<Component> ScreenChildren;
+    ScreenChildren.push_back(MakeNode(ChaosElementTag::Frame, WithClass("spacer")));
+    ScreenChildren.push_back(MakeNode(ChaosElementTag::Frame, PanelProps, std::move(PanelChildren)));
+    ScreenChildren.push_back(MakeNode(ChaosElementTag::Frame, WithClass("after")));
+    ScreenChildren.push_back(MakeNode(ChaosElementTag::Frame, WithClass("stuck")));
+    std::unique_ptr<WidgetBase> Built =
+        BuildWidgetTree(MakeNode(ChaosElementTag::Frame, WithClass("screen"), std::move(ScreenChildren)), Context);
+
+    auto* Screen = dynamic_cast<Box*>(Built.get());
+    auto* Panel  = Screen != nullptr && Screen->GetChildCount() == 4 ? dynamic_cast<Box*>(Screen->GetChildAt(1)) : nullptr;
+    if (Panel == nullptr || Panel->GetChildCount() != 3) {
+        Expect(false, "the positioned tree mounts with its panel's three children");
+        return;
+    }
+    WidgetBase* After  = Screen->GetChildAt(2);
+    auto*       Stuck  = dynamic_cast<Box*>(Screen->GetChildAt(3));
+    auto*       Pinned = dynamic_cast<Box*>(Panel->GetChildAt(0));
+    auto*       Corner = dynamic_cast<Box*>(Panel->GetChildAt(1));
+    auto*       NoTop  = dynamic_cast<Box*>(Panel->GetChildAt(2));
+    auto*       Inner  = Pinned != nullptr && Pinned->GetChildCount() == 1 ? dynamic_cast<Box*>(Pinned->GetChildAt(0)) : nullptr;
+    if (Stuck == nullptr || Pinned == nullptr || Corner == nullptr || NoTop == nullptr || Inner == nullptr) {
+        Expect(false, "every positioned frame builds to a Box");
+        return;
+    }
+
+    using Penumbra::Widgets::PointerEvents;
+    using Penumbra::Widgets::Position;
+    Expect(Panel->Style.PositionMode == Position::Relative && Pinned->Style.PositionMode == Position::Absolute &&
+               Corner->Style.PositionMode == Position::Fixed && Stuck->Style.PositionMode == Position::Sticky &&
+               After->GetBoxStyle()->PositionMode == Position::Static,
+           "each position reaches BoxStyle::PositionMode, and unset is static");
+    Expect(Pinned->Style.ZIndex == std::optional<int>(5) && !Panel->Style.ZIndex.has_value(),
+           "z-index reaches BoxStyle::ZIndex, and unset is auto");
+    Expect(Pinned->Style.PointerEventsMode == PointerEvents::None && Inner->Style.PointerEventsMode == PointerEvents::None,
+           "pointer-events: none reaches the frame and, inherited as in CSS, its unclassed child");
+    Expect(!NoTop->Style.Top.has_value() && NoTop->Style.Left.has_value(),
+           "a later `top: auto` clears the offset an earlier rule set, and leaves the others");
+
+    LayOut(*Screen, 400.0F, 300.0F);
+    Expect(ArrangedAt(Panel, 7.0F, 55.0F, 200.0F, 100.0F), "a relative frame moves by its offsets from where it would be");
+    Expect(ArrangedAt(After, 0.0F, 150.0F, 100.0F, 30.0F),
+           "and what follows it stays where it was, with the absolute and fixed children taking no room");
+    Expect(ArrangedAt(Pinned, 27.0F, 65.0F, 30.0F, 20.0F), "an absolute frame is placed against its positioned parent");
+    Expect(ArrangedAt(Corner, 350.0F, 260.0F, 50.0F, 40.0F),
+           "a fixed frame is placed against the initial containing block, not its positioned parent");
+
+    Penumbra::Platform::InputState Press;
+    Press.MousePosition                  = {42.0F, 75.0F};
+    Press.MouseButtonPressedThisFrame[0] = true;
+    Press.MouseButtonDown[0]             = true;
+    Screen->UpdateInteractionState(Press);
+    Expect(PinnedPresses == 0 && PanelPresses == 1,
+           "a press on a pointer-events: none frame goes through to the frame under it");
+}
+
+// `left: attr(x); top: attr(y)` follows a Frame's props as `flex-grow: attr(fill)` does: a
+// Signal change re-renders the Slot, the diff carries the new numbers, and the same widget
+// moves.
+void TestAnOffsetFromAttrFollowsASignalThroughTheReconciler() {
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
+.board { position: relative; width: 200px; height: 200px; }
+.marker { position: absolute; left: attr(x); top: attr(y); width: 10px; height: 10px; }
+)",
+                                                            "Board.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+    const chaos::MountFn Mount = PenumbraUiBackend::MakeMountFn(Context);
+
+    chaos::Signal<float> X = 15.0F;
+    const Component      RootNode =
+        MakeNode(ChaosElementTag::Frame, WithClass("board"),
+                 {Component(ChaosElementTag::Slot, {}, {}, Chaos::MakeSlotCallable([&]() -> Component {
+                                ChaosProps Props = WithClass("marker");
+                                Props["x"]       = ChaosPropValue{X.get()};
+                                Props["y"]       = ChaosPropValue{X.get() * 2.0F};
+                                return MakeNode(ChaosElementTag::Frame, std::move(Props));
+                            }))});
+    std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
+    auto                            Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
+    auto* Board = dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
+    if (Board == nullptr || Board->GetChildCount() != 1) {
+        Expect(false, "the attr()-placed board mounts its Slot's marker");
+        return;
+    }
+    WidgetBase* Marker = Board->GetChildAt(0);
+    LayOut(*Board, 200.0F, 200.0F);
+    Expect(ArrangedAt(Marker, 15.0F, 30.0F, 10.0F, 10.0F), "the marker's left and top come from its x and y props");
+
+    X.set(40.0F);
+    chaos::Tick();
+    LayOut(*Board, 200.0F, 200.0F);
+    Expect(Board->GetChildCount() == 1 && Board->GetChildAt(0) == Marker,
+           "a Signal change updates the marker in place, without a remount");
+    Expect(ArrangedAt(Marker, 40.0F, 80.0F, 10.0F, 10.0F), "and the diff's new x and y move it");
+}
+
 void RunStyleWiringTests() {
     TestMountAppliesResolvedStyleToABuiltWidget();
     TestMountLeavesStyleUntouchedWhenNoContextIsSupplied();
@@ -674,4 +820,6 @@ void RunStyleWiringTests() {
     TestAStartingStyleGrowsANewlyMountedBarIn();
     TestAnAttrBindingFollowsItsPropThroughTheReconciler();
     TestAClassChangeKeepsAnAttrBoundValue();
+    TestPositionOffsetsZIndexAndPointerEventsLayOutAsInCss();
+    TestAnOffsetFromAttrFollowsASignalThroughTheReconciler();
 }
