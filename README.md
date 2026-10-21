@@ -42,9 +42,9 @@ This is Stage 2 of Chaos's roadmap (see `chaos`'s `docs/iris_handoff.md` §6). T
 implemented: `PenumbraUiBackend::BuildWidgetTree()` (`include/PenumbraUiBackend/Walker.h`)
 takes a single `Component` IR node and recursively builds the equivalent real Penumbra
 widget tree via each Core primitive's own fluent `Builder`. It's a one-shot tree build only —
-no diffing, no identity tracking (`key` never reaches `Component`; it's stripped by Chaos's
-preprocessor before codegen, so there's nothing here for a `key`-based live-widget map to key
-off of — that's a Stage 3 reconciler concern layered on top of this, not part of it).
+no diffing, no identity tracking (`key` never reaches `Component`, so there's nothing here
+for a `key`-based live-widget map to key off of — that's a Stage 3 reconciler concern
+layered on top of this, not part of it).
 
 Mapping (`docs/iris_core_spec.md` §3.1, cross-checked against the real Penumbra source):
 

@@ -437,7 +437,7 @@ void TestNativeWithNoBuilderProducesNoWidget() {
     const auto Node = MakeNode(ChaosElementTag::Native);
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     Expect(Built == nullptr,
-           "<Native> with no build prop (malformed -- Codegen itself already rejects this) builds to nullptr, "
+           "<Native> with no build prop builds to nullptr, "
            "not a crash");
 }
 
@@ -463,7 +463,7 @@ void TestNativeBuildReturningNonPenumbraWidgetProducesNoWidget() {
 void TestNestedTreeBuildsRecursively() {
     // <Frame class="party-row"><HealthBar-shaped Frame/></Frame> — a small stand-in for
     // the spec §9 PartyScreen shape, since <HealthBar> itself is a component invocation
-    // Codegen resolves away before this walker ever sees an Component tree.
+    // resolved away before this walker ever sees a Component tree.
     std::vector<Component> Inner;
     ChaosProps                   TextProps;
     TextProps["text"] = ChaosPropValue{std::string("42/100")};
@@ -523,10 +523,8 @@ struct FakeLifecycle : Umbra::IWidgetLifecycle {
     void OnTick(const Umbra::TickInfo&) override { ++TickCount; }
 };
 
-// A Component with a real ComponentInstance whose Lifecycle field points at Lifecycle --
-// the same shape `chaos::RegisterLifecycle` produces inside a real component body, built
-// by hand here since these tests build a Component tree directly rather than going
-// through Codegen.
+// A Component with a real ComponentInstance whose Lifecycle field points at Lifecycle,
+// built by hand here since these tests build a Component tree directly.
 Component MakeNodeWithLifecycle(ChaosElementTag Tag, Umbra::IWidgetLifecycle* Lifecycle) {
     Component Node = MakeNode(Tag);
     Node.Instance = std::make_shared<chaos::ComponentInstance>();

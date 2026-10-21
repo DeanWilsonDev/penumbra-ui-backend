@@ -539,9 +539,8 @@ void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWi
     // docs/next_steps.md's "swap a live real widget when a reconciled `<Native>`
     // re-renders" ask -- a real, live gap found investigating it, not hypothetical:
     // SplitPanel has exactly two fixed slots addressed by structural position (Index 0
-    // == First, Index 1 == Second -- Codegen guarantees a real <Split> always has
-    // exactly two children in this order, docs/native_split_backend_wiring_gap.md), not
-    // the generic Box::Children vector it inherits but never actually uses. Must be
+    // == First, Index 1 == Second, docs/native_split_backend_wiring_gap.md), not the
+    // generic Box::Children vector it inherits but never actually uses. Must be
     // checked *before* the generic Box fallback below: SplitPanel : Box, so without this
     // branch the cast below would silently succeed and write into a vector SplitPanel's
     // own Draw/Arrange/GetChildAt never look at -- the widget would be genuinely

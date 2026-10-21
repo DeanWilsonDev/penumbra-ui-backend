@@ -176,19 +176,17 @@ struct BuildContext {
 // When OutRefs is non-null, every node carrying a `ref` prop has its built widget's raw
 // pointer recorded there against that ref name -- see RefMap's own comment above. Left
 // null (the default), behaves exactly as before this parameter existed. A `ref` whose
-// value isn't a plain string (shouldn't happen via real `.chaos` codegen, `Component.h`'s
-// `Ref` field always carries the string an `IIFE` wrapper set it from) is silently
-// skipped, same "malformed input is simply not recorded" tolerance the rest of this
-// walker already has for e.g. a wrongly-typed `class` prop.
+// value isn't a plain string is silently skipped, same "malformed input is simply not
+// recorded" tolerance the rest of this walker already has for e.g. a wrongly-typed
+// `class` prop.
 //
 // When Context.LifecycleHost is non-null, every node's `Component::Instance` is checked
 // for a live `Instance->Lifecycle` (set via `chaos::RegisterLifecycle` inside that
-// component's own body) -- not just Node itself: `MountComponentInstance` sets
-// `Instance` for *every* component invocation `Codegen.h` wraps, including a plain
-// nested `<ChildComponent .../>` used as an ordinary static child with no `<Slot>`
-// involved, so this check happens at the same per-node point PrimitiveTagMap/RefMap
-// above already record at, not once at Node's own root. See BuildContext::
-// LifecycleHost's own comment for what registering actually does.
+// component's own body) -- not just Node itself: `Instance` is set for every component
+// invocation, including a plain nested `<ChildComponent .../>` used as an ordinary
+// static child with no `<Slot>` involved, so this check happens at the same per-node
+// point PrimitiveTagMap/RefMap above already record at, not once at Node's own root.
+// See BuildContext::LifecycleHost's own comment for what registering actually does.
 //
 // When OutNumbers is non-null, every built widget's number props are recorded there --
 // see NumberPropMap's own comment above.

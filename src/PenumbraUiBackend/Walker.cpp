@@ -91,8 +91,8 @@ bool ResolvedStyleIsEmpty(const ::Cosmos::ResolvedStyle& Style) {
 }
 
 // `Node.Ref` mirrors `Node.Key` exactly (both `std::optional<ChaosPropValue>`,
-// `Chaos/Component.h`) -- extracts the plain string it always carries via real `.chaos`
-// codegen. Returns nullopt for an unset ref or (defensively) a non-string value.
+// `Chaos/Component.h`). Returns nullopt for an unset ref or (defensively) a non-string
+// value.
 std::optional<std::string> GetRefName(const Component& Node) {
     if (!Node.Ref.has_value()) {
         return std::nullopt;
@@ -572,9 +572,8 @@ std::unique_ptr<WidgetBase> BuildInline(const Component& Node, const BuildContex
     return Builder.build();
 }
 
-// `<Text>`'s content lands in its own `"text"` prop, not a child
-// (docs/iris_stage1_codegen_decision.md, Gap 2) — Codegen already concatenated it into
-// one string, so there's nothing to recurse into here, just `text()` on the Builder.
+// `<Text>`'s content lands in its own `"text"` prop, not a child, so there's nothing to
+// recurse into here, just `text()` on the Builder.
 // `Label::Builder` has no way to set `FontBackend`/`Font` (Penumbra's own demo sets
 // both as plain fields after construction — there's no Builder method for either), so
 // that happens here too, from `Context`.
@@ -672,11 +671,8 @@ std::unique_ptr<WidgetBase> BuildScroll(const Component& Node, const BuildContex
 // <Split> (docs/native_split_backend_wiring_gap.md) -- SplitPanel has no Builder either
 // (same "plain fields, not a Builder chain" treatment BuildScroll above already gives
 // ScrollablePanel) and takes exactly two children through SetFirst/SetSecond rather than
-// a generic Children vector -- Codegen.cpp already enforces exactly two children at
-// compile time (`<Split> requires exactly two children`), so real `.chaos`-authored trees
-// always have both; the size checks below only guard a malformed tree built directly
-// (e.g. a structural test bypassing Codegen), matching this walker's existing tolerance
-// for other malformed input.
+// a generic Children vector; the size checks below guard a tree with fewer, matching
+// this walker's existing tolerance for other malformed input.
 std::unique_ptr<WidgetBase> BuildSplit(const Component& Node, const BuildContext& Context,
                                         const WalkerStyleElement& ThisStyleElement, BuildRecords& Records) {
     auto Built = std::make_unique<SplitPanel>();
@@ -804,7 +800,7 @@ std::unique_ptr<WidgetBase> BuildTextArea(const Component& Node, const BuildCont
 // nullptr -- the same "no widget here" treatment None/Slot already get, not an error.
 std::unique_ptr<WidgetBase> BuildNative(const Component& Node) {
     if (!Node.NativeBuilder) {
-        return nullptr; // Codegen already rejects a <Native> with no build prop
+        return nullptr;
     }
     std::unique_ptr<Umbra::IWidget> Handle = Node.NativeBuilder->Build();
     if (auto* AsPenumbraWidget = dynamic_cast<PenumbraWidget*>(Handle.get())) {
