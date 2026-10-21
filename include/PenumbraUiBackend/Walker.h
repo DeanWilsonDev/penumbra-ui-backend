@@ -58,8 +58,8 @@ using NumberPropMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, s
 // `FontBackend`/`Font` are plain public fields set after construction (there's no
 // Builder method for either — confirmed against penumbra-proto's own demo, which sets
 // them the same way), and `ImageWidget` needs an explicit `LoadFrom()` call after
-// `build()` since loading was deliberately kept out of the Builder chain
-// (docs/iris_core_spec.md §3.1's `<Image>` entry). Any field left null/default here
+// `build()` since loading was deliberately kept out of the Builder chain. Any field
+// left null/default here
 // just means that resource-dependent step is skipped — a `<Text>` widget still builds
 // successfully with `FontBackend == nullptr`, it just can't measure/draw real text
 // content yet; useful for structural tests that don't need a real font/SDL context.
@@ -75,7 +75,7 @@ struct BuildContext {
     Penumbra::Backends::IImageBackend* ImageBackend{nullptr};
     Penumbra::Backends::IIconBackend*  IconBackend{nullptr};
     SDL_Renderer*                      SdlRenderer{nullptr};
-    // <Input> (docs/iris_core_spec.md §3.1) -- app-owned runtime state a built
+    // <Input> -- app-owned runtime state a built
     // TextInput needs to actually be focusable/editable. Left null means the
     // same "build succeeds, nothing loaded" tolerance ImageBackend/IconBackend
     // already have: the widget still builds, it's just inert (unfocusable, no
@@ -111,7 +111,7 @@ struct BuildContext {
     Penumbra::LifecycleRegistry* LifecycleHost{nullptr};
 };
 
-// Walks a single `Component` IR node (docs/iris_core_spec.md §2.5, from the `chaos`
+// Walks a single `Component` IR node (from the `chaos`
 // preprocessor — never a Penumbra type) and builds the equivalent real Penumbra widget
 // via that primitive's own fluent `Builder`, recursing into `Node.Children`. This is
 // Stage 2 only: a one-shot tree build, no diffing, no identity tracking — `Component`
@@ -122,8 +122,7 @@ struct BuildContext {
 // Two ChaosElementTag values get special handling rather than a Builder call, and both
 // return `nullptr` — "no widget here, contributes nothing to its parent's built
 // children," not an error:
-//   - `None` (the `<Slot>`-callable-returned-`nullptr` sentinel, docs/iris_core_spec.md
-//     §8).
+//   - `None` (the `<Slot>`-callable-returned-`nullptr` sentinel).
 //   - `Slot` (docs/iris_slot_stage2_wiring_decision.md) — a `<Slot>` child's own
 //     content isn't known yet at this point in the build (its callable hasn't been
 //     invoked), so this function leaves its position empty, same as `None`. The real

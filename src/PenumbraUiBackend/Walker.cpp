@@ -161,8 +161,8 @@ std::optional<std::function<void()>> GetEventProp(const ChaosProps& Props, const
 }
 
 // Sibling to GetEventProp for the value-carrying event variant `<Input>`'s
-// onTextChange needs (ChaosPropValue's std::function<void(std::string)> alternative,
-// docs/iris_core_spec.md's <Input> section) -- the zero-arg GetEventProp above can't
+// onTextChange needs (ChaosPropValue's std::function<void(std::string)> alternative)
+// -- the zero-arg GetEventProp above can't
 // extract this one, std::get_if is keyed on the exact alternative type.
 std::optional<std::function<void(std::string)>> GetStringEventProp(const ChaosProps& Props, const std::string& Name) {
     const auto It = Props.find(Name);
@@ -177,9 +177,9 @@ std::optional<std::function<void(std::string)>> GetStringEventProp(const ChaosPr
 
 // <Scroll>/<Input> both build to a WidgetBase subclass with no Builder of its own
 // (ScrollablePanel.h/TextInput.h -- unlike every other Core primitive here). Shared
-// props (class, event props) are WidgetBase's own plain public fields
-// (docs/iris_core_spec.md §3.1's `<Icon>` entry already established this "public
-// field, not a Builder chain" pattern for the pieces without one), so this mirrors
+// props (class, event props) are WidgetBase's own plain public fields (`<Icon>`
+// already uses this "public field, not a Builder chain" pattern for the pieces
+// without one), so this mirrors
 // ApplySharedProps's own five-events-plus-class set by hand rather than through a
 // templated Builder call.
 void ApplySharedPropsToWidget(WidgetBase& Widget, const ChaosProps& Props) {
@@ -424,8 +424,7 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
 
 // The five event props plus `class` are the exact shared method set every Box-derived
 // primitive's Builder exposes identically (Box::Builder, Label::Builder,
-// InlineContainer::Builder — docs/iris_core_spec.md §3.1's "most share the same
-// method-naming convention"). Templated rather than duplicated per primitive since none
+// InlineContainer::Builder). Templated rather than duplicated per primitive since none
 // of those Builders share a common base class — only the method names line up.
 template <typename BuilderT>
 void ApplySharedProps(BuilderT& Builder, const ChaosProps& Props) {
@@ -473,7 +472,7 @@ std::unique_ptr<WidgetBase> BuildFrame(const Component& Node, const BuildContext
     return Builder.build();
 }
 
-// docs/iris_stage2_decision_doc.md §3 / docs/iris_core_spec.md §3.1: Penumbra has no
+// docs/iris_stage2_decision_doc.md §3: Penumbra has no
 // grid layout mode — `<Grid>` maps onto a plain `Box` with `LayoutMode::HorizontalStack`
 // as a stub, which explicitly does not meet the Core-primitive requirement yet. `Layout`
 // is a public field on `Box`, not something `Box::Builder` exposes — there's no
@@ -514,7 +513,7 @@ std::unique_ptr<WidgetBase> BuildText(const Component& Node, const BuildContext&
 }
 
 // `<Image>` is a leaf with a deliberately narrow Builder (no child()/children(), no
-// event props — docs/iris_core_spec.md §3.1) and loading is not part of build() at all:
+// event props) and loading is not part of build() at all:
 // `ImageWidget::LoadFrom()` must be called separately once a real image/SDL backend is
 // available, which is exactly what `Context.ImageBackend`/`Context.SdlRenderer` are
 // for. Building still succeeds with either left null (e.g. a structural test with no
@@ -535,14 +534,14 @@ std::unique_ptr<WidgetBase> BuildImage(const Component& Node, const BuildContext
 }
 
 // `<Icon>` is a leaf with a deliberately narrow Builder (no child()/children(), no
-// event props — docs/iris_core_spec.md §3.1, same shape as `<Image>`). Unlike
+// event props, same shape as `<Image>`). Unlike
 // `<Image>` there is no separate load step: `IconWidget::IconBackend` is a plain
 // public field (mirroring how `Label::FontBackend`/`Font` are already set directly
 // below in BuildText, not through the Builder), set here from `Context.IconBackend` so
 // Draw() can resolve the icon name fresh every frame. Building still succeeds with
 // `Context.IconBackend` left null (e.g. a structural test with no real backend) — the
 // widget just never draws anything. `size`, if present, overrides
-// `IconWidget::SizeLogical`'s 16px default (docs/iris_core_spec.md §3.1) — omitted
+// `IconWidget::SizeLogical`'s 16px default — omitted
 // leaves the built widget at that default, same "absent prop -> builder method never
 // called" treatment every other optional prop here gets.
 std::unique_ptr<WidgetBase> BuildIcon(const Component& Node, const BuildContext& Context) {
@@ -561,7 +560,7 @@ std::unique_ptr<WidgetBase> BuildIcon(const Component& Node, const BuildContext&
     return Built;
 }
 
-// <Scroll> (docs/iris_core_spec.md §3.1) -- element children only, same as <Frame>, but
+// <Scroll> -- element children only, same as <Frame>, but
 // ScrollablePanel has no Builder to route them through: AddChild directly, same "plain
 // field/method, not a Builder chain" treatment ApplySharedPropsToWidget above already
 // gives its shared props. wheelStep maps onto WheelStepLogical, direction (default

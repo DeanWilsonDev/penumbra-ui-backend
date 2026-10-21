@@ -564,7 +564,7 @@ void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWi
     }
     // If RawWidget() is neither of the above (e.g. <Image>, a leaf), there's no real
     // child slot to place this into — Core primitives never give a leaf primitive
-    // children in the first place (docs/iris_core_spec.md §3.1), so this path is
+    // children in the first place, so this path is
     // unreachable in practice; the wrapper bookkeeping below still stays consistent
     // regardless.
     Children_.insert(Children_.begin() + static_cast<long>(Index),
@@ -684,7 +684,7 @@ std::unique_ptr<WidgetBase> PenumbraWidget::ReplaceRawWidget(std::unique_ptr<Wid
         } else {
             // Every real container a live wrapper's Parent_ can point at is either a
             // Box or a SplitPanel (Core primitives never give a leaf primitive
-            // children, docs/iris_core_spec.md §3.1) -- unreachable in practice, same
+            // children) -- unreachable in practice, same
             // tolerance InsertChildAt's own analogous "not a Box" branch already has.
             return nullptr;
         }

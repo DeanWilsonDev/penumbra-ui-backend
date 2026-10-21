@@ -63,8 +63,8 @@ public:
     std::unique_ptr<Umbra::IWidget> RemoveChildAt(std::size_t Index) override;
 
     // `<Image>`'s `src` prop needs to re-decode through a real image backend/renderer
-    // on change (docs/iris_core_spec.md §3.1 — loading was deliberately kept out of
-    // `ImageWidget`'s own `Builder`), the same resources `BuildContext` already carries
+    // on change (loading was deliberately kept out of `ImageWidget`'s own `Builder`),
+    // the same resources `BuildContext` already carries
     // for the initial mount. Propagated to every wrapper recursively by
     // `WrapExistingTree` so a nested `<Image>` picks it up too, without threading it
     // through every call site by hand.

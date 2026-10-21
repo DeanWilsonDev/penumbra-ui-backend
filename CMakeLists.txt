@@ -59,9 +59,8 @@ target_link_libraries(penumbra_ui_backend_cosmos PUBLIC cosmos penumbra)
 # ---------------------------------------------------------------------------
 # The backend itself: walks a parsed, props-resolved Chaos component IR tree
 # (from `chaos`) and builds a real Penumbra widget tree via Penumbra's
-# fluent Builder API (from `penumbra`) — docs/iris_core_spec.md §2.5–§2.6,
-# §3 on the `chaos` side; `docs/iris_stage2_decision_doc.md` for the Stage 2
-# planning decisions this implements. Also resolves and applies Cosmos
+# fluent Builder API (from `penumbra`); `docs/iris_stage2_decision_doc.md` for
+# the Stage 2 planning decisions this implements. Also resolves and applies Cosmos
 # styles at mount (Walker.cpp) and on every class change
 # (PenumbraWidgetAdapter.cpp) when a caller supplies a StylesheetSet/
 # IStyleApplier via BuildContext — both fields are nullable, so a consumer

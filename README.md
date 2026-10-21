@@ -46,7 +46,7 @@ no diffing, no identity tracking (`key` never reaches `Component`, so there's no
 for a `key`-based live-widget map to key off of — that's a Stage 3 reconciler concern
 layered on top of this, not part of it).
 
-Mapping (`docs/iris_core_spec.md` §3.1, cross-checked against the real Penumbra source):
+Mapping (`docs/chaos_core_spec.md` §3.1, cross-checked against the real Penumbra source):
 
 | `ChaosElementTag` | Penumbra widget | Notes |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ Penumbra ownership has to live in exactly one `Box::Children` vector at a time")
 
 **Resolved (in the `chaos` repo, not here):** a separate, serious defect surfaced while
 verifying the adapter against real C++ generated from `.iris` files (the since-retired C++ host
-path) — a `<Slot>` callable capturing a `chaos::Signal<T>` local by reference (every `docs/iris_core_spec.md` example's own pattern)
+path) — a `<Slot>` callable capturing a `chaos::Signal<T>` local by reference (every `docs/chaos_core_spec.md` example's own pattern)
 read freed stack memory the instant the declaring component function returned, confirmed with
 AddressSanitizer. Fixed there via `CHAOS_SIGNAL(Type, Name, InitExpr)`
 (`chaos`'s `docs/iris_signal_lifetime_decision.md`) — state declarations now bind to
