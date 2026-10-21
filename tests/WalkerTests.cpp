@@ -699,14 +699,8 @@ void TestApplicationRegisterLifecycleStillForwardsToItsOwnLifecycleRegistry() {
     Expect(Lifecycle.TickCount == 1, "once unregistered via Application's own API, it no longer receives OnTick");
 }
 
-// docs/next_steps.md's "a Nyx-authored OnMount/OnTick has no way to reach its own
-// component's ref'd widgets" ask. Unlike the hand-built-Component lifecycle tests above,
-// GetRef needs a real `Chaos::NyxDriverState` (a real nyx::host::NyxRuntime::NyxScope with a
-// real Environment) behind Node.Instance->DriverState -- only ChaosNyxDriver::MountRoot
-// produces that, so these tests go through the real `.chaos` -> ChaosIrDocument -> Component
-// pipeline end to end, the same way Chaos's own ChaosNyxDriverTests.cpp verifies
-// `auto OnTick = ...` itself. TempProject mirrors that file's own test helper exactly (a
-// real on-disk fixture, not a hand-built ChaosIrDocument).
+// GetRef is checked against real mounted `.chaos` components, since Nyx analyses a hook's
+// call to it against what the runtime declares before anything runs.
 class TempProject {
 public:
     TempProject() {
@@ -735,84 +729,111 @@ Chaos::ChaosConfig UmbraConfig() {
     return Config;
 }
 
-void TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef() {
-    TempProject       Project;
-    const std::string AppPath = Project.Write("RefTicker.chaos",
-                                               "void RefTicker() {\n"
-                                               "    auto OnTick = (float dt) -> {\n"
-                                               "        auto handle = GetRef(\"label\");\n"
-                                               "        handle.SetText(\"ticked\");\n"
-                                               "        handle.SetColor(1, 2, 3, 255);\n"
-                                               "        handle.SetVisible(false);\n"
-                                               "    };\n"
-                                               "\n"
-                                               "    render {\n"
-                                               "        <Text ref=\"label\">idle</Text>\n"
-                                               "    }\n"
-                                               "}\n");
-
-    Chaos::ChaosNyxDriver Driver(UmbraConfig(), Project.RootPath());
-    const Component      Root = Driver.MountRoot(AppPath, "RefTicker");
-    Expect(Driver.Diagnostics().empty(), "the RefTicker fixture compiles and mounts with no errors");
-    Expect(Root.Instance != nullptr && Root.Instance->Lifecycle != nullptr,
-           "the `auto OnTick = ...` local wires a real Instance->Lifecycle, same as Chaos's own test");
-
-    BuildContext Context;
-    Context.NyxHost = &Driver.Runtime();
-    PenumbraUiBackend::RefMap Refs;
-    const auto                Built = BuildWidgetTree(Root, Context, /*OutTags=*/nullptr, &Refs);
-
-    auto* LabelWidget = Refs.count("label") != 0 ? dynamic_cast<Label*>(Refs.at("label")) : nullptr;
-    Expect(LabelWidget != nullptr, "the ref=\"label\" node built a real Label, recorded in RefMap");
-    Expect(LabelWidget != nullptr && LabelWidget->Text == "idle",
-           "before OnTick ever runs, the Label still shows its original render-time text");
-
-    Root.Instance->Lifecycle->OnTick(Umbra::TickInfo{0.5f});
-
-    Expect(LabelWidget != nullptr && LabelWidget->Text == "ticked",
-           "OnTick's GetRef(\"label\").SetText(...) call reached the real built Label, not a copy");
-    Expect(LabelWidget != nullptr && LabelWidget->ColorText.R == 1 && LabelWidget->ColorText.G == 2 &&
-               LabelWidget->ColorText.B == 3 && LabelWidget->ColorText.A == 255,
-           "GetRef(...).SetColor(...) reached the same real Label's ColorText field");
-    Expect(LabelWidget != nullptr && !LabelWidget->GetIsVisible(),
-           "GetRef(...).SetVisible(false) reached the same real Label's WidgetBase::IsVisible field");
+Component MountWithGetRef(Chaos::ChaosNyxDriver& Driver, const std::string& Path, const std::string& Name) {
+    Driver.RegisterElementType("Penumbra::Component");
+    PenumbraUiBackend::RegisterComponentGetRef(Driver.Runtime());
+    return Driver.MountRoot(Path, Name);
 }
 
-void TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle() {
-    TempProject       Project;
-    const std::string AppPath = Project.Write("NoHostTicker.chaos",
-                                               "void NoHostTicker() {\n"
-                                               "    auto OnTick = (float dt) -> {\n"
-                                               "        auto handle = GetRef(\"label\");\n"
-                                               "        handle.SetText(\"ticked\");\n"
-                                               "    };\n"
-                                               "\n"
-                                               "    render {\n"
-                                               "        <Text ref=\"label\">idle</Text>\n"
-                                               "    }\n"
-                                               "}\n");
+Label* RefdLabel(const PenumbraUiBackend::RefMap& Refs) {
+    return Refs.count("label") != 0 ? dynamic_cast<Label*>(Refs.at("label")) : nullptr;
+}
 
+constexpr std::string_view RefTickerSource = "RefTicker :: () -> Penumbra:::Component {\n"
+                                             "    OnTick := (dt: f32) -> void {\n"
+                                             "        guard handle ~= GetRef(\"label\") return;\n"
+                                             "        handle.SetText(\"ticked\");\n"
+                                             "        handle.SetColor(1, 2, 3, 255);\n"
+                                             "        handle.SetVisible(false);\n"
+                                             "    };\n"
+                                             "\n"
+                                             "    return (<text ref=\"label\">idle</text>);\n"
+                                             "}\n";
+
+void TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef() {
+    TempProject           Project;
+    const std::string     AppPath = Project.Write("RefTicker.chaos", RefTickerSource);
     Chaos::ChaosNyxDriver Driver(UmbraConfig(), Project.RootPath());
-    const Component      Root = Driver.MountRoot(AppPath, "NoHostTicker");
-    Expect(Driver.Diagnostics().empty(), "the NoHostTicker fixture compiles and mounts with no errors");
+    const Component       Root = MountWithGetRef(Driver, AppPath, "RefTicker");
+    Expect(Driver.Diagnostics().empty(), "a component whose OnTick calls GetRef mounts with no diagnostics");
+    Expect(Root.Instance != nullptr && Root.Instance->Lifecycle != nullptr,
+           "the OnTick local wires a real Instance->Lifecycle");
 
-    BuildContext Context; // NyxHost left null, the default
+    Penumbra::LifecycleRegistry Host;
+    BuildContext                Context;
+    Context.LifecycleHost = &Host;
     PenumbraUiBackend::RefMap Refs;
     const auto                Built = BuildWidgetTree(Root, Context, /*OutTags=*/nullptr, &Refs);
 
-    auto* LabelWidget = Refs.count("label") != 0 ? dynamic_cast<Label*>(Refs.at("label")) : nullptr;
-    Expect(LabelWidget != nullptr, "the ref=\"label\" node still builds normally with no NyxHost set");
-
-    // GetRef was never defined into this instance's own RenderScope Environment, so the
-    // OnTick body's own GetRef(...) call hits an ordinary Nyx-level "undefined variable"
-    // RuntimeError -- caught and converted to an error Value inside NyxRuntime::
-    // EvaluateInScope, not a C++ exception escaping this call, and not a crash.
-    Root.Instance->Lifecycle->OnTick(Umbra::TickInfo{0.5f});
-
+    Label* LabelWidget = RefdLabel(Refs);
+    Expect(LabelWidget != nullptr, "the ref=\"label\" node built a real Label, recorded in RefMap");
     Expect(LabelWidget != nullptr && LabelWidget->Text == "idle",
-           "Context.NyxHost == nullptr (the default) means GetRef doesn't exist for this component at "
-           "all -- OnTick's own call to it fails at the Nyx level and never reaches the real Label, "
-           "exactly pre-wiring behavior");
+           "before OnTick runs, the Label still shows its render-time text");
+
+    Host.Tick(0.5f);
+
+    Expect(LabelWidget != nullptr && LabelWidget->Text == "ticked",
+           "OnTick's GetRef(\"label\").SetText(...) reached the real built Label");
+    Expect(LabelWidget != nullptr && LabelWidget->ColorText.R == 1 && LabelWidget->ColorText.G == 2 &&
+               LabelWidget->ColorText.B == 3 && LabelWidget->ColorText.A == 255,
+           "GetRef(...).SetColor(...) reached the same Label's ColorText");
+    Expect(LabelWidget != nullptr && !LabelWidget->GetIsVisible(),
+           "GetRef(...).SetVisible(false) reached the same Label's visibility");
+}
+
+void TestGetRefFindsNothingOutsideARunningLifecycleHook() {
+    TempProject           Project;
+    const std::string     AppPath = Project.Write("RefTicker.chaos", RefTickerSource);
+    Chaos::ChaosNyxDriver Driver(UmbraConfig(), Project.RootPath());
+    const Component       Root = MountWithGetRef(Driver, AppPath, "RefTicker");
+    Expect(Driver.Diagnostics().empty(), "the RefTicker fixture mounts with no diagnostics");
+
+    Penumbra::LifecycleRegistry Host;
+    BuildContext                Context;
+    Context.LifecycleHost = &Host;
+    PenumbraUiBackend::RefMap Refs;
+    const auto                Built = BuildWidgetTree(Root, Context, /*OutTags=*/nullptr, &Refs);
+
+    const bool HasLifecycle = Root.Instance != nullptr && Root.Instance->Lifecycle != nullptr;
+    Expect(HasLifecycle, "the OnTick local wires a real Instance->Lifecycle");
+    if (HasLifecycle) {
+        Root.Instance->Lifecycle->OnTick(Umbra::TickInfo{0.5f});
+    }
+
+    Label* LabelWidget = RefdLabel(Refs);
+    Expect(HasLifecycle && LabelWidget != nullptr && LabelWidget->Text == "idle",
+           "an OnTick called around the walker's lifecycle host gets null from GetRef and changes nothing");
+}
+
+void TestClassComponentOnTickCanReachItsRefsViaGetRef() {
+    TempProject           Project;
+    const std::string     AppPath = Project.Write("ClassTicker.chaos",
+                                                   "ClassTicker :: class : Component {\n"
+                                                   "public:\n"
+                                                   "    OnTick~: (dt: f32) -> void {\n"
+                                                   "        guard handle ~= GetRef(\"label\") return;\n"
+                                                   "        handle.SetText(\"ticked\");\n"
+                                                   "    }\n"
+                                                   "\n"
+                                                   "    Render:: () -> Penumbra:::Component {\n"
+                                                   "        return (<text ref=\"label\">idle</text>);\n"
+                                                   "    }\n"
+                                                   "}\n");
+    Chaos::ChaosNyxDriver Driver(UmbraConfig(), Project.RootPath());
+    const Component       Root = MountWithGetRef(Driver, AppPath, "ClassTicker");
+    Expect(Driver.Diagnostics().empty(), "a class component whose OnTick calls GetRef mounts with no diagnostics");
+
+    Penumbra::LifecycleRegistry Host;
+    BuildContext                Context;
+    Context.LifecycleHost = &Host;
+    PenumbraUiBackend::RefMap Refs;
+    const auto                Built = BuildWidgetTree(Root, Context, /*OutTags=*/nullptr, &Refs);
+
+    Host.Tick(0.5f);
+
+    Label* LabelWidget = RefdLabel(Refs);
+    Expect(LabelWidget != nullptr && LabelWidget->Text == "ticked",
+           "a class component's OnTick reaches its own ref'd Label through GetRef");
 }
 
 } // namespace
@@ -854,10 +875,9 @@ void RunWalkerTests() {
     TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost();
     TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle();
     TestApplicationRegisterLifecycleStillForwardsToItsOwnLifecycleRegistry();
-    std::printf("[SKIP] TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef and "
-                "TestNoNyxHostMeansNoGetRefCapabilityEvenWithARealNyxLifecycle: a component's GetRef is "
-                "defined at build time, so canonical Nyx can't analyse a call to it "
-                "(penumbra-ui-backend board: give-components-a-getref-canonical-nyx-can-analyse)\n");
+    TestNyxOnTickCanLookUpAndMutateARefdWidgetViaGetRef();
+    TestGetRefFindsNothingOutsideARunningLifecycleHook();
+    TestClassComponentOnTickCanReachItsRefsViaGetRef();
 }
 
 void RunPenumbraWidgetAdapterTests();      // tests/PenumbraWidgetAdapterTests.cpp

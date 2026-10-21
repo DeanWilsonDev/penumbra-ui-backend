@@ -20,9 +20,7 @@
 #include "Penumbra/Widgets/TextInput.h"
 #include "Penumbra/Widgets/TextSelection.h"
 
-#include "host/marshal.hpp"
-#include "runtime/callable.hpp"
-#include "runtime/environment.hpp"
+#include "host/nyx-runtime.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -253,95 +251,9 @@ private:
     const WalkerStyleElement* Parent_;
 };
 
-// docs/next_steps.md's "reconciler-side wiring for a framework-owned component
-// lifecycle system" ask. `Umbra::IWidgetLifecycle` (`chaos::ComponentInstance::
-// Lifecycle`'s own type) and `Penumbra::IWidgetLifecycle` (what
-// `Penumbra::LifecycleRegistry::RegisterLifecycle` takes) are two distinct classes with
-// identical virtual signatures
-// -- deliberately mirrored, per `Penumbra::IWidgetLifecycle`'s own doc comment, rather
-// than one shared type, since Penumbra doesn't depend on umbra-interfaces. This repo is
-// the one place that sees both sides of the mirror, so it's the one that has to bridge
-// them -- not a framework gap on either side.
-// `InnerWatch_` (umbra-interfaces' `Umbra::LivenessGuard::Watch`) guards exactly the
-// dangling-pointer shape this repo has actually hit: `Inner_` outliving its own pointee
-// when whatever owns it (a Chaos `NyxDriverState`, transitively through
-// `Node.Instance`) is torn down before this bridge's own `OnUnmount()`/`OnTick()` is
-// called by `Penumbra::LifecycleRegistry` -- previously an `EXC_BAD_ACCESS` inside
-// `Inner_->OnTick(...)`/`Inner_->OnUnmount()`, only diagnosable after the fact via
-// `lldb`. `AssertAlive` turns that into an immediate, attributable `abort()` at the
-// actual call site instead.
-class UmbraLifecycleBridge : public Penumbra::IWidgetLifecycle {
-public:
-    explicit UmbraLifecycleBridge(Umbra::IWidgetLifecycle* Inner)
-        : Inner_(Inner), InnerWatch_(Inner->Liveness()) {}
-
-    void OnMount() override {
-        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnMount)");
-        Inner_->OnMount();
-    }
-    void OnUnmount() override {
-        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnUnmount)");
-        Inner_->OnUnmount();
-    }
-    void OnTick(const Penumbra::TickInfo& Info) override {
-        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnTick)");
-        Inner_->OnTick(Umbra::TickInfo{Info.DeltaSeconds});
-    }
-
-private:
-    Umbra::IWidgetLifecycle*    Inner_;
-    Umbra::LivenessGuard::Watch InnerWatch_;
-};
-
-// Registers Node's own component lifecycle (if any) against Context.LifecycleHost, and
-// arranges for it to unregister automatically when Built is actually torn down. Called
-// once per built widget from BuildWidgetTreeInternal, at the same per-node point
-// OutTags/OutRefs are already recorded -- see Walker.h's BuildWidgetTree comment for why
-// this can't be a one-shot root-only check (a plain nested `<ChildComponent .../>` with
-// no `<Slot>` also carries its own Component::Instance, inline in the same tree).
-//
-// `LifecycleRegistry::RegisterLifecycle`/`UnregisterLifecycle` already call `OnMount()`/
-// `OnUnmount()` internally (`external/penumbra`'s `LifecycleRegistry.cpp`), so this function's
-// only job is picking the right moments to call them. `WidgetBase::OnDestroyed`
-// (`Penumbra/Widgets/WidgetBase.h`) -- an existing, generic "this widget is being torn
-// down" hook, unused anywhere else in this repo -- fires from `~WidgetBase()`, giving
-// exactly the unmount timing needed without requiring `ComponentInstance` to grow a
-// destructor or a registry reference of its own (Chaos's own decision, see
-// `Chaos/ComponentInstance.h`'s `Lifecycle` field comment: passive and non-owning,
-// deliberately no self-unregister-at-destruction). The bridge itself needs no separate
-// storage anywhere -- the OnDestroyed lambda's own capture owns it for exactly as long
-// as it needs to live, freeing it the instant UnregisterLifecycle has been called.
-//
-// `Bridge` is a `shared_ptr`, not `unique_ptr`, purely so the capturing lambda stays
-// copyable -- `WidgetBase::OnDestroyed` is a `std::function<void()>`, which requires a
-// copyable target, the same constraint `TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase`
-// (`tests/WalkerTests.cpp`) already worked around the same way for a move-only capture.
-// `Built.OnDestroyed` is only ever invoked once (from `~WidgetBase()`), so the shared
-// ownership never actually gets shared in practice.
-void RegisterLifecycleIfPresent(const Component& Node, const BuildContext& Context, WidgetBase& Built) {
-    if (Context.LifecycleHost == nullptr || !Node.Instance || Node.Instance->Lifecycle == nullptr) {
-        return;
-    }
-    auto                         Bridge = std::make_shared<UmbraLifecycleBridge>(Node.Instance->Lifecycle);
-    Penumbra::LifecycleRegistry* Host = Context.LifecycleHost;
-    Host->RegisterLifecycle(Bridge.get());
-    Built.OnDestroyed = [Host, Bridge]() { Host->UnregisterLifecycle(Bridge.get()); };
-}
-
-std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const BuildContext& Context,
-                                                     const WalkerStyleElement* ParentStyleElement,
-                                                     bool IsComponentRoot, BuildRecords& Records);
-
-// docs/next_steps.md's "a Nyx-authored OnMount/OnTick has no way to reach its own
-// component's ref'd widgets" ask. The small typed-setter wrapper `GetRef(name)` (below)
-// hands back to Nyx script -- dynamic_cast dispatch onto whichever concrete Penumbra
-// widget type the ref actually names, silently no-op on a mismatched call (e.g.
-// SetIconName on a plain Box with no IconWidget), matching this walker's existing
-// "malformed/mismatched input is simply not applied" tolerance elsewhere (GetStringProp
-// et al., GetRefName above). Exactly the four operations pharos-proto's own
-// inspector_panel_native.cpp hand-writes today per Inspector row -- Text/IconName/
-// ColorText/SetIsVisible -- not a speculative surface (docs/next_steps.md's own "one real
-// open design question" section names this as the validated minimum bar).
+// What a component's lifecycle hooks get back from `GetRef(name)`. Each setter
+// dynamic_casts to the widget type it applies to and does nothing on any other, so a
+// mismatched call (SetIconName on a Label) is a no-op rather than an error.
 class WidgetRefHandle {
 public:
     explicit WidgetRefHandle(WidgetBase* Widget) : Widget_(Widget) {}
@@ -381,122 +293,134 @@ private:
     WidgetBase* Widget_;
 };
 
-// Registers the "WidgetRef" host type (the four WidgetRefHandle methods above) against
-// Runtime exactly once -- TypeBuilder<T>'s destructor commits unconditionally on every
-// call, so a naive "register every time a lifecycle-bearing node is built" would leak a
-// fresh TypeDescriptor into Runtime's own registry on every reload/rebuild. Dispatch on a
-// HostObject-kind Value goes entirely through `host->descriptor` at call time
-// (Interpreter::CallInstanceMethod, confirmed against nyx-proto's real source -- never
-// through any Environment/Globals lookup), so this registration doesn't need to happen on
-// whichever Environment a particular component's GetRef closure is later defined into; one
-// registration against the app's single NyxRuntime is visible from every HostObject this
-// walker ever hands back, regardless of which component's own RenderScope built it.
-//
-// "Already registered?" is answered by querying Runtime's own Globals() directly, not a
-// side-table keyed by `&Runtime` (a previous version of this function used exactly that --
-// a `static std::unordered_map<NyxRuntime*, const TypeDescriptor*>` -- and it was a real
-// dangling-pointer bug: a short-lived NyxRuntime (e.g. a test's own stack-local
-// Chaos::ChaosNyxDriver) can be destroyed and a *different*, unrelated NyxRuntime later
-// constructed at the same address, at which point the stale map entry hands back a
-// TypeDescriptor* owned by the first (now-destroyed) Runtime's own `types_` -- confirmed
-// directly: two independent NyxRuntimes each calling BuildWidgetTree with NyxHost set, back
-// to back in the same process, with the first's stack storage reused by the second,
-// reproduces exactly this). Runtime.Globals() is itself already a member of Runtime --
-// correctly scoped to its lifetime, nothing external to go stale -- so it's the only source
-// of truth this needs.
-const nyx::runtime::TypeDescriptor* EnsureWidgetRefTypeRegistered(nyx::host::NyxRuntime& Runtime) {
-    if (const auto Existing = Runtime.Globals().find("WidgetRef"); Existing != Runtime.Globals().end()) {
-        return std::get<std::shared_ptr<nyx::runtime::HostObject>>(Existing->second.data)->descriptor;
-    }
-    {
-        auto Builder = Runtime.RegisterType<WidgetRefHandle>("WidgetRef");
-        Builder.Method("SetText", &WidgetRefHandle::SetText)
-            .Method("SetIconName", &WidgetRefHandle::SetIconName)
-            .Method("SetColor", &WidgetRefHandle::SetColor)
-            .Method("SetVisible", &WidgetRefHandle::SetVisible);
-    } // Builder destructs here -- commits the descriptor into Runtime.
-    if (const auto Global = Runtime.Globals().find("WidgetRef"); Global != Runtime.Globals().end()) {
-        return std::get<std::shared_ptr<nyx::runtime::HostObject>>(Global->second.data)->descriptor;
-    }
-    return nullptr;
-}
+// The refs a component's lifecycle hooks can reach through `GetRef`, with the handles
+// already handed out for them. A handle is cached per name so a per-frame OnTick doesn't
+// allocate one on every call.
+class ComponentRefs {
+public:
+    explicit ComponentRefs(const RefMap* Refs) : Refs_(Refs) {}
 
-// Defines a Nyx-callable `GetRef(name: string)` directly into Node's own component
-// instance's `Chaos::NyxDriverState::RenderScope` Environment -- deliberately never onto
-// Context.NyxHost->Globals(). docs/next_steps.md's own ask left this as one real open
-// design question (global-on-Runtime::Globals() vs. per-instance-scoped); resolved here in
-// favor of per-instance, confirmed against real source rather than assumed:
-//
-// - A global `GetRef` would be one flat binding shared by every concurrently-mounted
-//   lifecycle-bearing component (Explorer/Atlas/Inspector/Toolbar are all named as
-//   eventual GetRef consumers by the same ask) -- the last BuildWidgetTree call to
-//   (re)register it would silently win for every other already-mounted component's own
-//   later OnTick calls too, a real cross-component ref-map collision, not a hypothetical
-//   one, since ref names are only unique *within* one BuildWidgetTree call
-//   (RefMap's own doc comment), not across separately-built sibling components.
-// - Per-instance scoping needs no new Chaos/nyx-proto API at all: NyxDriverState
-//   (Chaos/ChaosNyxDriver.h) is already a public type, RenderScope is the exact Environment
-//   BuildFreeFunctionLifecycleAdapter's own `Scope.context.env->FindOwn("OnTick")` check
-//   already reads (ChaosNyxDriver.cpp, confirmed directly) to detect the reserved-name
-//   locals this same instance's OnMount/OnTick hooks are declared in, and
-//   Environment::Define (environment.hpp, already public) creates a binding "in this scope
-//   only." Nyx variable lookup is late -- walks the live parent chain at call time, not a
-//   snapshot taken when a closure was declared -- so defining GetRef into that same live
-//   Environment object, at any point before the first OnMount/OnTick call actually runs,
-//   is visible to it with no ordering hazard.
-//
-// Only reaches Model 1 (free-function) components: Model 2 (class-based) lifecycle hooks
-// dispatch via Interpreter::TryCallInstanceMethod against the *file-level* shared
-// interpreter/registry (BuildClassLifecycleAdapter, ChaosNyxDriver.cpp), never through any
-// per-instance Environment at all -- there is no analogous scope to define GetRef into for
-// that model today. A class-based OnTick calling GetRef gets an ordinary Nyx-level
-// "undefined variable" error, a real and deliberately left-open scope boundary, not a
-// silently wrong result.
-//
-// `Refs` must outlive Node's own mounted lifetime, the same requirement RefMap's own doc
-// comment already implies for every other consumer (PenumbraWidgetAdapter.cpp's GetByRef
-// registry) -- GetRef's closure captures the raw pointer, not a copy, since it needs to see
-// every ref this same BuildWidgetTree call goes on to record after this point too (the
-// "favorable ordering fact" docs/next_steps.md's own ask grounds this whole capability in:
-// by the time a node's own OnMount fires, every ref belonging to that node's own subtree is
-// already recorded in *Refs).
-void RegisterGetRefIfPresent(const Component& Node, const BuildContext& Context, RefMap* Refs) {
-    if (Context.NyxHost == nullptr || Refs == nullptr || !Node.Instance || !Node.Instance->DriverState) {
-        return;
-    }
-    auto* State = static_cast<Chaos::NyxDriverState*>(Node.Instance->DriverState.get());
-    if (!State->RenderScope.context.env) {
-        return;
-    }
-    const nyx::runtime::TypeDescriptor* Descriptor = EnsureWidgetRefTypeRegistered(*Context.NyxHost);
-    if (Descriptor == nullptr) {
-        return;
-    }
-
-    // Handles are cached per ref name (not reallocated on every GetRef call, which would
-    // otherwise grow unboundedly under a real per-frame OnTick) -- captured by shared_ptr
-    // alongside Refs/Descriptor since std::function (NyxCallable::declaration's third
-    // alternative) requires a copyable target.
-    auto HandleCache = std::make_shared<std::unordered_map<std::string, std::unique_ptr<WidgetRefHandle>>>();
-    auto Callable     = std::make_shared<nyx::runtime::NyxCallable>();
-    Callable->declaration =
-        [Refs, HandleCache, Descriptor](std::vector<nyx::runtime::Value> Args) -> nyx::runtime::Value {
-        if (Args.empty() || Args[0].Kind() != nyx::runtime::ValueKind::String) {
-            return nyx::runtime::Value();
+    WidgetRefHandle* Find(const std::string& Name) {
+        if (Refs_ == nullptr) {
+            return nullptr;
         }
-        const std::string& Name  = std::get<std::string>(Args[0].data);
-        const auto          RefIt = Refs->find(Name);
-        if (RefIt == Refs->end()) {
-            return nyx::runtime::Value();
+        const auto RefIt = Refs_->find(Name);
+        if (RefIt == Refs_->end()) {
+            return nullptr;
         }
-        std::unique_ptr<WidgetRefHandle>& Handle = (*HandleCache)[Name];
+        std::unique_ptr<WidgetRefHandle>& Handle = Handles_[Name];
         if (!Handle) {
             Handle = std::make_unique<WidgetRefHandle>(RefIt->second);
         }
-        return nyx::host::ToValue(Handle.get(), Descriptor);
-    };
-    State->RenderScope.context.env->Define("GetRef", nyx::runtime::Value(Callable));
+        return Handle.get();
+    }
+
+private:
+    const RefMap*                                                     Refs_;
+    std::unordered_map<std::string, std::unique_ptr<WidgetRefHandle>> Handles_;
+};
+
+// The refs of the component whose lifecycle hook is running, which is what the
+// runtime-wide `GetRef` resolves against. Null outside a hook, so `GetRef` finds nothing.
+thread_local ComponentRefs* RunningComponentRefs = nullptr;
+
+class RunningComponentScope {
+public:
+    explicit RunningComponentScope(ComponentRefs& Refs) : Previous_(RunningComponentRefs) {
+        RunningComponentRefs = &Refs;
+    }
+    ~RunningComponentScope() { RunningComponentRefs = Previous_; }
+
+    RunningComponentScope(const RunningComponentScope&)            = delete;
+    RunningComponentScope& operator=(const RunningComponentScope&) = delete;
+
+private:
+    ComponentRefs* Previous_;
+};
+
+// docs/next_steps.md's "reconciler-side wiring for a framework-owned component
+// lifecycle system" ask. `Umbra::IWidgetLifecycle` (`chaos::ComponentInstance::
+// Lifecycle`'s own type) and `Penumbra::IWidgetLifecycle` (what
+// `Penumbra::LifecycleRegistry::RegisterLifecycle` takes) are two distinct classes with
+// identical virtual signatures
+// -- deliberately mirrored, per `Penumbra::IWidgetLifecycle`'s own doc comment, rather
+// than one shared type, since Penumbra doesn't depend on umbra-interfaces. This repo is
+// the one place that sees both sides of the mirror, so it's the one that has to bridge
+// them -- not a framework gap on either side.
+// `InnerWatch_` (umbra-interfaces' `Umbra::LivenessGuard::Watch`) guards exactly the
+// dangling-pointer shape this repo has actually hit: `Inner_` outliving its own pointee
+// when whatever owns it (a Chaos `NyxDriverState`, transitively through
+// `Node.Instance`) is torn down before this bridge's own `OnUnmount()`/`OnTick()` is
+// called by `Penumbra::LifecycleRegistry` -- previously an `EXC_BAD_ACCESS` inside
+// `Inner_->OnTick(...)`/`Inner_->OnUnmount()`, only diagnosable after the fact via
+// `lldb`. `AssertAlive` turns that into an immediate, attributable `abort()` at the
+// actual call site instead.
+class UmbraLifecycleBridge : public Penumbra::IWidgetLifecycle {
+public:
+    UmbraLifecycleBridge(Umbra::IWidgetLifecycle* Inner, const RefMap* Refs)
+        : Inner_(Inner), InnerWatch_(Inner->Liveness()), Refs_(Refs) {}
+
+    void OnMount() override {
+        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnMount)");
+        RunningComponentScope Running(Refs_);
+        Inner_->OnMount();
+    }
+    void OnUnmount() override {
+        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnUnmount)");
+        RunningComponentScope Running(Refs_);
+        Inner_->OnUnmount();
+    }
+    void OnTick(const Penumbra::TickInfo& Info) override {
+        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnTick)");
+        RunningComponentScope Running(Refs_);
+        Inner_->OnTick(Umbra::TickInfo{Info.DeltaSeconds});
+    }
+
+private:
+    Umbra::IWidgetLifecycle*    Inner_;
+    Umbra::LivenessGuard::Watch InnerWatch_;
+    ComponentRefs               Refs_;
+};
+
+// Registers Node's own component lifecycle (if any) against Context.LifecycleHost, and
+// arranges for it to unregister automatically when Built is actually torn down. Called
+// once per built widget from BuildWidgetTreeInternal, at the same per-node point
+// OutTags/OutRefs are already recorded -- see Walker.h's BuildWidgetTree comment for why
+// this can't be a one-shot root-only check (a plain nested `<ChildComponent .../>` with
+// no `<Slot>` also carries its own Component::Instance, inline in the same tree).
+//
+// `LifecycleRegistry::RegisterLifecycle`/`UnregisterLifecycle` already call `OnMount()`/
+// `OnUnmount()` internally (`external/penumbra`'s `LifecycleRegistry.cpp`), so this function's
+// only job is picking the right moments to call them. `WidgetBase::OnDestroyed`
+// (`Penumbra/Widgets/WidgetBase.h`) -- an existing, generic "this widget is being torn
+// down" hook, unused anywhere else in this repo -- fires from `~WidgetBase()`, giving
+// exactly the unmount timing needed without requiring `ComponentInstance` to grow a
+// destructor or a registry reference of its own (Chaos's own decision, see
+// `Chaos/ComponentInstance.h`'s `Lifecycle` field comment: passive and non-owning,
+// deliberately no self-unregister-at-destruction). The bridge itself needs no separate
+// storage anywhere -- the OnDestroyed lambda's own capture owns it for exactly as long
+// as it needs to live, freeing it the instant UnregisterLifecycle has been called.
+//
+// `Bridge` is a `shared_ptr`, not `unique_ptr`, purely so the capturing lambda stays
+// copyable -- `WidgetBase::OnDestroyed` is a `std::function<void()>`, which requires a
+// copyable target, the same constraint `TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase`
+// (`tests/WalkerTests.cpp`) already worked around the same way for a move-only capture.
+// `Built.OnDestroyed` is only ever invoked once (from `~WidgetBase()`), so the shared
+// ownership never actually gets shared in practice.
+void RegisterLifecycleIfPresent(const Component& Node, const BuildContext& Context, WidgetBase& Built,
+                                const RefMap* Refs) {
+    if (Context.LifecycleHost == nullptr || !Node.Instance || Node.Instance->Lifecycle == nullptr) {
+        return;
+    }
+    auto                         Bridge = std::make_shared<UmbraLifecycleBridge>(Node.Instance->Lifecycle, Refs);
+    Penumbra::LifecycleRegistry* Host = Context.LifecycleHost;
+    Host->RegisterLifecycle(Bridge.get());
+    Built.OnDestroyed = [Host, Bridge]() { Host->UnregisterLifecycle(Bridge.get()); };
 }
+
+std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const BuildContext& Context,
+                                                     const WalkerStyleElement* ParentStyleElement,
+                                                     bool IsComponentRoot, BuildRecords& Records);
 
 // The five event props plus `class` are the exact shared method set every Box-derived
 // primitive's Builder exposes identically (Box::Builder, Label::Builder,
@@ -943,19 +867,30 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
 
     // Same per-node reasoning as OutTags/OutRefs above -- Node.Instance is only
     // reachable here, not from the built WidgetBase tree later, and isn't limited to
-    // Node's own root (see RegisterLifecycleIfPresent's own comment). GetRef is defined
-    // before RegisterLifecycleIfPresent runs (not after) so it's already reachable from
-    // inside the Nyx-authored OnMount body RegisterLifecycleIfPresent's own
-    // Host->RegisterLifecycle call triggers immediately below.
+    // Node's own root (see RegisterLifecycleIfPresent's own comment).
     if (Built) {
-        RegisterGetRefIfPresent(Node, Context, Records.Refs);
-        RegisterLifecycleIfPresent(Node, Context, *Built);
+        RegisterLifecycleIfPresent(Node, Context, *Built, Records.Refs);
     }
 
     return Built;
 }
 
 } // namespace
+
+void RegisterComponentGetRef(nyx::host::NyxRuntime& Runtime) {
+    if (!Runtime.Globals().contains("WidgetRef")) {
+        Runtime.RegisterType<WidgetRefHandle>("WidgetRef")
+            .Method("SetText", &WidgetRefHandle::SetText)
+            .Method("SetIconName", &WidgetRefHandle::SetIconName)
+            .Method("SetColor", &WidgetRefHandle::SetColor)
+            .Method("SetVisible", &WidgetRefHandle::SetVisible);
+    }
+    if (!Runtime.Globals().contains("GetRef")) {
+        Runtime.RegisterFunction("GetRef", [](const std::string& Name) -> WidgetRefHandle* {
+            return RunningComponentRefs != nullptr ? RunningComponentRefs->Find(Name) : nullptr;
+        });
+    }
+}
 
 std::unique_ptr<WidgetBase> BuildWidgetTree(const Component& Node, const BuildContext& Context,
                                              PrimitiveTagMap* OutTags, RefMap* OutRefs, NumberPropMap* OutNumbers) {

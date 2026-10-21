@@ -109,30 +109,6 @@ struct BuildContext {
     // are ever called on this pointer (see RegisterLifecycleIfPresent in Walker.cpp),
     // both unchanged in signature/behavior on the new type.
     Penumbra::LifecycleRegistry* LifecycleHost{nullptr};
-
-    // docs/next_steps.md's "a Nyx-authored OnMount/OnTick has no way to reach its own
-    // component's ref'd widgets" ask. When set (alongside LifecycleHost, and only for a
-    // node whose `Instance->DriverState` was actually produced by `Chaos::ChaosNyxDriver` --
-    // see Walker.cpp's RegisterGetRefIfPresent for the exact gate), BuildWidgetTreeInternal
-    // defines a Nyx-callable `GetRef(name: string)` directly into that component's own
-    // `Chaos::NyxDriverState::RenderScope` Environment (never onto this Runtime's own
-    // `Globals()` -- see RegisterGetRefIfPresent's own comment for why per-instance scoping
-    // is both necessary, so concurrently-mounted components' ref sets never collide under
-    // one shared name, and achievable with zero Chaos/`nyx-proto` API additions).
-    // `GetRef` returns a small host-object handle (`SetText`/`SetIconName`/`SetColor`/
-    // `SetVisible`, dispatched by `dynamic_cast` against whichever concrete Penumbra widget
-    // type the ref actually names) for whatever the calling component's own `ref`-tagged
-    // descendants are -- exactly the operation set `pharos-proto`'s own
-    // `inspector_panel_native.cpp` hand-writes today per row. Left null (the default) means
-    // exactly pre-wiring behavior: no `GetRef` capability exists for any component, same
-    // "optional resource" convention every other BuildContext field already follows. Only
-    // reaches Model 1 (free-function) components today -- Model 2 (class-based) components
-    // dispatch their lifecycle hooks through the file-level shared interpreter/registry, not
-    // through any per-instance Environment, so there is currently no analogous scope to
-    // define `GetRef` into for that model (a class-based OnTick calling `GetRef` gets an
-    // ordinary Nyx-level "undefined variable" error, not a wrong-widget bug) -- a real,
-    // deliberately-left-open scope boundary, not silently broken.
-    nyx::host::NyxRuntime* NyxHost{nullptr};
 };
 
 // Walks a single `Component` IR node (docs/iris_core_spec.md §2.5, from the `chaos`
@@ -195,5 +171,13 @@ std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Chaos::Comp
                                                                  PrimitiveTagMap*           OutTags = nullptr,
                                                                  RefMap*                    OutRefs = nullptr,
                                                                  NumberPropMap*             OutNumbers = nullptr);
+
+// Declares `GetRef(name: string) -> WidgetRef?` and the `WidgetRef` type on Runtime, so a
+// component's lifecycle hooks can reach the widgets it tagged with `ref`. Call it before
+// the first mount, since Nyx analyses a file against what the runtime declares when it
+// loads. `GetRef` resolves against the component whose OnMount/OnTick/OnUnmount is
+// running, which needs BuildContext::LifecycleHost and an OutRefs map; anywhere else it
+// returns null. Safe to call more than once on the same runtime.
+void RegisterComponentGetRef(nyx::host::NyxRuntime& Runtime);
 
 } // namespace PenumbraUiBackend

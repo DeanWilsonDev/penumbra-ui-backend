@@ -35,6 +35,7 @@ std::optional<std::string> ReadFileToString(const std::string& Path) {
 
 void ChaosApplication::Attach(Chaos::ChaosNyxDriver& Driver, std::string UiDir) {
     Driver.RegisterElementType("Penumbra::Component");
+    RegisterComponentGetRef(Driver.Runtime());
     Driver_                  = &Driver;
     ReportedDiagnosticCount_ = 0;
     UiDir_                   = std::move(UiDir);
@@ -146,7 +147,6 @@ bool ChaosApplication::MountAppRoot(const std::string& File, const std::string& 
 
     BuildContext Context  = MakeBuildContext();
     Context.LifecycleHost = &GetLifecycleRegistry();
-    Context.NyxHost       = &Driver_->Runtime();
 
     AppRootRefs_.clear();
     std::unique_ptr<Penumbra::Widgets::WidgetBase> Built = BuildWidgetTree(AppRoot_, Context, nullptr, &AppRootRefs_);

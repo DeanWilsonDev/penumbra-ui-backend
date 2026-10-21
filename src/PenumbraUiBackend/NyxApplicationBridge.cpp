@@ -278,6 +278,7 @@ template <typename AppBaseT>
 NyxApplicationBridgeT<AppBaseT>::NyxApplicationBridgeT(Chaos::ChaosConfig Config, std::string ProjectRoot)
     : Runtime_(), ChaosDriver_(std::move(Config), ProjectRoot, Runtime_), ProjectRoot_(std::move(ProjectRoot)) {
     ChaosDriver_.RegisterElementType("Penumbra::Component");
+    RegisterComponentGetRef(Runtime_);
 }
 
 template <typename AppBaseT>
