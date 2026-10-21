@@ -183,6 +183,8 @@ Penumbra::Widgets::WidgetBase* ChaosApplication::GetRef(const std::string& Name)
     return nullptr;
 }
 
+ChaosApplication::~ChaosApplication() { TeardownRootWidget(); }
+
 void ChaosApplication::TeardownRootWidget() {
     for (auto& [Name, Mount] : ReconciledMounts_) {
         Mount.Slots.clear();

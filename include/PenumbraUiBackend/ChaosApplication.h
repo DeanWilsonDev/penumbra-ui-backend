@@ -79,7 +79,10 @@ namespace PenumbraUiBackend {
 class ChaosApplication : public Penumbra::Application {
 public:
     ChaosApplication() = default;
-    ~ChaosApplication() override = default;
+    // Tears the widget tree down first, while Focus_ and the rest are still here: the
+    // tree's root is Application's own member, which would otherwise outlive them, and a
+    // focused TextInput or TextArea clears Focus_ as it's destroyed.
+    ~ChaosApplication() override;
 
     // Called once, post-construction, before anything else on this class. `Driver` must
     // outlive this object (same ownership shape `NyxApplicationBridgeT` already gives its
