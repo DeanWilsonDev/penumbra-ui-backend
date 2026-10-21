@@ -11,6 +11,7 @@
 
 #include <cstdio>
 #include <string>
+#include <vector>
 
 extern int Failures; // defined in WalkerTests.cpp
 
@@ -106,6 +107,29 @@ void TestApplyPropDiffOnTextChangeReachesRealTextInput() {
         AsTextInput->OnTextChanged("typed");
         Expect(LastValue == "typed", "and invoking it calls back into the original handler");
     }
+}
+
+void TestApplyPropDiffOnKeyDownNamesPenumbrasKeysTheWebsWay() {
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("overlay"));
+
+    std::vector<std::string> Pressed;
+    Umbra::ChaosPropDiff     Diff;
+    Diff.OnKeyDown = std::function<void(std::string)>([&Pressed](std::string Key) { Pressed.push_back(std::move(Key)); });
+    Wrapped->ApplyPropDiff(Diff);
+
+    auto* AsBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
+    Expect(AsBox != nullptr && static_cast<bool>(AsBox->OnKeyPressed),
+           "ApplyPropDiff's OnKeyDown reaches the real WidgetBase::OnKeyPressed field");
+    if (AsBox == nullptr || !AsBox->OnKeyPressed) {
+        return;
+    }
+    using Penumbra::Platform::Key;
+    for (const Key Each : {Key::Escape, Key::Enter, Key::Tab, Key::Left, Key::Down, Key::Backspace, Key::A, Key::Unknown}) {
+        AsBox->OnKeyPressed(Each);
+    }
+    Expect(Pressed == std::vector<std::string>({"Escape", "Enter", "Tab", "ArrowLeft", "ArrowDown", "Backspace", "a"}),
+           "each key arrives named as KeyboardEvent.key names it, and an unknown key doesn't arrive");
 }
 
 void TestReconcilerChangesAReusedIconsGlyph() {
@@ -411,6 +435,7 @@ void RunPenumbraWidgetAdapterTests() {
     TestWrapExistingTreeMirrorsRealTreeStructure();
     TestApplyPropDiffReachesRealWidgetBaseFields();
     TestApplyPropDiffOnTextChangeReachesRealTextInput();
+    TestApplyPropDiffOnKeyDownNamesPenumbrasKeysTheWebsWay();
     TestReconcilerChangesAReusedIconsGlyph();
     TestReconcilerUpdatesRealWidgetTreeInPlace();
     TestReconcilerAddsRealChildToRealParentBox();

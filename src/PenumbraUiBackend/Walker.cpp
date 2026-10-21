@@ -816,6 +816,12 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
             break; // unreachable -- None/Slot returned above, every other tag handled
     }
 
+    if (Built) {
+        if (const auto OnKeyDown = GetStringEventProp(Node.Props, "onKeyDown")) {
+            Built->OnKeyPressed = KeyDownHandler(*OnKeyDown);
+        }
+    }
+
     if (auto* AsBox = dynamic_cast<Box*>(Built.get()); AsBox && GetBoolProp(Node.Props, "selectable").value_or(false)) {
         Penumbra::Widgets::TextSelection& Selection = AsBox->EnableTextSelection();
         Selection.Focus = Context.Focus;
@@ -889,6 +895,34 @@ void RegisterComponentGetRef(nyx::host::NyxRuntime& Runtime) {
             return RunningComponentRefs != nullptr ? RunningComponentRefs->Find(Name) : nullptr;
         });
     }
+}
+
+std::function<void(Penumbra::Platform::Key)> KeyDownHandler(std::function<void(std::string)> OnKeyDown) {
+    return [OnKeyDown = std::move(OnKeyDown)](Penumbra::Platform::Key Pressed) {
+        using Penumbra::Platform::Key;
+        const char* Name = nullptr;
+        switch (Pressed) {
+            case Key::Left: Name = "ArrowLeft"; break;
+            case Key::Right: Name = "ArrowRight"; break;
+            case Key::Up: Name = "ArrowUp"; break;
+            case Key::Down: Name = "ArrowDown"; break;
+            case Key::Home: Name = "Home"; break;
+            case Key::End: Name = "End"; break;
+            case Key::Backspace: Name = "Backspace"; break;
+            case Key::Delete: Name = "Delete"; break;
+            case Key::Escape: Name = "Escape"; break;
+            case Key::Enter: Name = "Enter"; break;
+            case Key::Tab: Name = "Tab"; break;
+            case Key::A: Name = "a"; break;
+            case Key::C: Name = "c"; break;
+            case Key::V: Name = "v"; break;
+            case Key::X: Name = "x"; break;
+            case Key::Unknown: break;
+        }
+        if (Name != nullptr) {
+            OnKeyDown(Name);
+        }
+    };
 }
 
 std::unique_ptr<WidgetBase> BuildWidgetTree(const Component& Node, const BuildContext& Context,

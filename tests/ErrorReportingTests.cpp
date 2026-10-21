@@ -120,7 +120,8 @@ void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
 
     Button->OnPressed();
     const std::string TickOutput = CaptureStderr([&]() { App.TickChaos(); });
-    Expect(Contains(TickOutput, "error[CHA0560]: array index out of range") && Contains(TickOutput, "Root.chaos:12:74"),
+    Expect(Contains(TickOutput, "error[CHA0560]: prop 'class' on <frame> raised an error: array index out of range") &&
+               Contains(TickOutput, "Root.chaos:12:74"),
            "TickChaos reports a Nyx error raised while a <Slot> re-renders as its CHA diagnostic, where it is in its file");
 
     const std::string SecondTickOutput = CaptureStderr([&]() { App.TickChaos(); });

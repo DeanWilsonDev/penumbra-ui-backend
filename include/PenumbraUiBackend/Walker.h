@@ -179,4 +179,11 @@ std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Chaos::Comp
 // returns null. Safe to call more than once on the same runtime.
 void RegisterComponentGetRef(nyx::host::NyxRuntime& Runtime);
 
+// The `WidgetBase::OnKeyPressed` for a Chaos `onKeyDown`: names each key Penumbra hands it
+// as `Umbra::ChaosPropDiff::OnKeyDown` says, the way the web's `KeyboardEvent.key` does
+// ("Escape", "Enter", "Tab", "ArrowLeft", "Home", "Backspace", a letter as its lowercase
+// character), and calls OnKeyDown with that name. A key with no name
+// (`Platform::Key::Unknown`) isn't passed on.
+std::function<void(Penumbra::Platform::Key)> KeyDownHandler(std::function<void(std::string)> OnKeyDown);
+
 } // namespace PenumbraUiBackend

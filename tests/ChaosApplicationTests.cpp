@@ -340,6 +340,59 @@ void TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard() {
     App.TeardownRootWidget();
 }
 
+void TestOnKeyDownGetsAKeyNoFocusedFieldUsedOnTheTopmostElementWithOne() {
+    TempProject Project;
+    Project.Write("Keys.cosmos", ".app { display: stack; flex-direction: column; }\n"
+                                  ".field { width: 200px; height: 30px; }\n"
+                                  ".modal { width: 200px; height: 100px; }\n");
+    Project.Write("Keys.chaos", "Keys :: () -> Penumbra:::Component {\n"
+                                 "    return (\n"
+                                 "        <frame class=\"app\" onKeyDown={(key: string) -> Pressed(`app:${key}`)}>\n"
+                                 "            <input ref=\"field\" class=\"field\" />\n"
+                                 "            <frame class=\"modal\" onKeyDown={(key: string) -> Pressed(`modal:${key}`)} />\n"
+                                 "        </frame>\n"
+                                 "    );\n"
+                                 "}\n");
+
+    Chaos::ChaosNyxDriver    Driver(TestConfig(), Project.RootPath());
+    std::vector<std::string> Pressed;
+    Driver.Runtime().RegisterFunction("Pressed", [&Pressed](std::string Name) { Pressed.push_back(std::move(Name)); });
+    PenumbraUiBackend::ChaosApplication App;
+    App.Attach(Driver, Project.UiDir());
+    Expect(App.MountAppRoot("Keys.chaos", "Keys"), "MountAppRoot mounts frames with onKeyDown handlers");
+
+    Penumbra::Widgets::WidgetBase* Root  = App.GetRootWidget();
+    const auto*                    Field = dynamic_cast<Penumbra::Widgets::TextInput*>(App.GetRef("field"));
+    Expect(Root != nullptr && Field != nullptr, "the mounted root and its <input> are reachable");
+    if (Root == nullptr || Field == nullptr) {
+        return;
+    }
+    Root->Measure({800.0f, 600.0f});
+    Root->Arrange({0.0f, 0.0f, 800.0f, 600.0f});
+
+    Penumbra::Platform::InputState Escape;
+    Escape.KeysPressedThisFrame = {Penumbra::Platform::Key::Escape};
+    Root->UpdateInteractionState(Escape);
+    Expect(Pressed == std::vector<std::string>{"modal:Escape"},
+           "Escape reaches only the topmost element with an onKeyDown, named \"Escape\"");
+
+    const Penumbra::Rect  Rect = Field->GetArrangedRect();
+    const Penumbra::Point Inside{Rect.X + Rect.W / 2.0f, Rect.Y + Rect.H / 2.0f};
+    Penumbra::Platform::InputState Click;
+    Click.MousePosition = Inside;
+    Click.MouseButtonPressedThisFrame[0] = true;
+    Click.MouseButtonDown[0] = true;
+    Root->UpdateInteractionState(Click);
+
+    Penumbra::Platform::InputState Keys;
+    Keys.MousePosition = Inside;
+    Keys.KeysPressedThisFrame = {Penumbra::Platform::Key::Left, Penumbra::Platform::Key::Escape};
+    Root->UpdateInteractionState(Keys);
+    Expect(Pressed == std::vector<std::string>({"modal:Escape", "modal:Escape"}),
+           "with the <input> focused, the arrow it used reaches no onKeyDown, and Escape still does");
+    App.TeardownRootWidget();
+}
+
 void TestGetRefFindsRefsInsideSlotMountedContent() {
     TempProject Project;
     Project.Write("Board.chaos", "Board :: () -> Penumbra:::Component {\n"
@@ -580,6 +633,7 @@ void RunChaosApplicationTests() {
     TestGetRefFindsRefsInsideSlotMountedContent();
     TestMountedIconsGetTheBackendGivenToSetIconBackend();
     TestMountAppRootGivesTextFieldsAFocusStateAndAClipboard();
+    TestOnKeyDownGetsAKeyNoFocusedFieldUsedOnTheTopmostElementWithOne();
     TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount();
     TestMountReconciledComponentFailsForAnUnknownTargetRef();
     TestMountAppRootFailsGracefullyOnAMalformedFixture();

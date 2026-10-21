@@ -453,6 +453,9 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::ChaosPropDiff& Diff) {
     if (Diff.OnChange) {
         Widget->OnChanged = *Diff.OnChange;
     }
+    if (Diff.OnKeyDown) {
+        Widget->OnKeyPressed = KeyDownHandler(*Diff.OnKeyDown);
+    }
 
     if (Diff.Text) {
         if (auto* AsLabel = dynamic_cast<Label*>(Widget)) {
