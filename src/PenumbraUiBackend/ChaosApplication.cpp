@@ -56,7 +56,8 @@ bool ChaosApplication::ReloadFont(float DpiScaleFactor) {
 }
 
 void ChaosApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath) {
-    std::vector<std::string> Worklist{EntryResolvedPath};
+    const nyx::host::ImportIndex& Index = Driver_->Runtime().RefreshImports();
+    std::vector<std::string>      Worklist{EntryResolvedPath};
     while (!Worklist.empty()) {
         std::string Path = std::move(Worklist.back());
         Worklist.pop_back();
@@ -86,7 +87,7 @@ void ChaosApplication::EnsureStylesheetsFor(const std::string& EntryResolvedPath
         // diagnostics when it compiles the file, so these aren't reported again.
         Chaos::DiagnosticSink               Ignored;
         const Chaos::ImportResolutionResult Resolved =
-            Chaos::ResolveImports(Imports, Path, Driver_->Config(), Driver_->ProjectRoot(), Ignored);
+            Chaos::ResolveImports(Imports, Path, Driver_->Config(), Driver_->ProjectRoot(), Index, Ignored);
         for (const Chaos::ResolvedImport& R : Resolved.Resolved) Worklist.push_back(R.ResolvedPath);
     }
 }
