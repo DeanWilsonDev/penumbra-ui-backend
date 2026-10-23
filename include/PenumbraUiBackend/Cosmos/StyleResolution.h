@@ -32,8 +32,10 @@ using NumberPropLookup = std::function<std::optional<float>(std::string_view Nam
 
 // Fills in each `attr()` binding in Style, and in its Hover/Active/Disabled/Starting
 // overlays, from Lookup: `flex-grow: attr(fill)` sets FlexGrow to the element's `fill`
-// prop, a length in logical pixels. A binding whose prop the element lacks leaves the
-// property unset, as CSS treats an attr() with no attribute and no fallback.
+// prop, a length in logical pixels. A colour binding reads each attr() channel the same
+// way, rounded and clamped to 0..255: `background-color: rgba(attr(r), attr(g), attr(b),
+// 255)`. A binding whose prop the element lacks leaves the property unset, as CSS treats
+// an attr() with no attribute and no fallback; a gradient missing either stop is unset.
 void BindAttributes(::Cosmos::ResolvedStyle& Style, const NumberPropLookup& Lookup);
 
 void StyleTextAreaSpans(Penumbra::Widgets::TextArea& Field, const ::Cosmos::IStyleTarget& FieldTarget,

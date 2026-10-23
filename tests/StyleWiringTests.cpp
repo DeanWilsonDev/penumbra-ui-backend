@@ -419,6 +419,12 @@ public:
 
     bool Ready() const { return Ready_; }
 
+    Penumbra::Render::Color Pixel(int X, int Y) const {
+        Penumbra::Render::Color Out;
+        SDL_ReadSurfacePixel(Surface_, X, Y, &Out.R, &Out.G, &Out.B, &Out.A);
+        return Out;
+    }
+
     void Step(WidgetBase& Root, float DeltaSeconds) {
         {
             const Penumbra::Widgets::LayoutPass Pass;
@@ -802,6 +808,176 @@ void TestAnOffsetFromAttrFollowsASignalThroughTheReconciler() {
     Expect(ArrangedAt(Marker, 40.0F, 80.0F, 10.0F, 10.0F), "and the diff's new x and y move it");
 }
 
+bool Near(Penumbra::Render::Color A, Penumbra::Render::Color B, int Tolerance) {
+    return std::abs(A.R - B.R) <= Tolerance && std::abs(A.G - B.G) <= Tolerance && std::abs(A.B - B.B) <= Tolerance;
+}
+
+// Pharos's treemap tile: each stop of its gradient comes from four number props through
+// rgba(attr()) channels, and a Signal change recolours the same Box in place.
+void TestAColourAttrBindingFollowsItsPropsThroughTheReconciler() {
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
+.map { position: relative; width: 200px; height: 40px; }
+.treemap-leaf {
+    position: absolute; left: attr(x); top: attr(y); width: attr(w); height: attr(h);
+    background-gradient-start: rgba(attr(tr), attr(tg), attr(tb), attr(ta));
+    background-gradient-end: rgba(attr(r), attr(g), attr(b), attr(a));
+}
+)",
+                                                            "Treemap.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+    const chaos::MountFn Mount = PenumbraUiBackend::MakeMountFn(Context);
+
+    chaos::Signal<float> Shade = 10.0F;
+    const Component      RootNode =
+        MakeNode(ChaosElementTag::Frame, WithClass("map"),
+                 {Component(ChaosElementTag::Slot, {}, {}, Chaos::MakeSlotCallable([&]() -> Component {
+                                const float Value = Shade.get();
+                                ChaosProps  Props = WithClass("treemap-leaf");
+                                Props["x"]        = ChaosPropValue{0.0F};
+                                Props["y"]        = ChaosPropValue{0.0F};
+                                Props["w"]        = ChaosPropValue{200.0F};
+                                Props["h"]        = ChaosPropValue{40.0F};
+                                Props["r"]        = ChaosPropValue{Value};
+                                Props["g"]        = ChaosPropValue{Value * 2.0F};
+                                Props["b"]        = ChaosPropValue{Value * 3.0F};
+                                Props["a"]        = ChaosPropValue{255.0F};
+                                Props["tr"]       = ChaosPropValue{Value + 100.0F};
+                                Props["tg"]       = ChaosPropValue{Value + 110.0F};
+                                Props["tb"]       = ChaosPropValue{Value + 120.0F};
+                                Props["ta"]       = ChaosPropValue{255.0F};
+                                return MakeNode(ChaosElementTag::Frame, std::move(Props));
+                            }))});
+    std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
+    auto                            Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
+    auto* Map  = dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
+    auto* Leaf = Map != nullptr && Map->GetChildCount() == 1 ? dynamic_cast<Box*>(Map->GetChildAt(0)) : nullptr;
+    FrameStepper Frames;
+    if (Leaf == nullptr || !Frames.Ready()) {
+        Expect(false, "the colour-bound map mounts its Slot's tile, and a software renderer is available");
+        return;
+    }
+
+    using Penumbra::Render::Color;
+    Expect(Leaf->Style.GradientTop == Color{110, 120, 130, 255} && Leaf->Style.GradientBottom == Color{10, 20, 30, 255},
+           "the tile's gradient stops come from its tr/tg/tb/ta and r/g/b/a props through rgba(attr())");
+    Frames.Step(*Map, 0.1F);
+    Expect(Near(Frames.Pixel(100, 0), Color{110, 120, 130, 255}, 4) &&
+               Near(Frames.Pixel(100, 39), Color{10, 20, 30, 255}, 4),
+           "and the tile draws that gradient, top stop to bottom stop");
+
+    Shade.set(50.4F);
+    chaos::Tick();
+    Expect(Map->GetChildCount() == 1 && Map->GetChildAt(0) == Leaf,
+           "a Signal change updates the tile in place, without a remount");
+    Expect(Leaf->Style.GradientTop == Color{150, 160, 170, 255} && Leaf->Style.GradientBottom == Color{50, 101, 151, 255},
+           "and the diff's new props recolour it, each channel rounded to a whole number");
+    Frames.Step(*Map, 0.1F);
+    Expect(Near(Frames.Pixel(100, 0), Color{150, 160, 170, 255}, 4) &&
+               Near(Frames.Pixel(100, 39), Color{50, 101, 151, 255}, 4),
+           "and the next frame draws the new gradient");
+}
+
+// background-color, border-color, color and a :hover overlay each take a colour from the
+// element's props, with literal channels mixed in and out-of-range values clamped.
+void TestColourAttrBindingsReachEveryColourField() {
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
+.swatch {
+    background-color: rgb(attr(r), attr(g), 40);
+    border-color: rgba(attr(r), 0, attr(b), attr(a));
+}
+.swatch:hover { background-color: rgba(attr(b), attr(g), attr(r), 128); }
+.caption { color: rgb(attr(r), attr(g), attr(b)); }
+)",
+                                                            "Swatch.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    ChaosProps Props = WithClass("swatch");
+    Props["r"]       = ChaosPropValue{300.0F};
+    Props["g"]       = ChaosPropValue{12.6F};
+    Props["b"]       = ChaosPropValue{-4.0F};
+    Props["a"]       = ChaosPropValue{64};
+    ChaosProps CaptionProps = WithClass("caption");
+    CaptionProps["r"]       = ChaosPropValue{1.0F};
+    CaptionProps["g"]       = ChaosPropValue{2.0F};
+    CaptionProps["b"]       = ChaosPropValue{3.0F};
+    std::unique_ptr<Umbra::IWidget> Wrapper = PenumbraUiBackend::MakeMountFn(Context)(
+        MakeNode(ChaosElementTag::Frame, Props, {MakeNode(ChaosElementTag::Text, CaptionProps)}));
+    auto* Swatch = Wrapper ? dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Wrapper.get())->RawWidget()) : nullptr;
+    auto* Caption = Swatch != nullptr && Swatch->GetChildCount() == 1 ? dynamic_cast<Label*>(Swatch->GetChildAt(0)) : nullptr;
+    if (Swatch == nullptr || Caption == nullptr) {
+        Expect(false, "the colour-bound swatch mounts with its caption");
+        return;
+    }
+
+    using Penumbra::Render::Color;
+    Expect(Swatch->Style.ColorBackground == Color{255, 13, 40, 255},
+           "background-color takes rgb(attr()) channels, clamped and rounded, with rgb()'s alpha opaque");
+    Expect(Swatch->Style.ColorBorder == Color{255, 0, 0, 64}, "border-color takes rgba(attr()), an int prop included");
+    Expect(Swatch->Style.ColorBackgroundHovered == Color{0, 13, 255, 128},
+           "a :hover overlay binds its own colour, reaching the hovered background");
+    Expect(Caption->ColorText == Color{1, 2, 3, 255}, "color takes rgb(attr()) channels on a Text");
+
+    Umbra::ChaosPropDiff NewGreen;
+    NewGreen.Numbers["g"] = 99.0F;
+    Wrapper->ApplyPropDiff(NewGreen);
+    Expect(Swatch->Style.ColorBackground == Color{255, 99, 40, 255} &&
+               Swatch->Style.ColorBackgroundHovered == Color{0, 99, 255, 128} &&
+               Swatch->Style.ColorBorder == Color{255, 0, 0, 64},
+           "a changed number prop recolours the base and hover backgrounds and keeps the border");
+}
+
+// A colour whose prop the element lacks stays unset, as an attr() with no attribute does in
+// CSS, and a gradient missing either stop draws no gradient; the prop arriving later binds it.
+void TestAColourAttrBindingWithAMissingPropLeavesThePropertyUnset() {
+    const ::Cosmos::Stylesheet ComponentSheet = ParseOrDie(R"(
+.half {
+    background-color: rgb(attr(r), attr(g), attr(missing));
+    background-gradient-start: rgb(attr(r), 0, 0);
+    background-gradient-end: rgb(attr(nope), 0, 0);
+    border-color: #102030;
+}
+)",
+                                                            "Half.cosmos");
+    const CosmosStyleApplier      Applier;
+    const ::Cosmos::StylesheetSet Sheets{nullptr, &ComponentSheet};
+    BuildContext                  Context;
+    Context.Style        = &Sheets;
+    Context.StyleApplier = &Applier;
+
+    ChaosProps Props = WithClass("half");
+    Props["r"]       = ChaosPropValue{200.0F};
+    Props["g"]       = ChaosPropValue{100.0F};
+    std::unique_ptr<Umbra::IWidget> Wrapper =
+        PenumbraUiBackend::MakeMountFn(Context)(MakeNode(ChaosElementTag::Frame, std::move(Props)));
+    auto* AsBox = Wrapper ? dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Wrapper.get())->RawWidget()) : nullptr;
+    if (AsBox == nullptr) {
+        Expect(false, "the half-bound frame mounts");
+        return;
+    }
+
+    using Penumbra::Render::Color;
+    Expect(AsBox->Style.ColorBackground == Color{}, "a colour with a missing prop leaves background-color unset");
+    Expect(AsBox->Style.GradientTop == Color{} && AsBox->Style.GradientBottom == Color{},
+           "a gradient whose end stop's prop is missing leaves the whole gradient unset, not one stop");
+    Expect(AsBox->Style.ColorBorder == Color{16, 32, 48, 255}, "and the frame's plain colours still apply");
+
+    Umbra::ChaosPropDiff Arrived;
+    Arrived.Numbers["missing"] = 50.0F;
+    Arrived.Numbers["nope"]    = 7.0F;
+    Wrapper->ApplyPropDiff(Arrived);
+    Expect(AsBox->Style.ColorBackground == Color{200, 100, 50, 255} &&
+               AsBox->Style.GradientTop == Color{200, 0, 0, 255} && AsBox->Style.GradientBottom == Color{7, 0, 0, 255},
+           "the missing props arriving through a diff bind the background and both gradient stops");
+}
+
 void RunStyleWiringTests() {
     TestMountAppliesResolvedStyleToABuiltWidget();
     TestMountLeavesStyleUntouchedWhenNoContextIsSupplied();
@@ -822,4 +998,7 @@ void RunStyleWiringTests() {
     TestAClassChangeKeepsAnAttrBoundValue();
     TestPositionOffsetsZIndexAndPointerEventsLayOutAsInCss();
     TestAnOffsetFromAttrFollowsASignalThroughTheReconciler();
+    TestAColourAttrBindingFollowsItsPropsThroughTheReconciler();
+    TestColourAttrBindingsReachEveryColourField();
+    TestAColourAttrBindingWithAMissingPropLeavesThePropertyUnset();
 }

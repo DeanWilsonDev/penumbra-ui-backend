@@ -1,6 +1,8 @@
 #include "PenumbraUiBackend/Cosmos/StyleResolution.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -23,6 +25,60 @@ private:
     std::string                   ClassName_;
     const ::Cosmos::IStyleTarget& Field_;
 };
+
+std::optional<std::uint8_t> ChannelValue(const ::Cosmos::ColorChannel& Channel, const NumberPropLookup& Lookup) {
+    if (!Channel.Attribute) {
+        return Channel.Value;
+    }
+    const std::optional<float> Value = Lookup(*Channel.Attribute);
+    if (!Value || std::isnan(*Value)) {
+        return std::nullopt;
+    }
+    return static_cast<std::uint8_t>(std::clamp(std::round(*Value), 0.0F, 255.0F));
+}
+
+std::optional<::Cosmos::Color>* ColorField(::Cosmos::ResolvedStyle& Style, std::string_view Property) {
+    if (Property == "background-color") {
+        return &Style.BackgroundColor;
+    }
+    if (Property == "background-gradient-start") {
+        return &Style.BackgroundGradientStart;
+    }
+    if (Property == "background-gradient-end") {
+        return &Style.BackgroundGradientEnd;
+    }
+    if (Property == "border-color") {
+        return &Style.BorderColor;
+    }
+    if (Property == "color") {
+        return &Style.TextColor;
+    }
+    return nullptr;
+}
+
+void BindColors(::Cosmos::ResolvedStyle& Style, const NumberPropLookup& Lookup) {
+    for (const ::Cosmos::ColorAttrBinding& Binding : Style.ColorAttrBindings) {
+        std::optional<::Cosmos::Color>* Field = ColorField(Style, Binding.Property);
+        if (Field == nullptr) {
+            continue;
+        }
+        const std::optional<std::uint8_t> R = ChannelValue(Binding.R, Lookup);
+        const std::optional<std::uint8_t> G = ChannelValue(Binding.G, Lookup);
+        const std::optional<std::uint8_t> B = ChannelValue(Binding.B, Lookup);
+        const std::optional<std::uint8_t> A = ChannelValue(Binding.A, Lookup);
+        if (R && G && B && A) {
+            *Field = ::Cosmos::Color{*R, *G, *B, *A};
+        } else {
+            Field->reset();
+        }
+    }
+    // The applier draws a gradient only from both stops, so a stop left unset by a
+    // missing prop leaves no gradient at all.
+    if (Style.BackgroundGradientStart.has_value() != Style.BackgroundGradientEnd.has_value()) {
+        Style.BackgroundGradientStart.reset();
+        Style.BackgroundGradientEnd.reset();
+    }
+}
 
 } // namespace
 
@@ -69,6 +125,7 @@ void BindAttributes(::Cosmos::ResolvedStyle& Style, const NumberPropLookup& Look
             Style.Left = ::Cosmos::Offset{.Auto = false, .Value = Pixels};
         }
     }
+    BindColors(Style, Lookup);
     for (const std::shared_ptr<::Cosmos::ResolvedStyle>& Overlay :
          {Style.Hover, Style.Active, Style.Disabled, Style.Starting}) {
         if (Overlay) {

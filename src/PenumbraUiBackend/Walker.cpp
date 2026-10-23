@@ -85,7 +85,7 @@ bool ResolvedStyleIsEmpty(const ::Cosmos::ResolvedStyle& Style) {
            !Style.TextOverflowMode && !Style.FlexGrow && !Style.ScrollbarThumbColor && !Style.ScrollbarTrackColor &&
            !Style.ScrollbarWidthLogical && !Style.JustifyContent && !Style.WhiteSpaceMode && !Style.ShadowColor &&
            !Style.ShadowBlurRadiusLogical && !Style.Opacity && !Style.Starting && Style.AttrBindings.empty() &&
-           !Style.SelectionColor;
+           Style.ColorAttrBindings.empty() && !Style.SelectionColor;
 }
 
 // `Node.Ref` mirrors `Node.Key` exactly (both `std::optional<ChaosPropValue>`,
