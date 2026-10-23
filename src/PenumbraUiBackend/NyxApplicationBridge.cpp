@@ -57,14 +57,14 @@ public:
     }
 
     // InvokeCustom -- the public seam NyxApplicationBridgeT::CallApplicationMethod
-    // reaches through: same dispatch Invoke() uses (NyxBridgeBase::interp_/nyxInstance_),
+    // reaches through: same dispatch Invoke() uses (NyxBridgeBase::interp_/NyxInstanceValue()),
     // just public and taking an already-built Value vector rather than marshalling
     // variadic C++ args, for a caller that doesn't know MethodName's signature at compile
     // time.
     std::optional<runtime::Value> InvokeCustom(const std::string& MethodName,
                                                std::vector<runtime::Value> Args) {
         try {
-            return interp_->TryCallInstanceMethod(nyxInstance_, MethodName, std::move(Args));
+            return interp_->TryCallInstanceMethod(NyxInstanceValue(), MethodName, std::move(Args));
         } catch (const runtime::RuntimeError& Error) {
             auto Obj = std::make_shared<runtime::NyxObject>();
             Obj->typeName = "Error::Unknown";
@@ -142,7 +142,7 @@ public:
     std::optional<runtime::Value> InvokeCustom(const std::string& MethodName,
                                                std::vector<runtime::Value> Args) {
         try {
-            return interp_->TryCallInstanceMethod(nyxInstance_, MethodName, std::move(Args));
+            return interp_->TryCallInstanceMethod(NyxInstanceValue(), MethodName, std::move(Args));
         } catch (const runtime::RuntimeError& Error) {
             auto Obj = std::make_shared<runtime::NyxObject>();
             Obj->typeName = "Error::Unknown";
