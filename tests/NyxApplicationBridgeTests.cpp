@@ -1,3 +1,4 @@
+#include "PenumbraUiBackend/ChaosApplication.h"
 #include "PenumbraUiBackend/NyxApplicationBridge.h"
 
 #include "Chaos/ChaosConfig.h"
@@ -5,6 +6,8 @@
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Widgets/Box.h"
+
+#include <SDL3/SDL.h>
 
 #include <cstdio>
 #include <filesystem>
@@ -107,6 +110,55 @@ void TestBridgeAppliesNyxConfigureOverrideToApplicationConfig() {
                      "a Nyx Configure() override can set the window size via SetWindowSize");
         delete Application;
     }
+}
+
+// PlatformWindow has no title getter, so this reads the one open window's title from SDL.
+std::string LiveWindowTitle() {
+    int          Count   = 0;
+    SDL_Window** Windows = SDL_GetWindows(&Count);
+    std::string  Title   = (Windows && Count == 1) ? SDL_GetWindowTitle(Windows[0]) : "";
+    SDL_free(Windows);
+    return Title;
+}
+
+// SetWindowTitle after Configure has to reach the window Initialize() opened, as when an
+// app retitles itself after loading a different file. SDL's dummy video driver gives
+// a real window without a display.
+template <typename BridgeT>
+void TestSetWindowTitleRetitlesTheLiveWindow(const std::string& BridgeName) {
+    BridgeT Bridge(TestConfig(), ".");
+
+    auto* Application = Bridge.LoadApplication(
+        "TestApplication :: class : Application {\n"
+        "public:\n"
+        "    Configure~: () -> void override { this.SetWindowTitle(\"Configured Title\"); }\n"
+        "    OnStart~: () -> bool override {\n"
+        "        this.SetWindowTitle(\"Started Title\");\n"
+        "        return true;\n"
+        "    }\n"
+        "    Retitle~: (title: string) -> void { this.SetWindowTitle(title); }\n"
+        "}\n",
+        "retitle-test.nyx", "TestApplication");
+
+    ExpectBridge(Application != nullptr, BridgeName + " loads a Nyx Application that retitles its window");
+    if (!Application) return;
+
+    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+    const bool Initialized = Application->Initialize();
+    ExpectBridge(Initialized, BridgeName + "'s application opens a window under SDL's dummy driver" +
+                                  (Initialized ? std::string() : std::string(" (SDL: ") + SDL_GetError() + ")"));
+    if (Initialized) {
+        ExpectBridge(LiveWindowTitle() == "Started Title",
+                     BridgeName + ": SetWindowTitle from OnStart retitles the window Configure named");
+
+        const std::string Reloaded = "Pharos — vulkan-analysis";
+        Bridge.CallApplicationMethod(*Application, "Retitle", {nyx::host::ToValue(Reloaded)});
+        ExpectBridge(LiveWindowTitle() == Reloaded,
+                     BridgeName + ": SetWindowTitle called later retitles the live window again");
+        Application->Shutdown();
+    }
+    SDL_ResetHint(SDL_HINT_VIDEO_DRIVER);
+    delete Application;
 }
 
 void TestBridgeCallApplicationMethodInvokesACustomNyxMethod() {
@@ -278,6 +330,8 @@ void RunNyxApplicationBridgeTests() {
     TestBridgeRuntimeIsIsolatedFromASelfOwnedChaosDriver();
     TestBridgeLoadsNyxApplicationAgainstSharedRuntime();
     TestBridgeAppliesNyxConfigureOverrideToApplicationConfig();
+    TestSetWindowTitleRetitlesTheLiveWindow<PenumbraUiBackend::NyxApplicationBridge>("NyxApplicationBridge");
+    TestSetWindowTitleRetitlesTheLiveWindow<PenumbraUiBackend::ChaosApplicationBridge>("ChaosApplicationBridge");
     TestBridgeCallApplicationMethodInvokesACustomNyxMethod();
     TestGetApplicationInstanceValueLetsAnotherScopeCallCustomMethodsDirectly();
     TestNyxApplicationCanReadPointerStateAndHitTestAWidget();

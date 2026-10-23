@@ -43,11 +43,18 @@ public:
     float GetMouseYForNyx() const { return GetInput().MousePosition.Y; }
     bool  IsMouseButtonDownForNyx() const { return GetInput().MouseButtonDown[0]; }
 
-    // SetWindowTitle/SetWindowSize -- only meaningful while PendingConfig_ is live, i.e.
-    // during a call to Configure() below (Application::Run() constructs the window
-    // immediately after Configure() returns, using whatever Config holds by then).
+    // During Configure() below, SetWindowTitle and SetWindowSize fill in PendingConfig_,
+    // which Application::Initialize() builds the window from as soon as Configure()
+    // returns. After that, SetWindowTitle retitles the live window, so an app can name it
+    // after whatever it has loaded since; with no window open, before Initialize() or after
+    // Shutdown(), it does nothing. SetWindowSize still works only in Configure():
+    // PlatformWindow has no way to resize a window it has already opened.
     void SetWindowTitle(const std::string& Title) {
-        if (PendingConfig_) PendingConfig_->Title = Title;
+        if (PendingConfig_) {
+            PendingConfig_->Title = Title;
+        } else {
+            GetWindow().SetTitle(Title);
+        }
     }
     void SetWindowSize(int Width, int Height) {
         if (PendingConfig_) {
@@ -129,8 +136,14 @@ public:
     float GetMouseYForNyx() const { return GetInput().MousePosition.Y; }
     bool  IsMouseButtonDownForNyx() const { return GetInput().MouseButtonDown[0]; }
 
+    // As NyxBridge<Penumbra::Application>'s: the title goes into Configure()'s config,
+    // or onto the live window after it.
     void SetWindowTitle(const std::string& Title) {
-        if (PendingConfig_) PendingConfig_->Title = Title;
+        if (PendingConfig_) {
+            PendingConfig_->Title = Title;
+        } else {
+            GetWindow().SetTitle(Title);
+        }
     }
     void SetWindowSize(int Width, int Height) {
         if (PendingConfig_) {
