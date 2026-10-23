@@ -100,7 +100,7 @@ void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
                                  "    return (\n"
                                  "        <frame ref=\"button\" onPress={() -> { count = count + 1; }}>\n"
                                  "            <slot>\n"
-                                 "                !{() -> count == 0 ? <frame class=\"ok\" /> : <frame class={Explode()} />}\n"
+                                 "                !{count == 0 ? <frame class=\"ok\" /> : <frame class={Explode()} />}\n"
                                  "            </slot>\n"
                                  "        </frame>\n"
                                  "    );\n"
@@ -121,7 +121,7 @@ void TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds() {
     Button->OnPressed();
     const std::string TickOutput = CaptureStderr([&]() { App.TickChaos(); });
     Expect(Contains(TickOutput, "error[CHA0560]: prop 'class' on <frame> raised an error: array index out of range") &&
-               Contains(TickOutput, "Root.chaos:12:74"),
+               Contains(TickOutput, "Root.chaos:12:68"),
            "TickChaos reports a Nyx error raised while a <Slot> re-renders as its CHA diagnostic, where it is in its file");
 
     const std::string SecondTickOutput = CaptureStderr([&]() { App.TickChaos(); });
@@ -183,7 +183,7 @@ void TestNyxApplicationBridgeReportsLifecycleHookErrors() {
     delete Application;
 }
 
-} // namespace
+}
 
 void RunErrorReportingTests() {
     TestTickChaosReportsASlotErrorOnceAndRemountStillSucceeds();

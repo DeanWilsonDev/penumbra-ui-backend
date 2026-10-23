@@ -31,10 +31,6 @@ void Expect(bool Condition, const std::string& Description) {
     }
 }
 
-// Same real-on-disk-fixture convention tests/WalkerTests.cpp's own TempProject uses
-// (ChaosNyxDriver::MountRoot needs a real `.chaos` -> ChaosIrDocument -> Component pipeline,
-// not a hand-built tree) -- kept local rather than shared since TempProject lives in
-// WalkerTests.cpp's own anonymous namespace.
 class TempProject {
 public:
     TempProject() {
@@ -399,7 +395,7 @@ void TestGetRefFindsRefsInsideSlotMountedContent() {
                                   "    return (\n"
                                   "        <frame ref=\"board\">\n"
                                   "            <slot>\n"
-                                  "                !{() -> <frame ref=\"lane-todo\" />}\n"
+                                  "                !{<frame ref=\"lane-todo\" />}\n"
                                   "            </slot>\n"
                                   "            <frame ref=\"content\"></frame>\n"
                                   "        </frame>\n"
@@ -409,7 +405,7 @@ void TestGetRefFindsRefsInsideSlotMountedContent() {
                                   "    return (\n"
                                   "        <frame ref=\"panel-static\">\n"
                                   "            <slot>\n"
-                                  "                !{() -> <frame ref=\"panel-slot\" />}\n"
+                                  "                !{<frame ref=\"panel-slot\" />}\n"
                                   "            </slot>\n"
                                   "        </frame>\n"
                                   "    );\n"
@@ -445,26 +441,22 @@ void TestMountReconciledComponentMountsResolvesSlotsAndReplacesOnRemount() {
                                  "}\n");
     Project.Write("CardListThree.chaos",
                    "CardListThree :: () -> Penumbra:::Component {\n"
+                   "    names: Array<string> = [\"Ann\", \"Bo\", \"Cy\"];\n"
                    "    return (\n"
                    "        <frame>\n"
                    "            <slot>\n"
-                   "                !{() -> {\n"
-                   "                    names: Array<string> = [\"Ann\", \"Bo\", \"Cy\"];\n"
-                   "                    return names.map((item: string) -> <frame class={item} />);\n"
-                   "                }}\n"
+                   "                !{names.map((item: string) -> <frame class={item} />)}\n"
                    "            </slot>\n"
                    "        </frame>\n"
                    "    );\n"
                    "}\n");
     Project.Write("CardListTwo.chaos",
                    "CardListTwo :: () -> Penumbra:::Component {\n"
+                   "    names: Array<string> = [\"Dee\", \"Eff\"];\n"
                    "    return (\n"
                    "        <frame>\n"
                    "            <slot>\n"
-                   "                !{() -> {\n"
-                   "                    names: Array<string> = [\"Dee\", \"Eff\"];\n"
-                   "                    return names.map((item: string) -> <frame class={item} />);\n"
-                   "                }}\n"
+                   "                !{names.map((item: string) -> <frame class={item} />)}\n"
                    "            </slot>\n"
                    "        </frame>\n"
                    "    );\n"
@@ -601,11 +593,6 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
                                                    {{"Record", "(value: i32) -> void"}},
                                                    [&PreDispatchCalls] { ++PreDispatchCalls; });
 
-    // RegisterFunction stores the registered lambda directly as a NyxCallable's own
-    // std::function alternative (callable.hpp's own doc comment: "a host-registered free
-    // function... purely additive, so a host function can be bound into an Environment and
-    // called through the same CallCallable path as a Nyx-declared one") -- invoking it
-    // directly here avoids needing a live Interpreter just to call one global by name.
     Expect(Bridge.Runtime().Globals().count("Record") == 1, "RegisterInstanceForwarders registers a global named "
                                                              "after the forwarded method");
     auto Callable = std::get<std::shared_ptr<nyx::runtime::NyxCallable>>(Bridge.Runtime().Globals().at("Record").data);
@@ -620,7 +607,7 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
     delete Application;
 }
 
-} // namespace
+}
 
 void RunChaosApplicationTests() {
     TestMountComponentAutoDiscoversItsOwnColocatedStylesheet();
