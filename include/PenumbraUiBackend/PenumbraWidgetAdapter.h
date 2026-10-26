@@ -5,6 +5,8 @@
 #include "Chaos/SlotRuntime.h"
 #include "Umbra/IWidget.h"
 
+#include "Cosmos/ResolvedStyle.h"
+
 #include "Penumbra/Backends/IImageBackend.h"
 #include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/WidgetBase.h"
@@ -12,6 +14,7 @@
 #include <SDL3/SDL.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -207,6 +210,11 @@ private:
     // The widget's number props as last built or diffed, for attr() bindings when its
     // style is re-resolved.
     std::unordered_map<std::string, float> NumberProps_;
+
+    // The cascade's result before attr() binding, reused while the element's class chain and
+    // stylesheets are unchanged, so a diff that changes only number props doesn't re-run it.
+    std::optional<::Cosmos::ResolvedStyle> CascadeStyle_;
+    std::string                            CascadeKey_;
 
     std::vector<float>       SpanRanges_;
     std::vector<std::string> SpanClasses_;

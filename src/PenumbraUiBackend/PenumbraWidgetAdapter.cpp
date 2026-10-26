@@ -16,6 +16,7 @@
 #include "Penumbra/Widgets/TextSelection.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <optional>
 
 namespace PenumbraUiBackend {
@@ -494,7 +495,20 @@ void PenumbraWidget::Restyle(WidgetBase& Widget) {
     }
     ResetStyleableFields(Widget);
     const std::vector<std::unique_ptr<ReconcileStyleElement>> Chain = BuildReconcileStyleChain(*this);
-    ::Cosmos::ResolvedStyle Resolved = Cosmos::ResolveStyle(*Chain.front(), *Sheets_);
+    std::string CascadeKey = std::to_string(reinterpret_cast<std::uintptr_t>(Sheets_->Global)) + ":" +
+                             std::to_string(reinterpret_cast<std::uintptr_t>(Sheets_->Component));
+    for (const std::unique_ptr<ReconcileStyleElement>& Element : Chain) {
+        CascadeKey += '\x1e';
+        CascadeKey += Element->ClassName();
+        CascadeKey += '\x1f';
+        CascadeKey += Element->PrimitiveTag();
+        CascadeKey += Element->IsComponentRoot() ? "\x1fR" : "";
+    }
+    if (!CascadeStyle_ || CascadeKey != CascadeKey_) {
+        CascadeStyle_ = Cosmos::ResolveStyle(*Chain.front(), *Sheets_);
+        CascadeKey_   = std::move(CascadeKey);
+    }
+    ::Cosmos::ResolvedStyle Resolved = *CascadeStyle_;
     Cosmos::BindAttributes(Resolved, [this](std::string_view Name) -> std::optional<float> {
         const auto It = NumberProps_.find(std::string(Name));
         return It == NumberProps_.end() ? std::nullopt : std::optional<float>(It->second);
