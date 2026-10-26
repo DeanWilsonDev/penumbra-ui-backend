@@ -23,7 +23,7 @@ void ReportHookError(const std::string& Hook, const runtime::Value& Error, std::
     const auto&           Object  = std::get<std::shared_ptr<runtime::NyxObject>>(Error.data);
     const runtime::Value* Message = Object->FindFieldByName("message");
     std::string Line = "[NyxApplicationBridge] " + Hook + " raised " + Object->typeName;
-    if (Message && Message->Kind() == runtime::ValueKind::String) Line += ": " + std::get<std::string>(Message->data);
+    if (Message && Message->Kind() == runtime::ValueKind::String) Line += ": " + Message->AsString();
     if (Line == LastReported) return;
     LastReported = Line;
     std::fprintf(stderr, "%s\n", Line.c_str());
