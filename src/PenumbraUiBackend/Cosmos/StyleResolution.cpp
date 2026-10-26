@@ -53,6 +53,9 @@ std::optional<::Cosmos::Color>* ColorField(::Cosmos::ResolvedStyle& Style, std::
     if (Property == "color") {
         return &Style.TextColor;
     }
+    if (Property == "box-shadow") {
+        return &Style.ShadowColor;
+    }
     return nullptr;
 }
 
