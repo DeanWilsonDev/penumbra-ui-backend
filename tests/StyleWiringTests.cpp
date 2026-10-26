@@ -888,6 +888,7 @@ void TestColourAttrBindingsReachEveryColourField() {
 .swatch {
     background-color: rgb(attr(r), attr(g), 40);
     border-color: rgba(attr(r), 0, attr(b), attr(a));
+    box-shadow: rgba(attr(r), attr(g), 40, attr(a)) 12px;
 }
 .swatch:hover { background-color: rgba(attr(b), attr(g), attr(r), 128); }
 .caption { color: rgb(attr(r), attr(g), attr(b)); }
@@ -921,6 +922,8 @@ void TestColourAttrBindingsReachEveryColourField() {
     Expect(Swatch->Style.ColorBackground == Color{255, 13, 40, 255},
            "background-color takes rgb(attr()) channels, clamped and rounded, with rgb()'s alpha opaque");
     Expect(Swatch->Style.ColorBorder == Color{255, 0, 0, 64}, "border-color takes rgba(attr()), an int prop included");
+    Expect(Swatch->Style.ShadowColor == Color{255, 13, 40, 64} && Swatch->Style.ShadowBlurRadiusLogical == 12.0F,
+           "box-shadow takes rgba(attr()) for its colour and keeps its blur radius");
     Expect(Swatch->Style.ColorBackgroundHovered == Color{0, 13, 255, 128},
            "a :hover overlay binds its own colour, reaching the hovered background");
     Expect(Caption->ColorText == Color{1, 2, 3, 255}, "color takes rgb(attr()) channels on a Text");
@@ -930,8 +933,8 @@ void TestColourAttrBindingsReachEveryColourField() {
     Wrapper->ApplyPropDiff(NewGreen);
     Expect(Swatch->Style.ColorBackground == Color{255, 99, 40, 255} &&
                Swatch->Style.ColorBackgroundHovered == Color{0, 99, 255, 128} &&
-               Swatch->Style.ColorBorder == Color{255, 0, 0, 64},
-           "a changed number prop recolours the base and hover backgrounds and keeps the border");
+               Swatch->Style.ColorBorder == Color{255, 0, 0, 64} && Swatch->Style.ShadowColor == Color{255, 99, 40, 64},
+           "a changed number prop recolours the base and hover backgrounds and the shadow, and keeps the border");
 }
 
 // A colour whose prop the element lacks stays unset, as an attr() with no attribute does in
