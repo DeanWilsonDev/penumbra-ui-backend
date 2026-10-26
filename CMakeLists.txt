@@ -78,6 +78,18 @@ target_compile_features(penumbra_ui_backend PUBLIC cxx_std_26)
 target_link_libraries(penumbra_ui_backend PUBLIC chaos penumbra penumbra_ui_backend_cosmos)
 
 # ---------------------------------------------------------------------------
+# The application host: everything an app written as one Nyx Application subclass needs from
+# C++ (the bridge, nyx-proto's JSON, file and directory bindings, appInstance(), icons and the
+# font), so the app's own C++ is a main() and its app-specific host functions.
+# ---------------------------------------------------------------------------
+add_library(penumbra_ui_backend_host STATIC
+    src/PenumbraUiBackend/ChaosApplicationHost.cpp)
+
+target_include_directories(penumbra_ui_backend_host PUBLIC include)
+target_compile_features(penumbra_ui_backend_host PUBLIC cxx_std_26)
+target_link_libraries(penumbra_ui_backend_host PUBLIC penumbra_ui_backend penumbra_icons nyx-json)
+
+# ---------------------------------------------------------------------------
 # Tests — plain hand-rolled Expect()/[PASS]/[FAIL] executable, matching
 # `chaos`'s own test style (Cimmerian, the ecosystem's intended long-term test
 # framework, isn't wired into either repo yet).
@@ -97,9 +109,11 @@ add_executable(penumbra_ui_backend_tests
     tests/ErrorReportingTests.cpp
     tests/ChartTests.cpp
     tests/TextAreaSpanTests.cpp
-    tests/TextSelectionTests.cpp)
+    tests/TextSelectionTests.cpp
+    tests/ChaosApplicationHostTests.cpp)
 
-target_link_libraries(penumbra_ui_backend_tests PRIVATE penumbra_ui_backend penumbra_ui_backend_cosmos)
+target_link_libraries(penumbra_ui_backend_tests PRIVATE penumbra_ui_backend penumbra_ui_backend_cosmos
+                      penumbra_ui_backend_host)
 set_target_properties(penumbra_ui_backend_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 
