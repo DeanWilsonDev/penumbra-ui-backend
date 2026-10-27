@@ -1,4 +1,7 @@
 #include "PenumbraUiBackend/Walker.h"
+#include "PenumbraUiBackend/ViewportHostWidget.h"
+#include "Penumbra/Widgets/Checkbox.h"
+#include "Penumbra/Widgets/Dropdown.h"
 
 #include "PenumbraUiBackend/ChartNodes.h"
 #include "PenumbraUiBackend/Cosmos/StyleResolution.h"
@@ -41,6 +44,9 @@ using Chaos::Component;
 using Chaos::ChaosElementTag;
 using Chaos::ChaosProps;
 using Penumbra::Widgets::Box;
+using Penumbra::Widgets::Checkbox;
+using Penumbra::Widgets::Dropdown;
+using Penumbra::Widgets::DropdownItem;
 using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::ImageWidget;
 using Penumbra::Widgets::InlineContainer;
@@ -222,6 +228,9 @@ std::string ChaosTagToCosmosTag(ChaosElementTag Tag) {
         case ChaosElementTag::DonutChart: return "DonutChart";
         case ChaosElementTag::Series: return "Series";
         case ChaosElementTag::Slice: return "Slice";
+        case ChaosElementTag::Viewport: return "Viewport";
+        case ChaosElementTag::Select: return "Select";
+        case ChaosElementTag::Checkbox: return "Checkbox";
         default: return "";
     }
 }
@@ -732,6 +741,53 @@ std::unique_ptr<WidgetBase> BuildNative(const Component& Node) {
     return nullptr;
 }
 
+// <viewport renderer="Name"> -- the host's own scene. The renderer comes from
+// Context.ViewportRenderers by name; with none registered the widget still builds and
+// draws nothing, the same tolerance BuildImage gives a missing backend.
+std::unique_ptr<WidgetBase> BuildViewport(const Component& Node, const BuildContext& Context) {
+    Umbra::IViewportRenderer* Renderer = nullptr;
+    if (Context.ViewportRenderers != nullptr) {
+        if (const auto Name = GetStringProp(Node.Props, "renderer")) {
+            const auto Found = Context.ViewportRenderers->find(*Name);
+            if (Found != Context.ViewportRenderers->end()) {
+                Renderer = Found->second;
+            }
+        }
+    }
+    auto Built = std::make_unique<ViewportHostWidget>(Renderer);
+    ApplySharedPropsToWidget(*Built, Node.Props);
+    return Built;
+}
+
+// <select options selected onSelect> -- Penumbra's Dropdown. The program owns the state:
+// `options` and `selected` set the items and the current one, and OnSelectionChanged
+// reports the user's choice by its text.
+std::unique_ptr<WidgetBase> BuildSelect(const Component& Node, const BuildContext& Context) {
+    auto Built = std::make_unique<Dropdown>();
+    ApplySharedPropsToWidget(*Built, Node.Props);
+    Built->FontBackend = Context.FontBackend;
+    Built->Font        = Context.Font;
+    const Umbra::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
+    ApplySelectProps(*Built, Props);
+    return Built;
+}
+
+// <checkbox checked onToggle> -- Penumbra's Checkbox, which toggles itself on a click and
+// reports the new state through OnChanged.
+std::unique_ptr<WidgetBase> BuildCheckbox(const Component& Node, const BuildContext& Context) {
+    (void)Context;
+    auto Built = std::make_unique<Checkbox>();
+    ApplySharedPropsToWidget(*Built, Node.Props);
+    if (const auto Checked = GetBoolProp(Node.Props, "checked")) {
+        Built->Checked = *Checked;
+    }
+    const Umbra::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
+    if (Props.OnToggle) {
+        Built->OnChanged = *Props.OnToggle;
+    }
+    return Built;
+}
+
 std::unique_ptr<WidgetBase> BuildPortal(const Component& Node, const BuildContext& Context,
                                          const WalkerStyleElement& ThisStyleElement, BuildRecords& Records) {
     std::unique_ptr<WidgetBase> Content;
@@ -812,13 +868,28 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
         case ChaosElementTag::Slice:
             Built = BuildChartData<SliceNode>(Node);
             break;
+        case ChaosElementTag::Viewport:
+            Built = BuildViewport(Node, Context);
+            break;
+        case ChaosElementTag::Select:
+            Built = BuildSelect(Node, Context);
+            break;
+        case ChaosElementTag::Checkbox:
+            Built = BuildCheckbox(Node, Context);
+            break;
         default:
             break; // unreachable -- None/Slot returned above, every other tag handled
     }
 
     if (Built) {
-        if (const auto OnKeyDown = GetStringEventProp(Node.Props, "onKeyDown")) {
-            Built->OnKeyPressed = KeyDownHandler(*OnKeyDown);
+        const auto OnKeyDown = GetStringEventProp(Node.Props, "onKeyDown");
+        const auto OnKeyUp   = GetStringEventProp(Node.Props, "onKeyUp");
+        if (OnKeyDown || OnKeyUp) {
+            Built->OnKeyEvent = KeyEventHandler(OnKeyDown.value_or(nullptr), OnKeyUp.value_or(nullptr));
+        }
+        // Here rather than in ApplySharedProps, so the Builder-made widgets get it too.
+        if (const auto OnHoverEnd = GetEventProp(Node.Props, "onHoverEnd")) {
+            Built->OnUnhovered = *OnHoverEnd;
         }
     }
 
@@ -899,30 +970,93 @@ void RegisterComponentGetRef(nyx::host::NyxRuntime& Runtime) {
 
 std::function<void(Penumbra::Platform::Key)> KeyDownHandler(std::function<void(std::string)> OnKeyDown) {
     return [OnKeyDown = std::move(OnKeyDown)](Penumbra::Platform::Key Pressed) {
-        using Penumbra::Platform::Key;
-        const char* Name = nullptr;
-        switch (Pressed) {
-            case Key::Left: Name = "ArrowLeft"; break;
-            case Key::Right: Name = "ArrowRight"; break;
-            case Key::Up: Name = "ArrowUp"; break;
-            case Key::Down: Name = "ArrowDown"; break;
-            case Key::Home: Name = "Home"; break;
-            case Key::End: Name = "End"; break;
-            case Key::Backspace: Name = "Backspace"; break;
-            case Key::Delete: Name = "Delete"; break;
-            case Key::Escape: Name = "Escape"; break;
-            case Key::Enter: Name = "Enter"; break;
-            case Key::Tab: Name = "Tab"; break;
-            case Key::A: Name = "a"; break;
-            case Key::C: Name = "c"; break;
-            case Key::V: Name = "v"; break;
-            case Key::X: Name = "x"; break;
-            case Key::Unknown: break;
-        }
-        if (Name != nullptr) {
-            OnKeyDown(Name);
+        if (Pressed != Penumbra::Platform::Key::Unknown) {
+            OnKeyDown(std::string(Penumbra::Platform::KeyName(Pressed)));
         }
     };
+}
+
+std::string QualifiedKeyName(const Penumbra::Platform::KeyEvent& Event) {
+    using Penumbra::Platform::Key;
+    const std::string_view Name = Penumbra::Platform::KeyName(Event.Code);
+    const bool IsModifierKey = Event.Code == Key::LeftShift || Event.Code == Key::RightShift ||
+                               Event.Code == Key::LeftControl || Event.Code == Key::RightControl ||
+                               Event.Code == Key::LeftAlt || Event.Code == Key::RightAlt ||
+                               Event.Code == Key::LeftSuper || Event.Code == Key::RightSuper;
+    if (IsModifierKey) {
+        return std::string(Name);
+    }
+    std::string Qualified;
+    const Penumbra::Platform::Modifiers& Mods = Event.ModifierState;
+    if (Mods.Shortcut) {
+        Qualified += "Shortcut+";
+    }
+#if defined(__APPLE__)
+    if (Mods.Ctrl) {
+        Qualified += "Control+";
+    }
+#endif
+    if (Mods.Alt) {
+        Qualified += "Alt+";
+    }
+    if (Mods.Shift) {
+        Qualified += "Shift+";
+    }
+    Qualified += Name;
+    return Qualified;
+}
+
+std::function<void(const Penumbra::Platform::KeyEvent&)> KeyEventHandler(std::function<void(std::string)> OnKeyDown,
+                                                                       std::function<void(std::string)> OnKeyUp) {
+    return [OnKeyDown = std::move(OnKeyDown), OnKeyUp = std::move(OnKeyUp)](const Penumbra::Platform::KeyEvent& Event) {
+        if (Event.Code == Penumbra::Platform::Key::Unknown) {
+            return;
+        }
+        if (Event.Down && OnKeyDown) {
+            OnKeyDown(QualifiedKeyName(Event));
+        } else if (!Event.Down && OnKeyUp) {
+            OnKeyUp(QualifiedKeyName(Event));
+        }
+    };
+}
+
+void ApplySelectProps(Dropdown& Widget, const Umbra::ChaosPropDiff& Props) {
+    if (const auto Options = Props.StringLists.find("options"); Options != Props.StringLists.end()) {
+        // The selection follows its label through a change of options, since a diff that
+        // changes only the options carries no `selected` to restore it.
+        std::string SelectedLabel;
+        if (Widget.SelectedIndex < Widget.Items.size()) {
+            SelectedLabel = Widget.Items[Widget.SelectedIndex].Label;
+        }
+        Widget.Items.clear();
+        for (const std::string& Option : Options->second) {
+            Widget.Items.push_back(DropdownItem{Option, nullptr});
+        }
+        Widget.SelectedIndex = 0;
+        for (std::size_t Index = 0; Index < Widget.Items.size(); ++Index) {
+            if (Widget.Items[Index].Label == SelectedLabel) {
+                Widget.SelectedIndex = Index;
+                break;
+            }
+        }
+    }
+    if (const auto Selected = Props.Strings.find("selected"); Selected != Props.Strings.end()) {
+        for (std::size_t Index = 0; Index < Widget.Items.size(); ++Index) {
+            if (Widget.Items[Index].Label == Selected->second) {
+                Widget.SelectedIndex = Index;
+                break;
+            }
+        }
+    }
+    if (Props.OnSelect) {
+        Dropdown*                        Target   = &Widget;
+        std::function<void(std::string)> Callback = *Props.OnSelect;
+        Widget.OnSelectionChanged = [Target, Callback](std::size_t Index) {
+            if (Index < Target->Items.size()) {
+                Callback(Target->Items[Index].Label);
+            }
+        };
+    }
 }
 
 std::unique_ptr<WidgetBase> BuildWidgetTree(const Component& Node, const BuildContext& Context,

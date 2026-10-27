@@ -13,11 +13,17 @@
 #include "Penumbra/Widgets/FocusState.h"
 #include "Penumbra/Widgets/OverlayHost.h"
 #include "Penumbra/Widgets/WidgetBase.h"
+#include "Umbra/IViewportRenderer.h"
+#include "Umbra/IWidget.h"
 
 #include <SDL3/SDL.h>
 
 #include <memory>
 #include <unordered_map>
+
+namespace Penumbra::Widgets {
+class Dropdown;
+}
 
 namespace PenumbraUiBackend {
 
@@ -52,6 +58,9 @@ using RefMap = std::unordered_map<std::string, Penumbra::Widgets::WidgetBase*>;
 // Component directly, but a PenumbraWidget re-resolving a widget's style later (a class
 // change) has only the widget, so WrapExistingTree seeds each wrapper from this.
 using NumberPropMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::unordered_map<std::string, float>>;
+
+// The renderers a host registered, by the name a `<viewport renderer="Name">` gives.
+using ViewportRendererMap = std::unordered_map<std::string, Umbra::IViewportRenderer*>;
 
 // Resources BuildWidgetTree needs beyond what an Component tree itself carries.
 // Penumbra's own primitives don't take these through their fluent Builder: `Label`'s
@@ -109,6 +118,10 @@ struct BuildContext {
     // are ever called on this pointer (see RegisterLifecycleIfPresent in Walker.cpp),
     // both unchanged in signature/behavior on the new type.
     Penumbra::LifecycleRegistry* LifecycleHost{nullptr};
+
+    // <viewport renderer="Name"> looks its renderer up here. Null, or a name not in the
+    // map, builds an empty viewport that draws nothing.
+    const ViewportRendererMap* ViewportRenderers{nullptr};
 };
 
 // Walks a single `Component` IR node (from the `chaos`
@@ -185,5 +198,19 @@ void RegisterComponentGetRef(nyx::host::NyxRuntime& Runtime);
 // character), and calls OnKeyDown with that name. A key with no name
 // (`Platform::Key::Unknown`) isn't passed on.
 std::function<void(Penumbra::Platform::Key)> KeyDownHandler(std::function<void(std::string)> OnKeyDown);
+
+// The handler a widget's OnKeyEvent gets for an element's onKeyDown and onKeyUp. Each key
+// arrives named as KeyboardEvent.key names it, with the modifiers held folded in front in
+// the order Shortcut, Control, Alt, Shift ("Shortcut+s", "Alt+Shift+d"); a plain key keeps
+// its plain name, and a modifier key alone is just "Shift". Either handler may be empty.
+std::function<void(const Penumbra::Platform::KeyEvent&)> KeyEventHandler(std::function<void(std::string)> OnKeyDown,
+                                                                       std::function<void(std::string)> OnKeyUp);
+
+// The name KeyEventHandler gives one event.
+std::string QualifiedKeyName(const Penumbra::Platform::KeyEvent& Event);
+
+// Sets a <select>'s Dropdown from its props: `options` (StringLists), `selected` (Strings)
+// and OnSelect, at build and on every diff.
+void ApplySelectProps(Penumbra::Widgets::Dropdown& Widget, const Umbra::ChaosPropDiff& Props);
 
 } // namespace PenumbraUiBackend

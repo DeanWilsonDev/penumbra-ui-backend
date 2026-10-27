@@ -17,6 +17,9 @@
 #include "Penumbra/Widgets/SplitPanel.h"
 #include "Penumbra/Widgets/TextArea.h"
 #include "Penumbra/Widgets/TextInput.h"
+#include "Penumbra/Widgets/Dropdown.h"
+#include "Penumbra/Widgets/Checkbox.h"
+#include "PenumbraUiBackend/ViewportHostWidget.h"
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -62,6 +65,69 @@ using Penumbra::Widgets::WidgetBase;
 
 Component MakeNode(ChaosElementTag Tag, ChaosProps Props = {}, std::vector<Component> Children = {}) {
     return Component(Tag, std::move(Props), std::move(Children), nullptr);
+}
+
+class CountingViewportRenderer final : public Umbra::IViewportRenderer {
+public:
+    int Renders{0};
+    std::optional<Umbra::ViewportFrame> Render(std::uint32_t, std::uint32_t) override {
+        ++Renders;
+        return std::nullopt;
+    }
+};
+
+void TestViewportBuildsAHostWidgetBoundToTheNamedRenderer() {
+    CountingViewportRenderer             Renderer;
+    PenumbraUiBackend::ViewportRendererMap Renderers{{"level", &Renderer}};
+    BuildContext                         Context;
+    Context.ViewportRenderers = &Renderers;
+
+    ChaosProps Props;
+    Props["renderer"] = ChaosPropValue{std::string("level")};
+    const auto Built = BuildWidgetTree(MakeNode(ChaosElementTag::Viewport, Props), Context);
+    auto*      AsViewport = dynamic_cast<PenumbraUiBackend::ViewportHostWidget*>(Built.get());
+    Expect(AsViewport != nullptr && AsViewport->Renderer() == &Renderer,
+           "<viewport renderer=\"level\"> builds a ViewportHostWidget on the renderer registered under that name");
+
+    Props["renderer"] = ChaosPropValue{std::string("missing")};
+    const auto Unbound = BuildWidgetTree(MakeNode(ChaosElementTag::Viewport, Props), Context);
+    auto*      AsUnbound = dynamic_cast<PenumbraUiBackend::ViewportHostWidget*>(Unbound.get());
+    Expect(AsUnbound != nullptr && AsUnbound->Renderer() == nullptr,
+           "a name no host registered still builds a viewport, with no renderer");
+}
+
+void TestSelectBuildsADropdownWithItsOptions() {
+    ChaosProps Props;
+    Props["options"]  = ChaosPropValue{std::vector<std::string>{"Cube", "Sphere", "Capsule"}};
+    Props["selected"] = ChaosPropValue{std::string("Sphere")};
+    std::string Chosen;
+    Props["onSelect"] = ChaosPropValue{std::function<void(std::string)>([&Chosen](std::string Value) { Chosen = Value; })};
+    const auto Built = BuildWidgetTree(MakeNode(ChaosElementTag::Select, Props), BuildContext{});
+    auto*      AsDropdown = dynamic_cast<Penumbra::Widgets::Dropdown*>(Built.get());
+    Expect(AsDropdown != nullptr, "<select> builds a Dropdown");
+    if (AsDropdown == nullptr) {
+        return;
+    }
+    Expect(AsDropdown->Items.size() == 3 && AsDropdown->Items[2].Label == "Capsule", "its options become the items");
+    Expect(AsDropdown->SelectedIndex == 1, "`selected` picks the matching item");
+    if (AsDropdown->OnSelectionChanged) {
+        AsDropdown->OnSelectionChanged(2);
+    }
+    Expect(Chosen == "Capsule", "a selection reaches onSelect as the option's text");
+}
+
+void TestCheckboxBuildsACheckbox() {
+    ChaosProps Props;
+    Props["checked"] = ChaosPropValue{true};
+    bool Toggled = true;
+    Props["onToggle"] = ChaosPropValue{std::function<void(bool)>([&Toggled](bool Value) { Toggled = Value; })};
+    const auto Built = BuildWidgetTree(MakeNode(ChaosElementTag::Checkbox, Props), BuildContext{});
+    auto*      AsCheckbox = dynamic_cast<Penumbra::Widgets::Checkbox*>(Built.get());
+    Expect(AsCheckbox != nullptr && AsCheckbox->Checked, "<checkbox checked> builds a checked Checkbox");
+    if (AsCheckbox != nullptr && AsCheckbox->OnChanged) {
+        AsCheckbox->OnChanged(false);
+    }
+    Expect(!Toggled, "a toggle reaches onToggle with the new state");
 }
 
 void TestNoneProducesNoWidget() {
@@ -839,6 +905,9 @@ void TestClassComponentOnTickCanReachItsRefsViaGetRef() {
 } // namespace
 
 void RunWalkerTests() {
+    TestViewportBuildsAHostWidgetBoundToTheNamedRenderer();
+    TestSelectBuildsADropdownWithItsOptions();
+    TestCheckboxBuildsACheckbox();
     TestNoneProducesNoWidget();
     TestFrameBuildsABoxWithClassName();
     TestFrameChildrenAreAttachedAndNoneChildrenAreSkipped();

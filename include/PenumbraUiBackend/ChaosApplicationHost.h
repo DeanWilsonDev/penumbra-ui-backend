@@ -41,10 +41,13 @@ public:
     [[nodiscard]] ChaosApplicationBridge& Bridge() { return Bridge_; }
     [[nodiscard]] ChaosApplication*       App() const { return App_; }
 
+    // Loads the application once. A host that registers viewport renderers on App() calls this
+    // first, then Run(), which reuses the loaded application.
     ChaosApplication*         Load();
     [[nodiscard]] std::string LastDiagnostics();
 
-    // Loads the application and runs it, or prints the load diagnostics to stderr and returns 1.
+    // Runs the loaded application, loading it first if Load() hasn't been called, or prints the
+    // load diagnostics to stderr and returns 1.
     int Run();
 
 private:

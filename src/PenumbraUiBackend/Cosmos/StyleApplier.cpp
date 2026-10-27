@@ -1,4 +1,6 @@
 #include "PenumbraUiBackend/Cosmos/StyleApplier.h"
+#include "Penumbra/Widgets/Checkbox.h"
+#include "Penumbra/Widgets/Dropdown.h"
 
 #include "PenumbraUiBackend/ChartNodes.h"
 
@@ -469,6 +471,55 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
         if (Style.WhiteSpaceMode) {
             AsLabel->Wrap = (*Style.WhiteSpaceMode == ::Cosmos::WhiteSpace::Normal);
         }
+    }
+
+    if (auto* AsCheckbox = dynamic_cast<Penumbra::Widgets::Checkbox*>(&Widget)) {
+        // The glyph is the text size: the rule's, else the default font's, else 16.
+        AsCheckbox->GlyphSizeLogical = 16.0f;
+        if (const auto Font = EffectiveFont(Style)) {
+            AsCheckbox->GlyphSizeLogical = Font->SizeLogical;
+        }
+        if (Style.AccentColor) {
+            AsCheckbox->ColorBoxChecked = ToPenumbraColor(*Style.AccentColor);
+            AsCheckbox->ColorCheckMark  = {255, 255, 255, 255};
+        } else if (Style.TextColor) {
+            AsCheckbox->ColorBoxChecked = ToPenumbraColor(*Style.TextColor);
+            AsCheckbox->ColorCheckMark  = AsCheckbox->Style.ColorBackground;
+        }
+    }
+
+    if (auto* AsDropdown = dynamic_cast<Penumbra::Widgets::Dropdown*>(&Widget)) {
+        Penumbra::Widgets::DropdownStyle DropdownStyle;
+        static_cast<Penumbra::Widgets::BoxStyle&>(DropdownStyle) = AsDropdown->Style;
+        DropdownStyle.Menu                   = AsDropdown->Style;
+        DropdownStyle.Menu.FlexGrow          = 0.0f;
+        DropdownStyle.Row                    = Penumbra::Widgets::BoxStyle{};
+        DropdownStyle.Row.Padding            = AsDropdown->Style.Padding;
+        DropdownStyle.SelectedRow            = DropdownStyle.Row;
+        if (Style.AccentColor) {
+            DropdownStyle.SelectedRow.ColorBackground = ToPenumbraColor(*Style.AccentColor);
+            DropdownStyle.Row.ColorBackgroundHovered  = ToPenumbraColor(*Style.AccentColor);
+        }
+        if (Style.TextColor) {
+            DropdownStyle.ColorText            = ToPenumbraColor(*Style.TextColor);
+            DropdownStyle.ColorTextHighlighted = ToPenumbraColor(*Style.TextColor);
+        }
+        if (const auto Font = EffectiveFont(Style); Font && FontBackend_) {
+            AsDropdown->FontBackend = FontBackend_;
+            AsDropdown->Font        = ResolveFont(*Font, ToPenumbraFontStyle(Style));
+        }
+        float TextHeight = 16.0f;
+        if (AsDropdown->FontBackend != nullptr) {
+            TextHeight = AsDropdown->FontBackend->MeasureText(AsDropdown->Font, "Ag").HeightLogical;
+        }
+        DropdownStyle.TriggerContentSizeLogical = TextHeight;
+        const float RowPadding = DropdownStyle.Row.Padding.Top + DropdownStyle.Row.Padding.Bottom;
+        DropdownStyle.RowHeightLogical          = TextHeight + (RowPadding > 0.0f ? RowPadding : 8.0f);
+        DropdownStyle.MinimumOpenWidthLogical   = 120.0f;
+        DropdownStyle.TriggerChevronWidthLogical = TextHeight;
+        DropdownStyle.TriggerChevronThicknessLogical = 1.0f;
+        DropdownStyle.OpenTransitionSeconds     = 0.12f;
+        AsDropdown->ApplyStyle(DropdownStyle);
     }
 
     if (auto* AsTextInput = dynamic_cast<Penumbra::Widgets::TextInput*>(&Widget)) {

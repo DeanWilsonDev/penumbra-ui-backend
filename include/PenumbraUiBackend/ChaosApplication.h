@@ -19,6 +19,7 @@
 #include <runtime/value.hpp>
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -94,6 +95,30 @@ public:
     void SetFontConfig(std::string FontPath, float FontSizeLogical);
     void SetIconBackend(Penumbra::Backends::IIconBackend* Backend) { IconBackend_ = Backend; }
 
+    // A `<viewport renderer="Name">` built after this call shows Renderer's frames. The
+    // host owns the renderer and keeps it alive while any viewport names it.
+    void RegisterViewportRenderer(const std::string& Name, Umbra::IViewportRenderer* Renderer);
+    const ViewportRendererMap& ViewportRenderers() const { return ViewportRenderers_; }
+
+    // Native file dialogs, asynchronous: the dialog opens at once and the choice arrives
+    // later. A Nyx application polls FileDialogPending() each frame and reads the chosen
+    // path with TakeFileDialogResult(), which is empty when the dialog was cancelled.
+    // FilterPattern is SDL's form: extensions separated by ';' ("json;lantern"), or "*".
+    void        ShowOpenFileDialog(const std::string& FilterName, const std::string& FilterPattern,
+                                   const std::string& DefaultPath);
+    void        ShowSaveFileDialog(const std::string& FilterName, const std::string& FilterPattern,
+                                   const std::string& DefaultPath);
+    bool        FileDialogPending() const;
+    bool        FileDialogFinished() const;
+    std::string TakeFileDialogResult();
+
+    struct FileDialogState {
+        std::mutex  Guard;
+        bool        Pending{false};
+        bool        Finished{false};
+        std::string Result;
+    };
+
     bool ReloadFont(float DpiScaleFactor);
     Penumbra::Render::FontHandle CurrentFont() const { return Font_; }
 
@@ -151,6 +176,10 @@ protected:
     float                 DpiScaleFactor_  = 1.0f;
     Penumbra::Render::FontHandle Font_{0};
     Penumbra::Backends::IIconBackend* IconBackend_ = nullptr;
+    ViewportRendererMap               ViewportRenderers_;
+    std::shared_ptr<FileDialogState> FileDialog_ = std::make_shared<FileDialogState>();
+    void ShowFileDialog(bool Save, const std::string& FilterName, const std::string& FilterPattern,
+                        const std::string& DefaultPath);
 
     ::Cosmos::Stylesheet            GlobalSheet_;
     ::Cosmos::Stylesheet            ComposedSheet_;
