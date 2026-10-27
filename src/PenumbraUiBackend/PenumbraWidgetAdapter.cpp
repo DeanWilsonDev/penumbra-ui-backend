@@ -477,15 +477,31 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::ChaosPropDiff& Diff) {
     }
 
     if (Diff.Text) {
-        // A field the user is typing in keeps its text; the program's value lands once it
-        // loses focus, the way a controlled input works.
+        // A field the user is typing in keeps its text; the program's latest value lands
+        // once it loses focus, the way a controlled input works.
         if (auto* AsTextInput = dynamic_cast<TextInput*>(Widget)) {
             if (AsTextInput->Focus == nullptr || AsTextInput->Focus->Focused != AsTextInput) {
                 AsTextInput->Text = *Diff.Text;
+            } else {
+                PendingText_ = *Diff.Text;
+                AsTextInput->OnFocusLost = [this, AsTextInput]() {
+                    if (PendingText_) {
+                        AsTextInput->Text = *PendingText_;
+                        PendingText_.reset();
+                    }
+                };
             }
         } else if (auto* AsTextArea = dynamic_cast<TextArea*>(Widget)) {
             if (AsTextArea->Focus == nullptr || AsTextArea->Focus->Focused != AsTextArea) {
                 AsTextArea->Text = *Diff.Text;
+            } else {
+                PendingText_ = *Diff.Text;
+                AsTextArea->OnFocusLost = [this, AsTextArea]() {
+                    if (PendingText_) {
+                        AsTextArea->Text = *PendingText_;
+                        PendingText_.reset();
+                    }
+                };
             }
         }
         if (auto* AsLabel = dynamic_cast<Label*>(Widget)) {

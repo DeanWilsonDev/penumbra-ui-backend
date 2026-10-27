@@ -207,9 +207,6 @@ void ApplySharedPropsToWidget(WidgetBase& Widget, const ChaosProps& Props) {
     if (const auto OnChange = GetEventProp(Props, "onChange")) {
         Widget.OnChanged = *OnChange;
     }
-    if (const auto OnHoverEnd = GetEventProp(Props, "onHoverEnd")) {
-        Widget.OnUnhovered = *OnHoverEnd;
-    }
 }
 
 std::string ChaosTagToCosmosTag(ChaosElementTag Tag) {
@@ -890,6 +887,10 @@ std::unique_ptr<WidgetBase> BuildWidgetTreeInternal(const Component& Node, const
         if (OnKeyDown || OnKeyUp) {
             Built->OnKeyEvent = KeyEventHandler(OnKeyDown.value_or(nullptr), OnKeyUp.value_or(nullptr));
         }
+        // Here rather than in ApplySharedProps, so the Builder-made widgets get it too.
+        if (const auto OnHoverEnd = GetEventProp(Node.Props, "onHoverEnd")) {
+            Built->OnUnhovered = *OnHoverEnd;
+        }
     }
 
     if (auto* AsBox = dynamic_cast<Box*>(Built.get()); AsBox && GetBoolProp(Node.Props, "selectable").value_or(false)) {
@@ -1021,12 +1022,22 @@ std::function<void(const Penumbra::Platform::KeyEvent&)> KeyEventHandler(std::fu
 
 void ApplySelectProps(Dropdown& Widget, const Umbra::ChaosPropDiff& Props) {
     if (const auto Options = Props.StringLists.find("options"); Options != Props.StringLists.end()) {
+        // The selection follows its label through a change of options, since a diff that
+        // changes only the options carries no `selected` to restore it.
+        std::string SelectedLabel;
+        if (Widget.SelectedIndex < Widget.Items.size()) {
+            SelectedLabel = Widget.Items[Widget.SelectedIndex].Label;
+        }
         Widget.Items.clear();
         for (const std::string& Option : Options->second) {
             Widget.Items.push_back(DropdownItem{Option, nullptr});
         }
-        if (Widget.SelectedIndex >= Widget.Items.size()) {
-            Widget.SelectedIndex = 0;
+        Widget.SelectedIndex = 0;
+        for (std::size_t Index = 0; Index < Widget.Items.size(); ++Index) {
+            if (Widget.Items[Index].Label == SelectedLabel) {
+                Widget.SelectedIndex = Index;
+                break;
+            }
         }
     }
     if (const auto Selected = Props.Strings.find("selected"); Selected != Props.Strings.end()) {

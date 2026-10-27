@@ -218,6 +218,8 @@ private:
 
     std::vector<float>       SpanRanges_;
     std::vector<std::string> SpanClasses_;
+    // A text diff that arrived while the field had focus, applied when focus leaves it.
+    std::optional<std::string> PendingText_;
 
     Penumbra::Backends::IImageBackend* ImageBackend_{nullptr};
     SDL_Renderer*                       SdlRenderer_{nullptr};

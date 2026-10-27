@@ -196,6 +196,31 @@ void TestApplyPropDiffTextReachesAnUnfocusedTextInput() {
     Expect(AsInput != nullptr && AsInput->Text == "after", "a text diff reaches an unfocused TextInput");
 }
 
+void TestApplyPropDiffTextWaitsForAFocusedTextInputToLoseFocus() {
+    Penumbra::Widgets::FocusState Focus;
+    BuildContext                  Context;
+    Context.Focus = &Focus;
+    const chaos::MountFn Mount = MakeMountFn(Context);
+    ChaosProps           Props;
+    Props["text"] = ChaosPropValue{std::string("before")};
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Component(ChaosElementTag::Input, Props, {}, nullptr));
+    auto* AsInput = dynamic_cast<TextInput*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
+    if (AsInput == nullptr) {
+        Expect(false, "an <input> builds a TextInput");
+        return;
+    }
+    const Penumbra::Platform::InputState NoInput{};
+    Focus.Focused = AsInput;
+    AsInput->UpdateInteractionState(NoInput);
+    Umbra::ChaosPropDiff Diff;
+    Diff.Text = std::string("after");
+    Wrapped->ApplyPropDiff(Diff);
+    Expect(AsInput->Text == "before", "a text diff leaves a focused TextInput's text alone");
+    Focus.Focused = nullptr;
+    AsInput->UpdateInteractionState(NoInput);
+    Expect(AsInput->Text == "after", "the held text lands once the TextInput loses focus");
+}
+
 void TestReconcilerChangesAReusedIconsGlyph() {
     const chaos::MountFn Mount = MakeMountFn(BuildContext{});
     auto MakeIcon = [](const std::string& Name) {
@@ -498,6 +523,7 @@ void TestReplaceRawWidgetSeedsTagsAndRefsForTheNewSubtree() {
 void RunPenumbraWidgetAdapterTests() {
     TestApplyPropDiffKeyUpHoverEndCheckedAndToggleReachTheWidgets();
     TestApplyPropDiffTextReachesAnUnfocusedTextInput();
+    TestApplyPropDiffTextWaitsForAFocusedTextInputToLoseFocus();
     TestWrapExistingTreeMirrorsRealTreeStructure();
     TestApplyPropDiffReachesRealWidgetBaseFields();
     TestApplyPropDiffOnTextChangeReachesRealTextInput();

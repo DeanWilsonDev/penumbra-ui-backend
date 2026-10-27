@@ -474,8 +474,10 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
     }
 
     if (auto* AsCheckbox = dynamic_cast<Penumbra::Widgets::Checkbox*>(&Widget)) {
-        if (Style.FontSizeLogical) {
-            AsCheckbox->GlyphSizeLogical = *Style.FontSizeLogical;
+        // The glyph is the text size: the rule's, else the default font's, else 16.
+        AsCheckbox->GlyphSizeLogical = 16.0f;
+        if (const auto Font = EffectiveFont(Style)) {
+            AsCheckbox->GlyphSizeLogical = Font->SizeLogical;
         }
         if (Style.AccentColor) {
             AsCheckbox->ColorBoxChecked = ToPenumbraColor(*Style.AccentColor);
@@ -511,7 +513,8 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
             TextHeight = AsDropdown->FontBackend->MeasureText(AsDropdown->Font, "Ag").HeightLogical;
         }
         DropdownStyle.TriggerContentSizeLogical = TextHeight;
-        DropdownStyle.RowHeightLogical          = TextHeight + 8.0f;
+        const float RowPadding = DropdownStyle.Row.Padding.Top + DropdownStyle.Row.Padding.Bottom;
+        DropdownStyle.RowHeightLogical          = TextHeight + (RowPadding > 0.0f ? RowPadding : 8.0f);
         DropdownStyle.MinimumOpenWidthLogical   = 120.0f;
         DropdownStyle.TriggerChevronWidthLogical = TextHeight;
         DropdownStyle.TriggerChevronThicknessLogical = 1.0f;

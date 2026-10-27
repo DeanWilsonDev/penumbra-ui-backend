@@ -41,8 +41,9 @@ void ViewportHostWidget::Arrange(Penumbra::Rect FinalRectLogical) {
 }
 
 bool ViewportHostWidget::UpdateInteractionState(const Penumbra::Platform::InputState& Input) {
+    const bool BoxConsumed = Box::UpdateInteractionState(Input);
     if (Renderer_ == nullptr) {
-        return false;
+        return BoxConsumed;
     }
     Renderer_->Tick(Input.DeltaTimeSeconds);
 
@@ -61,7 +62,7 @@ bool ViewportHostWidget::UpdateInteractionState(const Penumbra::Platform::InputS
         ForwardPointer(Input, Content, PointerIsOver);
         ForwardKeys(Input);
     }
-    return PointerIsOver || DragUnderway;
+    return BoxConsumed || PointerIsOver || DragUnderway;
 }
 
 void ViewportHostWidget::ForwardPointer(const Penumbra::Platform::InputState& Input, Penumbra::Rect ContentRect,
