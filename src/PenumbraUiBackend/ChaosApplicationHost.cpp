@@ -63,7 +63,7 @@ std::string ChaosApplicationHost::LastDiagnostics() {
 }
 
 int ChaosApplicationHost::Run() {
-    ChaosApplication* Loaded = Load();
+    ChaosApplication* Loaded = App_ ? App_ : Load();
     if (!Loaded) {
         std::fprintf(stderr, "Failed to load %s from %s\n%s", Options_.ApplicationClass.c_str(),
                      Options_.ApplicationFile.c_str(), LastDiagnostics().c_str());
