@@ -513,6 +513,8 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
         DropdownStyle.TriggerContentSizeLogical = TextHeight;
         DropdownStyle.RowHeightLogical          = TextHeight + 8.0f;
         DropdownStyle.MinimumOpenWidthLogical   = 120.0f;
+        DropdownStyle.TriggerChevronWidthLogical = TextHeight;
+        DropdownStyle.TriggerChevronThicknessLogical = 1.0f;
         DropdownStyle.OpenTransitionSeconds     = 0.12f;
         AsDropdown->ApplyStyle(DropdownStyle);
     }
