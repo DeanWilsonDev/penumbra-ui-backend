@@ -1,4 +1,5 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
+#include "Penumbra/Widgets/Checkbox.h"
 
 #include "Chaos/Reconciler.h"
 #include "Chaos/Signal.h"
@@ -119,17 +120,80 @@ void TestApplyPropDiffOnKeyDownNamesPenumbrasKeysTheWebsWay() {
     Wrapped->ApplyPropDiff(Diff);
 
     auto* AsBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
-    Expect(AsBox != nullptr && static_cast<bool>(AsBox->OnKeyPressed),
-           "ApplyPropDiff's OnKeyDown reaches the real WidgetBase::OnKeyPressed field");
-    if (AsBox == nullptr || !AsBox->OnKeyPressed) {
+    Expect(AsBox != nullptr && static_cast<bool>(AsBox->OnKeyEvent),
+           "ApplyPropDiff's OnKeyDown reaches the real WidgetBase::OnKeyEvent field");
+    if (AsBox == nullptr || !AsBox->OnKeyEvent) {
         return;
     }
     using Penumbra::Platform::Key;
+    using Penumbra::Platform::KeyEvent;
     for (const Key Each : {Key::Escape, Key::Enter, Key::Tab, Key::Left, Key::Down, Key::Backspace, Key::A, Key::Unknown}) {
-        AsBox->OnKeyPressed(Each);
+        AsBox->OnKeyEvent(KeyEvent{Each, true, false, {}});
     }
+    AsBox->OnKeyEvent(KeyEvent{Key::A, false, false, {}});
     Expect(Pressed == std::vector<std::string>({"Escape", "Enter", "Tab", "ArrowLeft", "ArrowDown", "Backspace", "a"}),
-           "each key arrives named as KeyboardEvent.key names it, and an unknown key doesn't arrive");
+           "each key arrives named as KeyboardEvent.key names it, an unknown key doesn't arrive, and a release isn't a press");
+
+    Penumbra::Platform::Modifiers Mods;
+    Mods.Shortcut = true;
+    Mods.Shift    = true;
+    Pressed.clear();
+    AsBox->OnKeyEvent(KeyEvent{Key::S, true, false, Mods});
+    Penumbra::Platform::Modifiers ShiftOnly;
+    ShiftOnly.Shift = true;
+    AsBox->OnKeyEvent(KeyEvent{Key::LeftShift, true, false, ShiftOnly});
+    Expect(Pressed == std::vector<std::string>({"Shortcut+Shift+s", "Shift"}),
+           "modifiers are folded in front of the key's name, and a modifier key alone is just its name");
+}
+
+void TestApplyPropDiffKeyUpHoverEndCheckedAndToggleReachTheWidgets() {
+    const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("overlay"));
+    std::vector<std::string>         Fired;
+    Umbra::ChaosPropDiff             Diff;
+    Diff.OnKeyUp    = std::function<void(std::string)>([&Fired](std::string Key) { Fired.push_back("up:" + Key); });
+    Diff.OnHoverEnd = std::function<void()>([&Fired]() { Fired.push_back("hoverEnd"); });
+    Wrapped->ApplyPropDiff(Diff);
+    auto* AsBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
+    if (AsBox == nullptr || !AsBox->OnKeyEvent || !AsBox->OnUnhovered) {
+        Expect(false, "OnKeyUp and OnHoverEnd reach OnKeyEvent and OnUnhovered");
+        return;
+    }
+    AsBox->OnKeyEvent(Penumbra::Platform::KeyEvent{Penumbra::Platform::Key::W, false, false, {}});
+    AsBox->OnKeyEvent(Penumbra::Platform::KeyEvent{Penumbra::Platform::Key::W, true, false, {}});
+    AsBox->OnUnhovered();
+    Expect(Fired == std::vector<std::string>({"up:w", "hoverEnd"}),
+           "a release reaches onKeyUp, a press without an onKeyDown reaches nothing, and hover-end fires");
+
+    ChaosProps CheckboxProps;
+    CheckboxProps["checked"] = ChaosPropValue{false};
+    std::unique_ptr<Umbra::IWidget> WrappedCheckbox =
+        Mount(Component(ChaosElementTag::Checkbox, CheckboxProps, {}, nullptr));
+    bool                 Toggled = false;
+    Umbra::ChaosPropDiff CheckboxDiff;
+    CheckboxDiff.Checked  = true;
+    CheckboxDiff.OnToggle = std::function<void(bool)>([&Toggled](bool Value) { Toggled = Value; });
+    WrappedCheckbox->ApplyPropDiff(CheckboxDiff);
+    auto* AsCheckbox =
+        dynamic_cast<Penumbra::Widgets::Checkbox*>(dynamic_cast<PenumbraWidget*>(WrappedCheckbox.get())->RawWidget());
+    Expect(AsCheckbox != nullptr && AsCheckbox->Checked, "a checked diff reaches Checkbox::Checked");
+    if (AsCheckbox != nullptr && AsCheckbox->OnChanged) {
+        AsCheckbox->OnChanged(true);
+    }
+    Expect(Toggled, "an onToggle diff reaches Checkbox::OnChanged");
+}
+
+void TestApplyPropDiffTextReachesAnUnfocusedTextInput() {
+    const chaos::MountFn Mount = MakeMountFn(BuildContext{});
+    ChaosProps           Props;
+    Props["text"] = ChaosPropValue{std::string("before")};
+    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Component(ChaosElementTag::Input, Props, {}, nullptr));
+    Umbra::ChaosPropDiff            Diff;
+    Diff.Text = std::string("after");
+    Wrapped->ApplyPropDiff(Diff);
+    auto* AsInput =
+        dynamic_cast<Penumbra::Widgets::TextInput*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
+    Expect(AsInput != nullptr && AsInput->Text == "after", "a text diff reaches an unfocused TextInput");
 }
 
 void TestReconcilerChangesAReusedIconsGlyph() {
@@ -432,6 +496,8 @@ void TestReplaceRawWidgetSeedsTagsAndRefsForTheNewSubtree() {
 } // namespace
 
 void RunPenumbraWidgetAdapterTests() {
+    TestApplyPropDiffKeyUpHoverEndCheckedAndToggleReachTheWidgets();
+    TestApplyPropDiffTextReachesAnUnfocusedTextInput();
     TestWrapExistingTreeMirrorsRealTreeStructure();
     TestApplyPropDiffReachesRealWidgetBaseFields();
     TestApplyPropDiffOnTextChangeReachesRealTextInput();

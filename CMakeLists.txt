@@ -71,6 +71,7 @@ add_library(penumbra_ui_backend STATIC
     src/PenumbraUiBackend/ChaosApplication.cpp
     src/PenumbraUiBackend/ScriptCanvas.cpp
     src/PenumbraUiBackend/Walker.cpp
+    src/PenumbraUiBackend/ViewportHostWidget.cpp
     src/PenumbraUiBackend/PenumbraWidgetAdapter.cpp)
 
 target_include_directories(penumbra_ui_backend PUBLIC include)

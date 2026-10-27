@@ -10,6 +10,7 @@
 #include "Chaos/SlotRuntime.h"
 
 #include "Penumbra/Widgets/Box.h"
+#include <SDL3/SDL.h>
 
 #include <host/inheritable-type-builder.hpp>
 
@@ -39,6 +40,85 @@ void ChaosApplication::Attach(Chaos::ChaosNyxDriver& Driver, std::string UiDir) 
     Driver_                  = &Driver;
     ReportedDiagnosticCount_ = 0;
     UiDir_                   = std::move(UiDir);
+}
+
+void ChaosApplication::RegisterViewportRenderer(const std::string& Name, Umbra::IViewportRenderer* Renderer) {
+    if (Renderer == nullptr) {
+        ViewportRenderers_.erase(Name);
+    } else {
+        ViewportRenderers_[Name] = Renderer;
+    }
+}
+
+namespace {
+
+struct FileDialogFilters {
+    std::string                            Name;
+    std::string                            Pattern;
+    std::vector<SDL_DialogFileFilter>      Filters;
+};
+
+void FileDialogCallback(void* UserData, const char* const* FileList, int) {
+    auto* Shared = static_cast<std::shared_ptr<ChaosApplication::FileDialogState>*>(UserData);
+    {
+        std::lock_guard<std::mutex> Lock((*Shared)->Guard);
+        (*Shared)->Result   = FileList != nullptr && FileList[0] != nullptr ? FileList[0] : "";
+        (*Shared)->Pending  = false;
+        (*Shared)->Finished = true;
+    }
+    delete Shared;
+}
+
+} // namespace
+
+void ChaosApplication::ShowFileDialog(bool Save, const std::string& FilterName, const std::string& FilterPattern,
+                                      const std::string& DefaultPath) {
+    {
+        std::lock_guard<std::mutex> Lock(FileDialog_->Guard);
+        if (FileDialog_->Pending) {
+            return;
+        }
+        FileDialog_->Pending  = true;
+        FileDialog_->Finished = false;
+        FileDialog_->Result.clear();
+    }
+    static FileDialogFilters Filters;
+    Filters.Name    = FilterName;
+    Filters.Pattern = FilterPattern.empty() ? "*" : FilterPattern;
+    Filters.Filters.assign(1, SDL_DialogFileFilter{Filters.Name.c_str(), Filters.Pattern.c_str()});
+    auto* Shared = new std::shared_ptr<FileDialogState>(FileDialog_);
+    const char* Location = DefaultPath.empty() ? nullptr : DefaultPath.c_str();
+    if (Save) {
+        SDL_ShowSaveFileDialog(FileDialogCallback, Shared, nullptr, Filters.Filters.data(), 1, Location);
+    } else {
+        SDL_ShowOpenFileDialog(FileDialogCallback, Shared, nullptr, Filters.Filters.data(), 1, Location, false);
+    }
+}
+
+void ChaosApplication::ShowOpenFileDialog(const std::string& FilterName, const std::string& FilterPattern,
+                                          const std::string& DefaultPath) {
+    ShowFileDialog(false, FilterName, FilterPattern, DefaultPath);
+}
+
+void ChaosApplication::ShowSaveFileDialog(const std::string& FilterName, const std::string& FilterPattern,
+                                          const std::string& DefaultPath) {
+    ShowFileDialog(true, FilterName, FilterPattern, DefaultPath);
+}
+
+bool ChaosApplication::FileDialogPending() const {
+    std::lock_guard<std::mutex> Lock(FileDialog_->Guard);
+    return FileDialog_->Pending;
+}
+
+bool ChaosApplication::FileDialogFinished() const {
+    std::lock_guard<std::mutex> Lock(FileDialog_->Guard);
+    return FileDialog_->Finished;
+}
+
+std::string ChaosApplication::TakeFileDialogResult() {
+    std::lock_guard<std::mutex> Lock(FileDialog_->Guard);
+    FileDialog_->Finished = false;
+    return std::exchange(FileDialog_->Result, std::string());
 }
 
 void ChaosApplication::SetFontConfig(std::string FontPath, float FontSizeLogical) {
@@ -110,6 +190,7 @@ BuildContext ChaosApplication::MakeBuildContext() {
     Context.OverlayHost  = OverlayHostPtr_;
     Context.Focus        = &Focus_;
     Context.Clipboard    = &GetWindow();
+    Context.ViewportRenderers = &ViewportRenderers_;
     return Context;
 }
 
@@ -285,7 +366,12 @@ void RegisterChaosApplicationMethods(nyx::host::InheritableTypeBuilder<ChaosAppl
         .Method("TeardownReconciledComponent", &ChaosApplication::TeardownReconciledComponent)
         .Method("TeardownRootWidget", &ChaosApplication::TeardownRootWidget)
         .Method("TickChaos", &ChaosApplication::TickChaos)
-        .PointerMethod("GetRef", &GetRefForNyx, WidgetDescriptor);
+        .PointerMethod("GetRef", &GetRefForNyx, WidgetDescriptor)
+        .Method("ShowOpenFileDialog", &ChaosApplication::ShowOpenFileDialog)
+        .Method("ShowSaveFileDialog", &ChaosApplication::ShowSaveFileDialog)
+        .Method("FileDialogPending", &ChaosApplication::FileDialogPending)
+        .Method("FileDialogFinished", &ChaosApplication::FileDialogFinished)
+        .Method("TakeFileDialogResult", &ChaosApplication::TakeFileDialogResult);
 }
 
 } // namespace PenumbraUiBackend

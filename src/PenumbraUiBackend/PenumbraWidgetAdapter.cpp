@@ -1,4 +1,6 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
+#include "Penumbra/Widgets/Checkbox.h"
+#include "Penumbra/Widgets/Dropdown.h"
 
 #include "PenumbraUiBackend/ChartNodes.h"
 #include "PenumbraUiBackend/Cosmos/StyleResolution.h"
@@ -22,6 +24,8 @@
 namespace PenumbraUiBackend {
 
 using Penumbra::Widgets::Box;
+using Penumbra::Widgets::Checkbox;
+using Penumbra::Widgets::Dropdown;
 using Penumbra::Widgets::IconWidget;
 using Penumbra::Widgets::ImageWidget;
 using Penumbra::Widgets::InlineContainer;
@@ -454,11 +458,36 @@ void PenumbraWidget::ApplyPropDiff(const Umbra::ChaosPropDiff& Diff) {
     if (Diff.OnChange) {
         Widget->OnChanged = *Diff.OnChange;
     }
-    if (Diff.OnKeyDown) {
-        Widget->OnKeyPressed = KeyDownHandler(*Diff.OnKeyDown);
+    if (Diff.OnKeyDown || Diff.OnKeyUp) {
+        Widget->OnKeyEvent = KeyEventHandler(Diff.OnKeyDown.value_or(nullptr), Diff.OnKeyUp.value_or(nullptr));
+    }
+    if (Diff.OnHoverEnd) {
+        Widget->OnUnhovered = *Diff.OnHoverEnd;
+    }
+    if (auto* AsCheckbox = dynamic_cast<Checkbox*>(Widget)) {
+        if (Diff.Checked) {
+            AsCheckbox->Checked = *Diff.Checked;
+        }
+        if (Diff.OnToggle) {
+            AsCheckbox->OnChanged = *Diff.OnToggle;
+        }
+    }
+    if (auto* AsDropdown = dynamic_cast<Dropdown*>(Widget)) {
+        ApplySelectProps(*AsDropdown, Diff);
     }
 
     if (Diff.Text) {
+        // A field the user is typing in keeps its text; the program's value lands once it
+        // loses focus, the way a controlled input works.
+        if (auto* AsTextInput = dynamic_cast<TextInput*>(Widget)) {
+            if (AsTextInput->Focus == nullptr || AsTextInput->Focus->Focused != AsTextInput) {
+                AsTextInput->Text = *Diff.Text;
+            }
+        } else if (auto* AsTextArea = dynamic_cast<TextArea*>(Widget)) {
+            if (AsTextArea->Focus == nullptr || AsTextArea->Focus->Focused != AsTextArea) {
+                AsTextArea->Text = *Diff.Text;
+            }
+        }
         if (auto* AsLabel = dynamic_cast<Label*>(Widget)) {
             AsLabel->Text = *Diff.Text;
         }
