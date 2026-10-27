@@ -474,6 +474,9 @@ void CosmosStyleApplier::Apply(Penumbra::Widgets::WidgetBase& Widget, const ::Co
     }
 
     if (auto* AsCheckbox = dynamic_cast<Penumbra::Widgets::Checkbox*>(&Widget)) {
+        if (Style.FontSizeLogical) {
+            AsCheckbox->GlyphSizeLogical = *Style.FontSizeLogical;
+        }
         if (Style.AccentColor) {
             AsCheckbox->ColorBoxChecked = ToPenumbraColor(*Style.AccentColor);
             AsCheckbox->ColorCheckMark  = {255, 255, 255, 255};

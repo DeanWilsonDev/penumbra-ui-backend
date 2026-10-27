@@ -42,6 +42,8 @@ public:
     float GetMouseXForNyx() const { return GetInput().MousePosition.X; }
     float GetMouseYForNyx() const { return GetInput().MousePosition.Y; }
     bool  IsMouseButtonDownForNyx() const { return GetInput().MouseButtonDown[0]; }
+    bool  IsSecondaryMouseButtonDownForNyx() const { return GetInput().MouseButtonDown[2]; }
+    bool  WasSecondaryMouseButtonPressedForNyx() const { return GetInput().MouseButtonPressedThisFrame[2]; }
 
     // During Configure() below, SetWindowTitle and SetWindowSize fill in PendingConfig_,
     // which Application::Initialize() builds the window from as soon as Configure()
@@ -135,6 +137,8 @@ public:
     float GetMouseXForNyx() const { return GetInput().MousePosition.X; }
     float GetMouseYForNyx() const { return GetInput().MousePosition.Y; }
     bool  IsMouseButtonDownForNyx() const { return GetInput().MouseButtonDown[0]; }
+    bool  IsSecondaryMouseButtonDownForNyx() const { return GetInput().MouseButtonDown[2]; }
+    bool  WasSecondaryMouseButtonPressedForNyx() const { return GetInput().MouseButtonPressedThisFrame[2]; }
 
     // As NyxBridge<Penumbra::Application>'s: the title goes into Configure()'s config,
     // or onto the live window after it.
@@ -237,6 +241,16 @@ bool IsMouseButtonDownForNyx(const AppBaseT& Self) {
     return static_cast<const nyx::host::NyxBridge<AppBaseT>&>(Self).IsMouseButtonDownForNyx();
 }
 
+template <typename AppBaseT>
+bool IsSecondaryMouseButtonDownForNyx(const AppBaseT& Self) {
+    return static_cast<const nyx::host::NyxBridge<AppBaseT>&>(Self).IsSecondaryMouseButtonDownForNyx();
+}
+
+template <typename AppBaseT>
+bool WasSecondaryMouseButtonPressedForNyx(const AppBaseT& Self) {
+    return static_cast<const nyx::host::NyxBridge<AppBaseT>&>(Self).WasSecondaryMouseButtonPressedForNyx();
+}
+
 bool WidgetContainsPoint(const Penumbra::Widgets::WidgetBase& Widget, float X, float Y) {
     const Penumbra::Rect Bounds = Widget.GetArrangedRect();
     return X >= Bounds.X && X < Bounds.X + Bounds.W && Y >= Bounds.Y && Y < Bounds.Y + Bounds.H;
@@ -332,6 +346,8 @@ void NyxApplicationBridgeT<AppBaseT>::RegisterApplicationType() {
             .Method("GetMouseX", &GetMouseXForNyx<AppBaseT>)
             .Method("GetMouseY", &GetMouseYForNyx<AppBaseT>)
             .Method("IsMouseButtonDown", &IsMouseButtonDownForNyx<AppBaseT>)
+            .Method("IsSecondaryMouseButtonDown", &IsSecondaryMouseButtonDownForNyx<AppBaseT>)
+            .Method("WasSecondaryMouseButtonPressed", &WasSecondaryMouseButtonPressedForNyx<AppBaseT>)
             .PointerMethod("GetFontBackend", &GetFontBackendForNyx<AppBaseT>, FontBackendDescriptor)
             .Method("SetTextInputActive", static_cast<void (AppBaseT::*)(bool)>(&AppBaseT::SetTextInputActive))
             .Method("SetRootWidget", &SetRootWidgetFromNyx<AppBaseT>)
