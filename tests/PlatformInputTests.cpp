@@ -9,6 +9,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -175,11 +176,36 @@ void TestAFocusedTextInputKeepsKeysFromAHoveredViewport() {
            "a press on the viewport takes focus from the text input, and its keys reach the viewport");
 }
 
+
+void TestAKeyEventHandlerGetsThePressAFocusedFieldLeft() {
+    Penumbra::Widgets::FocusState Focus;
+    Penumbra::Widgets::Box        Root;
+    auto                          OwnedField = std::make_unique<Penumbra::Widgets::TextInput>();
+    Penumbra::Widgets::TextInput* Field      = OwnedField.get();
+    Field->Focus = &Focus;
+    Field->Text  = "ab";
+    Root.AddChild(std::move(OwnedField));
+    Focus.Focused = Field;
+    std::vector<KeyEvent> Delivered;
+    Root.OnKeyEvent = [&Delivered](const KeyEvent& Event) { Delivered.push_back(Event); };
+    Root.Arrange({0.0f, 0.0f, 200.0f, 100.0f});
+
+    Penumbra::Platform::Modifiers Control;
+    Control.Ctrl     = true;
+    Control.Shortcut = true;
+    InputState Input;
+    Input.KeysPressedThisFrame = {Key::Left, Key::Left};
+    Input.KeyEvents            = {KeyEvent{Key::Left, true, false, Control}, KeyEvent{Key::Left, true, false, {}}};
+    Root.UpdateInteractionState(Input);
+    Expect(Delivered.size() == 1 && Delivered[0].ModifierState.Ctrl,
+           "the field takes the plain Left it moves the caret with, and the handler gets the Ctrl+Left it left");
+}
 } // namespace
 
 void RunPlatformInputTests() {
     TestTypedTextAndEditingKeysApplyInTheOrderTheyArrived();
     TestAFocusedTextInputKeepsKeysFromAHoveredViewport();
+    TestAKeyEventHandlerGetsThePressAFocusedFieldLeft();
 
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
     PlatformWindow Window;
