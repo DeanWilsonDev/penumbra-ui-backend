@@ -4,6 +4,7 @@
 #include "Penumbra/Platform/PlatformWindow.h"
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/FocusState.h"
+#include "Penumbra/Widgets/OverlayHost.h"
 #include "Penumbra/Widgets/TextInput.h"
 
 #include <SDL3/SDL.h>
@@ -97,17 +98,24 @@ void TestShortcutSelectAllThenTypingInOneFrameReplacesTheText(PlatformWindow& Wi
     InputState Input;
     Window.PumpEventsAndBuildInput(Input);
 
-    PushKey(SdlWindow, SDLK_LCTRL, true, SDL_KMOD_LCTRL);
-    PushKey(SdlWindow, SDLK_A, true, SDL_KMOD_LCTRL);
-    PushKey(SdlWindow, SDLK_A, false, SDL_KMOD_LCTRL);
-    PushKey(SdlWindow, SDLK_LCTRL, false, SDL_KMOD_NONE);
+#if defined(__APPLE__)
+    const SDL_Keycode ShortcutKey      = SDLK_LGUI;
+    const SDL_Keymod  ShortcutModifier = SDL_KMOD_LGUI;
+#else
+    const SDL_Keycode ShortcutKey      = SDLK_LCTRL;
+    const SDL_Keymod  ShortcutModifier = SDL_KMOD_LCTRL;
+#endif
+    PushKey(SdlWindow, ShortcutKey, true, ShortcutModifier);
+    PushKey(SdlWindow, SDLK_A, true, ShortcutModifier);
+    PushKey(SdlWindow, SDLK_A, false, ShortcutModifier);
+    PushKey(SdlWindow, ShortcutKey, false, SDL_KMOD_NONE);
     PushKey(SdlWindow, SDLK_4, true, SDL_KMOD_NONE);
     PushTypedText(SdlWindow, "4");
     PushKey(SdlWindow, SDLK_4, false, SDL_KMOD_NONE);
     Window.PumpEventsAndBuildInput(Input);
     Field.UpdateInteractionState(Input);
     Expect(Field.Text == "4",
-           "Ctrl+A then a typed key inside one frame selects all and replaces it (got \"" + Field.Text + "\")");
+           "the select-all shortcut then a typed key inside one frame selects all and replaces it (got \"" + Field.Text + "\")");
 }
 
 void TestTypedTextAndEditingKeysApplyInTheOrderTheyArrived() {
@@ -133,11 +141,10 @@ void TestTypedTextAndEditingKeysApplyInTheOrderTheyArrived() {
 class KeyRecordingViewportRenderer final : public Umbra::IViewportRenderer {
 public:
     std::vector<std::string> KeysDown;
+    std::vector<std::string> KeysUp;
     std::optional<Umbra::ViewportFrame> Render(std::uint32_t, std::uint32_t) override { return std::nullopt; }
     bool Key(std::string_view KeyName, bool Down, const Umbra::ViewportModifiers&) override {
-        if (Down) {
-            KeysDown.emplace_back(KeyName);
-        }
+        (Down ? KeysDown : KeysUp).emplace_back(KeyName);
         return true;
     }
 };
@@ -177,6 +184,32 @@ void TestAFocusedTextInputKeepsKeysFromAHoveredViewport() {
 }
 
 
+void TestAKeyReleasedDuringAViewportDragUnderAnOverlayReachesTheViewport() {
+    KeyRecordingViewportRenderer          Renderer;
+    auto                                  OwnedViewport = std::make_unique<PenumbraUiBackend::ViewportHostWidget>(&Renderer);
+    PenumbraUiBackend::ViewportHostWidget* Viewport     = OwnedViewport.get();
+    Penumbra::Widgets::OverlayHost        Host;
+    Host.SetRoot(std::move(OwnedViewport));
+    Host.Arrange({0.0f, 0.0f, 200.0f, 100.0f});
+
+    InputState DragStart = HoverWithKey(Key::W);
+    DragStart.MouseButtonPressedThisFrame[1] = true;
+    DragStart.MouseButtonDown[1]             = true;
+    Host.UpdateInteractionState(DragStart);
+
+    Host.ShowOverlay(std::make_unique<Penumbra::Widgets::Box>(), Penumbra::Rect{150.0f, 80.0f, 20.0f, 10.0f}, false);
+    InputState UnderOverlay;
+    UnderOverlay.MousePosition      = {50.0f, 50.0f};
+    UnderOverlay.MouseButtonDown[1] = true;
+    UnderOverlay.KeysPressedThisFrame = {Key::E};
+    UnderOverlay.KeyEvents = {KeyEvent{Key::W, false, false, {}}, KeyEvent{Key::E, true, false, {}}};
+    Host.UpdateInteractionState(UnderOverlay);
+
+    Expect(Viewport != nullptr && Renderer.KeysUp == std::vector<std::string>{"w"} &&
+               Renderer.KeysDown == std::vector<std::string>{"w"},
+           "a key released while an overlay is open reaches the viewport dragging beneath it, and a new press doesn't");
+}
+
 void TestAKeyEventHandlerGetsThePressAFocusedFieldLeft() {
     Penumbra::Widgets::FocusState Focus;
     Penumbra::Widgets::Box        Root;
@@ -206,6 +239,7 @@ void RunPlatformInputTests() {
     TestTypedTextAndEditingKeysApplyInTheOrderTheyArrived();
     TestAFocusedTextInputKeepsKeysFromAHoveredViewport();
     TestAKeyEventHandlerGetsThePressAFocusedFieldLeft();
+    TestAKeyReleasedDuringAViewportDragUnderAnOverlayReachesTheViewport();
 
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
     PlatformWindow Window;
