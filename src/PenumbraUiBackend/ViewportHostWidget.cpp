@@ -24,7 +24,14 @@ ViewportHostWidget::ViewportHostWidget(Umbra::IViewportRenderer* Renderer) : Ren
     Style.FlexGrow = 1.0f;
 }
 
+bool ViewportHostWidget::AnotherWidgetHasFocus() const {
+    return Focus != nullptr && Focus->Focused != nullptr && Focus->Focused != this;
+}
+
 ViewportHostWidget::~ViewportHostWidget() {
+    if (Focus != nullptr && Focus->Focused == this) {
+        Focus->Focused = nullptr;
+    }
     if (Texture_ != nullptr) {
         SDL_DestroyTexture(Texture_);
     }
@@ -58,6 +65,13 @@ bool ViewportHostWidget::UpdateInteractionState(const Penumbra::Platform::InputS
         Renderer_->HoverChanged(PointerIsOver);
         PointerWasOver_ = PointerIsOver;
     }
+    if (PointerIsOver && Focus != nullptr) {
+        for (const bool Pressed : Input.MouseButtonPressedThisFrame) {
+            if (Pressed) {
+                Focus->Focused = this;
+            }
+        }
+    }
     if (PointerIsOver || DragUnderway) {
         ForwardPointer(Input, Content, PointerIsOver);
         ForwardKeys(Input);
@@ -90,6 +104,9 @@ void ViewportHostWidget::ForwardPointer(const Penumbra::Platform::InputState& In
 void ViewportHostWidget::ForwardKeys(const Penumbra::Platform::InputState& Input) {
     for (const Penumbra::Platform::KeyEvent& Event : Input.KeyEvents) {
         if (Event.Code == Penumbra::Platform::Key::Unknown || Event.Repeat) {
+            continue;
+        }
+        if (Event.Down && AnotherWidgetHasFocus()) {
             continue;
         }
         const bool Used = Renderer_->Key(Penumbra::Platform::KeyName(Event.Code), Event.Down,

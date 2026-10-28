@@ -111,7 +111,8 @@ add_executable(penumbra_ui_backend_tests
     tests/ChartTests.cpp
     tests/TextAreaSpanTests.cpp
     tests/TextSelectionTests.cpp
-    tests/ChaosApplicationHostTests.cpp)
+    tests/ChaosApplicationHostTests.cpp
+    tests/PlatformInputTests.cpp)
 
 target_link_libraries(penumbra_ui_backend_tests PRIVATE penumbra_ui_backend penumbra_ui_backend_cosmos
                       penumbra_ui_backend_host)

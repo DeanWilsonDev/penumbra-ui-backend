@@ -7,6 +7,7 @@
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Label.h"
 #include "Penumbra/Widgets/OverlayHost.h"
+#include "Penumbra/Widgets/TextInput.h"
 
 #include <cstdio>
 #include <string>
@@ -249,6 +250,83 @@ void TestOutsideDismissCanSynchronouslyReconcilePortalWithNestedSlots() {
            "OnDismiss may synchronously reconcile away the Portal after nested Slot owners are released");
 }
 
+
+struct InspectorRowState {
+    std::string Key;
+    std::string Text;
+};
+
+Component MakeKeyedInput(const InspectorRowState& Row) {
+    ChaosProps Props;
+    Props["text"] = ChaosPropValue{Row.Text};
+    Component Input(ChaosElementTag::Input, Props, {}, nullptr);
+    Input.Key = ChaosPropValue{Row.Key};
+    return Input;
+}
+
+Penumbra::Widgets::TextInput* SlottedInput(Box& RootBox) {
+    if (RootBox.Children.empty()) {
+        return nullptr;
+    }
+    auto* Row = dynamic_cast<Box*>(RootBox.Children[0].get());
+    if (Row == nullptr || Row->Children.empty()) {
+        return nullptr;
+    }
+    return dynamic_cast<Penumbra::Widgets::TextInput*>(Row->Children[0].get());
+}
+
+void TestSlotUpdatesAnUnfocusedInputsTextInPlace() {
+    Penumbra::Widgets::FocusState Focus;
+    BuildContext                  Context;
+    Context.Focus = &Focus;
+    const chaos::MountFn Mount = MakeMountFn(Context);
+
+    chaos::Signal<InspectorRowState> Selected = InspectorRowState{"entity-1", "Alpha"};
+    Component RootNode = MakeFrame({MakeSlot(Chaos::MakeSlotCallable(
+        [&]() -> Component { return MakeFrame({MakeKeyedInput(Selected.get())}); }))});
+    std::unique_ptr<Umbra::IWidget> Root = Mount(RootNode);
+    auto* RootBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Root.get())->RawWidget());
+    auto  Slots   = chaos::ResolveSlots(*Root, RootNode, Mount);
+
+    Penumbra::Widgets::TextInput* Before = SlottedInput(*RootBox);
+    Expect(Before != nullptr && Before->Text == "Alpha", "a slot mounts a keyed <input> with its text");
+
+    Selected.set(InspectorRowState{"entity-1", "Alpha 2"});
+    chaos::Tick();
+    Penumbra::Widgets::TextInput* After = SlottedInput(*RootBox);
+    Expect(After == Before && After != nullptr && After->Text == "Alpha 2",
+           "a new text prop on an unfocused <input> with the same key updates the same TextInput");
+}
+
+void TestSlotRemountsAKeyedInputWhenItsKeyChanges() {
+    Penumbra::Widgets::FocusState Focus;
+    BuildContext                  Context;
+    Context.Focus = &Focus;
+    const chaos::MountFn Mount = MakeMountFn(Context);
+
+    chaos::Signal<InspectorRowState> Selected = InspectorRowState{"entity-1", "Alpha"};
+    Component RootNode = MakeFrame({MakeSlot(Chaos::MakeSlotCallable(
+        [&]() -> Component { return MakeFrame({MakeKeyedInput(Selected.get())}); }))});
+    std::unique_ptr<Umbra::IWidget> Root = Mount(RootNode);
+    auto* RootBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Root.get())->RawWidget());
+    auto  Slots   = chaos::ResolveSlots(*Root, RootNode, Mount);
+
+    Penumbra::Widgets::TextInput* Before = SlottedInput(*RootBox);
+    if (Before == nullptr) {
+        Expect(false, "a slot mounts a keyed <input>");
+        return;
+    }
+    Focus.Focused = Before;
+    Before->UpdateInteractionState(Penumbra::Platform::InputState{});
+    Before->PreferredWidthLogical = 321.0f;
+
+    Selected.set(InspectorRowState{"entity-2", "Beta"});
+    chaos::Tick();
+    Penumbra::Widgets::TextInput* After = SlottedInput(*RootBox);
+    Expect(After != nullptr && After->PreferredWidthLogical != 321.0f && After->Text == "Beta",
+           "changing a keyed <input>'s key inside a slot remounts it with the new text, even while the old one had focus");
+    Expect(Focus.Focused != Before, "the remounted input's predecessor no longer holds focus");
+}
 } // namespace
 
 void RunSlotWiringTests() {
@@ -259,4 +337,6 @@ void RunSlotWiringTests() {
     TestMatchedPortalUpdatesPlacementAndChildInPlace();
     TestPortalSurfaceTracksAKeyedChildRemount();
     TestOutsideDismissCanSynchronouslyReconcilePortalWithNestedSlots();
+    TestSlotUpdatesAnUnfocusedInputsTextInPlace();
+    TestSlotRemountsAKeyedInputWhenItsKeyChanges();
 }

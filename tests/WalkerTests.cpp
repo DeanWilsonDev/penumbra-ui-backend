@@ -964,6 +964,7 @@ void RunChartTests();
 void RunTextAreaSpanTests();
 void RunTextSelectionTests();
 void RunChaosApplicationHostTests();
+void RunPlatformInputTests();
 
 int main() {
     RunNyxApplicationBridgeTests();
@@ -982,6 +983,7 @@ int main() {
     RunTextAreaSpanTests();
     RunTextSelectionTests();
     RunChaosApplicationHostTests();
+    RunPlatformInputTests();
 
     std::printf("\n%d failure(s)\n", Failures);
     return Failures == 0 ? 0 : 1;
