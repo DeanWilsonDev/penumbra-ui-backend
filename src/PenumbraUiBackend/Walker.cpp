@@ -755,6 +755,7 @@ std::unique_ptr<WidgetBase> BuildViewport(const Component& Node, const BuildCont
         }
     }
     auto Built = std::make_unique<ViewportHostWidget>(Renderer);
+    Built->Focus = Context.Focus;
     ApplySharedPropsToWidget(*Built, Node.Props);
     return Built;
 }
