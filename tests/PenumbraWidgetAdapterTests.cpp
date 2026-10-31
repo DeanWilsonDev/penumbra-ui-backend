@@ -1,8 +1,8 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "Penumbra/Widgets/Checkbox.h"
 
-#include "Chaos/Reconciler.h"
-#include "Chaos/Signal.h"
+#include "chaos/Reconciler.h"
+#include "chaos/Signal.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"

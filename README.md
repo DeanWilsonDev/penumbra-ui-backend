@@ -98,7 +98,7 @@ real Penumbra widgets under AddressSanitizer with zero errors after the bump.
 
 **`<Slot>` is now wired in, for both callable shapes**: `BuildWidgetTree` treats a `<Slot>` child
 exactly like `None` during the static build (contributes nothing); a new `chaos::ResolveSlots()`
-(`chaos`'s `include/Chaos/SlotResolution.h`) then walks the just-built tree and the source
+(`chaos`'s `include/chaos/SlotResolution.h`) then walks the just-built tree and the source
 `Component` tree in lockstep, and for each `<Slot>` found, attaches a `SlotState` to its
 exact position and performs its initial mount. A `SlotSiblingGroup` shared by every `<Slot>`
 sibling under the same static parent recomputes each slot's absolute position fresh on every

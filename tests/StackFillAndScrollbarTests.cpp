@@ -1,7 +1,7 @@
 #include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Cosmos/Parser.h"
+#include "cosmos/Parser.h"
 
 #include "Penumbra/Platform/InputState.h"
 #include "Penumbra/Widgets/Box.h"

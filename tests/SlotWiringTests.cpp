@@ -1,8 +1,8 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
-#include "Chaos/Signal.h"
-#include "Chaos/Reconciler.h"
-#include "Chaos/SlotResolution.h"
+#include "chaos/Signal.h"
+#include "chaos/Reconciler.h"
+#include "chaos/SlotResolution.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/Label.h"

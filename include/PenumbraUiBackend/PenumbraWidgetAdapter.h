@@ -2,10 +2,10 @@
 
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Chaos/SlotRuntime.h"
+#include "chaos/SlotRuntime.h"
 #include "Umbra/IWidget.h"
 
-#include "Cosmos/ResolvedStyle.h"
+#include "cosmos/ResolvedStyle.h"
 
 #include "Penumbra/Backends/IImageBackend.h"
 #include "Penumbra/Widgets/TextArea.h"

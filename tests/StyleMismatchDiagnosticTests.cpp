@@ -7,7 +7,7 @@
 // counters -- the whole point of the fix is a human-visible signal.
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Cosmos/Parser.h"
+#include "cosmos/Parser.h"
 
 #include <cstdio>
 #include <fcntl.h>

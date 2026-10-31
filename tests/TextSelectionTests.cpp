@@ -1,9 +1,9 @@
 #include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Chaos/Component.h"
-#include "Cosmos/Parser.h"
-#include "Cosmos/Resolver.h"
+#include "chaos/Component.h"
+#include "cosmos/Parser.h"
+#include "cosmos/Resolver.h"
 
 #include "Penumbra/Platform/IClipboard.h"
 #include "Penumbra/Platform/InputState.h"

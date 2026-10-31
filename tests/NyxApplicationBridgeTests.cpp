@@ -1,8 +1,8 @@
 #include "PenumbraUiBackend/ChaosApplication.h"
 #include "PenumbraUiBackend/NyxApplicationBridge.h"
 
-#include "Chaos/ChaosConfig.h"
-#include "Chaos/ChaosNyxDriver.h"
+#include "chaos/ChaosConfig.h"
+#include "chaos/ChaosNyxDriver.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Widgets/Box.h"

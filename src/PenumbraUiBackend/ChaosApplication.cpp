@@ -3,11 +3,11 @@
 #include "PenumbraUiBackend/Cosmos/StylesheetLoader.h"
 #include "PenumbraUiBackend/Portal.h"
 
-#include "Chaos/Diagnostics/DiagnosticSink.h"
-#include "Chaos/Diagnostics/RenderText.h"
-#include "Chaos/ImportResolver.h"
-#include "Chaos/SlotResolution.h"
-#include "Chaos/SlotRuntime.h"
+#include "chaos/Diagnostics/DiagnosticSink.h"
+#include "chaos/Diagnostics/RenderText.h"
+#include "chaos/ImportResolver.h"
+#include "chaos/SlotResolution.h"
+#include "chaos/SlotRuntime.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include <SDL3/SDL.h>

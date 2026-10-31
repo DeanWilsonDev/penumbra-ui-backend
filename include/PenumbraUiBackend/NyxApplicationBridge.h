@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Chaos/ChaosConfig.h"
-#include "Chaos/ChaosNyxDriver.h"
+#include "chaos/ChaosConfig.h"
+#include "chaos/ChaosNyxDriver.h"
 
 #include "Penumbra/Application.h"
 
