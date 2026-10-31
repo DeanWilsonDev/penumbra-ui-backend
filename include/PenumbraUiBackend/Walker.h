@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Cosmos/Resolver.h"
+#include "cosmos/Resolver.h"
 #include "PenumbraUiBackend/Cosmos/StyleApplier.h"
 
-#include "Chaos/Component.h"
-#include "Chaos/ChaosNyxDriver.h"
+#include "chaos/Component.h"
+#include "chaos/ChaosNyxDriver.h"
 #include "Penumbra/Backends/IIconBackend.h"
 #include "Penumbra/Backends/IImageBackend.h"
 #include "Penumbra/LifecycleRegistry.h"

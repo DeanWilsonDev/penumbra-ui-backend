@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Cosmos/Resolver.h"
-#include "Cosmos/ResolvedStyle.h"
+#include "cosmos/Resolver.h"
+#include "cosmos/ResolvedStyle.h"
 
 #include "Penumbra/Widgets/TextArea.h"
 #include "PenumbraUiBackend/Cosmos/StyleApplier.h"

@@ -49,7 +49,7 @@ void TestMissingFileReturnsAnEmptyStylesheet() {
 
 void TestFileWithParseErrorsStillReturnsWithoutCrashing() {
     // Duplicate-selector rule blocks are one of Parser's own diagnosed
-    // syntax errors (Cosmos/Parser.h) -- Parser::Parse() hands back the
+    // syntax errors (cosmos/Parser.h) -- Parser::Parse() hands back the
     // (possibly partial) tree it built regardless, so a caller can report
     // every error at once; LoadStylesheetFromFile mirrors that, it doesn't
     // discard the Sheet just because Errors is non-empty.

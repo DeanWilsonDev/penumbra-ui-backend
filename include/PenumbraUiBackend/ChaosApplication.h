@@ -4,9 +4,9 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Chaos/Component.h"
-#include "Chaos/ChaosNyxDriver.h"
-#include "Chaos/SlotRuntime.h"
+#include "chaos/Component.h"
+#include "chaos/ChaosNyxDriver.h"
+#include "chaos/SlotRuntime.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"

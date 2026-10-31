@@ -3,12 +3,12 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Chaos/ChaosConfig.h"
-#include "Chaos/ChaosNyxDriver.h"
-#include "Chaos/Reconciler.h"
-#include "Chaos/Signal.h"
-#include "Chaos/SlotResolution.h"
-#include "Cosmos/Parser.h"
+#include "chaos/ChaosConfig.h"
+#include "chaos/ChaosNyxDriver.h"
+#include "chaos/Reconciler.h"
+#include "chaos/Signal.h"
+#include "chaos/SlotResolution.h"
+#include "cosmos/Parser.h"
 
 #include "Penumbra/Render/Renderer.h"
 #include "Penumbra/Widgets/LayoutPass.h"

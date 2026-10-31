@@ -8,9 +8,9 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Portal.h"
 
-#include "Chaos/ComponentInstance.h"
-#include "Chaos/ChaosNyxDriver.h"
-#include "Chaos/Reconciler.h"
+#include "chaos/ComponentInstance.h"
+#include "chaos/ChaosNyxDriver.h"
+#include "chaos/Reconciler.h"
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/IconWidget.h"
@@ -95,7 +95,7 @@ bool ResolvedStyleIsEmpty(const ::Cosmos::ResolvedStyle& Style) {
 }
 
 // `Node.Ref` mirrors `Node.Key` exactly (both `std::optional<ChaosPropValue>`,
-// `Chaos/Component.h`). Returns nullopt for an unset ref or (defensively) a non-string
+// `chaos/Component.h`). Returns nullopt for an unset ref or (defensively) a non-string
 // value.
 std::optional<std::string> GetRefName(const Component& Node) {
     if (!Node.Ref.has_value()) {
@@ -405,7 +405,7 @@ private:
 // down" hook, unused anywhere else in this repo -- fires from `~WidgetBase()`, giving
 // exactly the unmount timing needed without requiring `ComponentInstance` to grow a
 // destructor or a registry reference of its own (Chaos's own decision, see
-// `Chaos/ComponentInstance.h`'s `Lifecycle` field comment: passive and non-owning,
+// `chaos/ComponentInstance.h`'s `Lifecycle` field comment: passive and non-owning,
 // deliberately no self-unregister-at-destruction). The bridge itself needs no separate
 // storage anywhere -- the OnDestroyed lambda's own capture owns it for exactly as long
 // as it needs to live, freeing it the instant UnregisterLifecycle has been called.
@@ -722,7 +722,7 @@ std::unique_ptr<WidgetBase> BuildTextArea(const Component& Node, const BuildCont
 
 // <Native> (docs/native_split_backend_wiring_gap.md) -- an opaque escape hatch whose
 // `build` prop already returns a live Umbra::IWidget handle, not more Component IR to
-// walk (Component::NativeBuilder, `external/chaos/include/Chaos/Component.h`). Every real
+// walk (Component::NativeBuilder, `external/chaos/include/chaos/Component.h`). Every real
 // Umbra::IWidget in this stack is a PenumbraWidget -- this file and
 // PenumbraWidgetAdapter.cpp are the only two places one is ever constructed -- so this
 // downcasts to reclaim the real WidgetBase ownership via DetachOwnership(), the same

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Cosmos/ResolvedStyle.h"
+#include "cosmos/ResolvedStyle.h"
 
 #include "Penumbra/Render/IFontBackend.h"
 #include "Penumbra/Widgets/TextArea.h"

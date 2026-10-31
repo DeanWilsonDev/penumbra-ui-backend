@@ -14,9 +14,9 @@
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 #include "PenumbraUiBackend/Walker.h"
 
-#include "Cosmos/Parser.h"
+#include "cosmos/Parser.h"
 
-#include "Chaos/Component.h"
+#include "chaos/Component.h"
 
 #include "Penumbra/Platform/PlatformWindow.h"
 #include "Penumbra/Render/Renderer.h"

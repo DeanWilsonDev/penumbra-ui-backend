@@ -1,6 +1,6 @@
 #include "PenumbraUiBackend/ChaosApplicationHost.h"
 
-#include "Chaos/ChaosConfig.h"
+#include "chaos/ChaosConfig.h"
 
 #include <diagnostics/render-text.hpp>
 #include <host/directory-binding.hpp>

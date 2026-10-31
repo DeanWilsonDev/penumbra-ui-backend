@@ -1,6 +1,6 @@
 #include "PenumbraUiBackend/Cosmos/StylesheetLoader.h"
 
-#include "Cosmos/Parser.h"
+#include "cosmos/Parser.h"
 
 #include <cstdio>
 #include <filesystem>

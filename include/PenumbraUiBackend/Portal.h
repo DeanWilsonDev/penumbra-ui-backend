@@ -2,7 +2,7 @@
 
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
-#include "Chaos/Portal.h"
+#include "chaos/Portal.h"
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/OverlayHost.h"
 

@@ -2,8 +2,8 @@
 
 #include "PenumbraUiBackend/PenumbraWidgetAdapter.h"
 
-#include "Chaos/ComponentInstance.h"
-#include "Chaos/ChaosNyxDriver.h"
+#include "chaos/ComponentInstance.h"
+#include "chaos/ChaosNyxDriver.h"
 
 #include "Penumbra/Application.h"
 #include "Penumbra/Backends/IIconBackend.h"
@@ -700,7 +700,7 @@ void TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost() {
 void TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle() {
     // A plain nested <ChildComponent .../> (no <Slot>) still gets its own
     // Component::Instance from MountComponentInstance, inline in the same tree --
-    // confirmed by reading Chaos/Component.h directly. The registration check has to
+    // confirmed by reading chaos/Component.h directly. The registration check has to
     // happen at every node BuildWidgetTreeInternal visits, not just the outer Node
     // BuildWidgetTree itself was called with.
     FakeLifecycle OuterLifecycle;
