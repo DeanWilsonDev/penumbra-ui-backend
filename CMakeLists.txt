@@ -80,15 +80,15 @@ target_link_libraries(penumbra_ui_backend PUBLIC chaos penumbra penumbra_ui_back
 
 # ---------------------------------------------------------------------------
 # The application host: everything an app written as one Nyx Application subclass needs from
-# C++ (the bridge, nyx-proto's JSON, file and directory bindings, appInstance(), icons and the
-# font), so the app's own C++ is a main() and its app-specific host functions.
+# C++ (the bridge, appInstance(), icons and the font), so the app's own C++ is a main() and its
+# app-specific host functions. Nyx's standard library comes with every runtime.
 # ---------------------------------------------------------------------------
 add_library(penumbra_ui_backend_host STATIC
     src/PenumbraUiBackend/ChaosApplicationHost.cpp)
 
 target_include_directories(penumbra_ui_backend_host PUBLIC include)
 target_compile_features(penumbra_ui_backend_host PUBLIC cxx_std_26)
-target_link_libraries(penumbra_ui_backend_host PUBLIC penumbra_ui_backend penumbra_icons nyx-json)
+target_link_libraries(penumbra_ui_backend_host PUBLIC penumbra_ui_backend penumbra_icons)
 
 # ---------------------------------------------------------------------------
 # Tests — plain hand-rolled Expect()/[PASS]/[FAIL] executable, matching

@@ -62,10 +62,11 @@ void TestHostLoadsAnApplicationThatUsesItsBindingsAndAnAppFunction() {
     Project.Write("ui/note.txt", "from a file");
     Project.Write("ui/HostedApplication.nyx",
                   "Greeting :: import Greeting;\n"
+                  "File :: import standard:::File;\n"
                   "HostedApplication :: class : Application {\n"
                   "public:\n"
                   "    Greet :: () -> string { return Greeting:::Text(appName()); }\n"
-                  "    Note :: (path: string) -> string { return readTextFile(path); }\n"
+                  "    Note :: (path: string) -> string { return File:::readText(path); }\n"
                   "    Self :: () -> bool {\n"
                   "        if app := appInstance() as HostedApplication {\n"
                   "            return true;\n"
