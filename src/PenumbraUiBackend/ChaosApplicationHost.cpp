@@ -3,8 +3,6 @@
 #include "chaos/ChaosConfig.h"
 
 #include <diagnostics/render-text.hpp>
-#include <host/directory-binding.hpp>
-#include <host/file-binding.hpp>
 #include <runtime/value.hpp>
 
 #include <cstdio>
@@ -27,14 +25,11 @@ Chaos::ChaosConfig HostChaosConfig() {
 ChaosApplicationHost::ChaosApplicationHost(ChaosApplicationHostOptions Options)
     : Options_(std::move(Options)),
       Bridge_(HostChaosConfig(), Options_.UiDirectory.string()),
-      Json_(Bridge_.Runtime()),
       Icons_(Options_.IconStrokeThicknessLogical, Options_.IconColor) {
     nyx::host::NyxRuntime& HostRuntime = Bridge_.Runtime();
     for (const std::filesystem::path& Directory : Options_.NyxSourceDirectories) {
         HostRuntime.AddImportSearchPath(Directory);
     }
-    nyx::host::RegisterFileBinding(HostRuntime);
-    nyx::host::RegisterDirectoryBinding(HostRuntime);
     HostRuntime.RegisterFunction("appInstance", "() -> Application", [this](std::vector<nyx::runtime::Value>) {
         return Bridge_.GetApplicationInstanceValue(*App_);
     });

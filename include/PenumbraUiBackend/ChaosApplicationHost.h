@@ -6,7 +6,6 @@
 
 #include "Penumbra/Render/Color.h"
 
-#include <host/json-binding.hpp>
 #include <host/nyx-runtime.hpp>
 
 #include <filesystem>
@@ -26,9 +25,6 @@ struct ChaosApplicationHostOptions {
     Penumbra::Render::Color            IconColor{238, 238, 243, 255};
 };
 
-// Everything an app built as one Nyx Application subclass needs from C++: the Chaos bridge
-// over UiDirectory, nyx-proto's JSON, file and directory bindings, `appInstance()`, the icon
-// backend and the font. An app registers its own host functions on Runtime() before Load().
 class ChaosApplicationHost {
 public:
     explicit ChaosApplicationHost(ChaosApplicationHostOptions Options);
@@ -53,7 +49,6 @@ public:
 private:
     ChaosApplicationHostOptions        Options_;
     ChaosApplicationBridge             Bridge_;
-    nyx::host::JsonBinding             Json_;
     PenumbraIcons::StandardIconBackend Icons_;
     ChaosApplication*                  App_ = nullptr;
 };

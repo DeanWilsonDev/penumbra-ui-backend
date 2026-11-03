@@ -88,7 +88,7 @@ add_library(penumbra_ui_backend_host STATIC
 
 target_include_directories(penumbra_ui_backend_host PUBLIC include)
 target_compile_features(penumbra_ui_backend_host PUBLIC cxx_std_26)
-target_link_libraries(penumbra_ui_backend_host PUBLIC penumbra_ui_backend penumbra_icons nyx-json)
+target_link_libraries(penumbra_ui_backend_host PUBLIC penumbra_ui_backend penumbra_icons)
 
 # ---------------------------------------------------------------------------
 # Tests — plain hand-rolled Expect()/[PASS]/[FAIL] executable, matching
