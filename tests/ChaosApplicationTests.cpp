@@ -596,7 +596,7 @@ void TestRegisterInstanceForwardersDispatchesToACustomMethodByBareName() {
     Expect(Bridge.Runtime().Globals().count("Record") == 1, "RegisterInstanceForwarders registers a global named "
                                                              "after the forwarded method");
     auto Callable = std::get<std::shared_ptr<nyx::runtime::NyxCallable>>(Bridge.Runtime().Globals().at("Record").data);
-    std::get<std::function<nyx::runtime::Value(std::vector<nyx::runtime::Value>)>>(Callable->declaration)(
+    std::get<std::function<nyx::runtime::Value(std::vector<nyx::runtime::Value>&&)>>(Callable->declaration)(
         {nyx::host::ToValue(std::int32_t{7})});
     Expect(PreDispatchCalls == 1, "RegisterInstanceForwarders runs PreDispatch exactly once per call");
 
