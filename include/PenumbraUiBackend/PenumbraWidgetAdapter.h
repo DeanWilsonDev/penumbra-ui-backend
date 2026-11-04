@@ -3,7 +3,7 @@
 #include "PenumbraUiBackend/Walker.h"
 
 #include "chaos/SlotRuntime.h"
-#include "Umbra/IWidget.h"
+#include "Equinox/IWidget.h"
 
 #include "cosmos/ResolvedStyle.h"
 
@@ -22,7 +22,7 @@
 
 namespace PenumbraUiBackend {
 
-// Wraps a `Penumbra::Widgets::WidgetBase` to satisfy `Umbra::IWidget` — the bridge
+// Wraps a `Penumbra::Widgets::WidgetBase` to satisfy `Equinox::IWidget` — the bridge
 // Chaos's Stage 3 reconciler (`chaos::ReconcileWidget`/`ReconcileChildren`, in the `chaos`
 // repo) needs to update a real Penumbra widget tree without ever naming a Penumbra type
 // itself (docs/iris_stage3_implementation_decision.md's "What remains deliberately
@@ -42,7 +42,7 @@ namespace PenumbraUiBackend {
 // `PenumbraWidget*` stay a stable identity across reconciliation even though the *real*
 // Penumbra ownership underneath it moves between `Box::Children` and this wrapper as
 // children get inserted, removed, and reordered.
-class PenumbraWidget : public Umbra::IWidget {
+class PenumbraWidget : public Equinox::IWidget {
 public:
     // Takes ownership of a freshly-built widget — e.g. a whole subtree's root
     // (`WrapExistingTree` below), or any standalone widget nothing else has claimed.
@@ -58,12 +58,12 @@ public:
     // docs/iris_stage3_implementation_decision.md).
     std::unique_ptr<Penumbra::Widgets::WidgetBase> DetachOwnership();
 
-    void ApplyPropDiff(const Umbra::ChaosPropDiff& Diff) override;
+    void ApplyPropDiff(const Equinox::ChaosPropDiff& Diff) override;
 
     std::size_t                     GetChildCount() const override;
-    Umbra::IWidget*                 GetChildAt(std::size_t Index) const override;
-    void                             InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWidget> Child) override;
-    std::unique_ptr<Umbra::IWidget> RemoveChildAt(std::size_t Index) override;
+    Equinox::IWidget*                 GetChildAt(std::size_t Index) const override;
+    void                             InsertChildAt(std::size_t Index, std::unique_ptr<Equinox::IWidget> Child) override;
+    std::unique_ptr<Equinox::IWidget> RemoveChildAt(std::size_t Index) override;
 
     // `<Image>`'s `src` prop needs to re-decode through a real image backend/renderer
     // on change (loading was deliberately kept out of `ImageWidget`'s own `Builder`),
@@ -107,7 +107,7 @@ public:
     // mount root (built once per `WrapExistingTree` call, not duplicated onto every
     // wrapper) -- callable from any wrapper in the tree regardless, since this walks up
     // to the root via GetParent() first.
-    Umbra::IWidget* GetByRef(std::string_view Ref) const;
+    Equinox::IWidget* GetByRef(std::string_view Ref) const;
 
     // The `ref` this wrapper's widget was built with, if it was wrapped with a `RefMap`
     // that named it (empty otherwise), and a search of this wrapper and everything under
@@ -127,12 +127,12 @@ public:
     // `RawWidget()` returns, and everything reachable under it, changes.
     //
     // This is deliberately a plain method on the concrete class, not an override of any
-    // `Umbra::IWidget` virtual -- `Umbra::IWidget` (vendored via `external/chaos/libs/
-    // umbra-interfaces`, a different repo) has no such operation today, and adding one
+    // `Equinox::IWidget` virtual -- `Equinox::IWidget` (vendored via `external/chaos/libs/
+    // equinox-interfaces`, a different repo) has no such operation today, and adding one
     // there is exactly the cross-repo handoff-shape question this ask's own doc entry
     // flags as still open with Chaos's reconciler side. Calling this today means
     // going through a concrete `PenumbraWidget*` (e.g. one already obtained via
-    // `GetByRef`), not through the backend-agnostic `Umbra::IWidget*` interface a real
+    // `GetByRef`), not through the backend-agnostic `Equinox::IWidget*` interface a real
     // reconciler would actually be holding -- a real, load-bearing gap, not an oversight;
     // see this method's own .cpp comment and docs/next_steps.md for the full picture.
     //
@@ -269,7 +269,7 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<Penumbra::Widge
 // reconcile, so both read the props the same way: `labels`, `min`, `max`,
 // `orientation`, `centre`, `caption`, a series' `name` and `values`, a slice's `label`
 // and `value`. `stacked` and `showAxes` are read at mount only.
-void ApplyChartProps(Penumbra::Widgets::WidgetBase& Widget, const Umbra::ChaosPropDiff& Diff);
+void ApplyChartProps(Penumbra::Widgets::WidgetBase& Widget, const Equinox::ChaosPropDiff& Diff);
 
 std::vector<Penumbra::Widgets::TextAreaSpan> TextAreaSpansFromProps(const std::vector<float>&       Ranges,
                                                                      const std::vector<std::string>& Classes);

@@ -146,7 +146,7 @@ void TestASeriesFollowsItsValuesThroughTheReconciler() {
                        Series["values"] = ChaosPropValue(std::vector<float>({1.0F, Today.get()}));
                        return MakeNode(ChaosElementTag::Series, Series);
                    }))});
-    std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root  = Mount(RootNode);
     auto                            Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
     auto* Chart = dynamic_cast<BarChart*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
     if (Chart == nullptr) {

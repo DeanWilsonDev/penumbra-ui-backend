@@ -42,7 +42,7 @@ void ChaosApplication::Attach(Chaos::ChaosNyxDriver& Driver, std::string UiDir) 
     UiDir_                   = std::move(UiDir);
 }
 
-void ChaosApplication::RegisterViewportRenderer(const std::string& Name, Umbra::IViewportRenderer* Renderer) {
+void ChaosApplication::RegisterViewportRenderer(const std::string& Name, Equinox::IViewportRenderer* Renderer) {
     if (Renderer == nullptr) {
         ViewportRenderers_.erase(Name);
     } else {

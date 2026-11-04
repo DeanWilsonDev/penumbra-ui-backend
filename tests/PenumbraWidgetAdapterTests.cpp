@@ -57,7 +57,7 @@ void TestWrapExistingTreeMirrorsRealTreeStructure() {
     const Component Root = MakeFrame("parent", std::move(Inner));
 
     const chaos::MountFn Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Root);
 
     Expect(Wrapped != nullptr, "MakeMountFn produces a wrapper for a real subtree");
     Expect(Wrapped->GetChildCount() == 1, "the wrapper mirrors the real tree's one child");
@@ -72,10 +72,10 @@ void TestWrapExistingTreeMirrorsRealTreeStructure() {
 
 void TestApplyPropDiffReachesRealWidgetBaseFields() {
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("initial"));
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(MakeFrame("initial"));
 
     bool Pressed = false;
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.ClassName = "updated";
     Diff.OnPress = std::function<void()>([&Pressed]() { Pressed = true; });
     Wrapped->ApplyPropDiff(Diff);
@@ -91,10 +91,10 @@ void TestApplyPropDiffReachesRealWidgetBaseFields() {
 void TestApplyPropDiffOnTextChangeReachesRealTextInput() {
     const chaos::MountFn Mount = MakeMountFn(BuildContext{});
     const Component     InputNode(ChaosElementTag::Input, ChaosProps{}, {}, nullptr);
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(InputNode);
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(InputNode);
 
     std::string          LastValue;
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.OnTextChange = std::function<void(std::string)>([&LastValue](std::string NewText) {
         LastValue = std::move(NewText);
     });
@@ -112,10 +112,10 @@ void TestApplyPropDiffOnTextChangeReachesRealTextInput() {
 
 void TestApplyPropDiffOnKeyDownNamesPenumbrasKeysTheWebsWay() {
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("overlay"));
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(MakeFrame("overlay"));
 
     std::vector<std::string> Pressed;
-    Umbra::ChaosPropDiff     Diff;
+    Equinox::ChaosPropDiff     Diff;
     Diff.OnKeyDown = std::function<void(std::string)>([&Pressed](std::string Key) { Pressed.push_back(std::move(Key)); });
     Wrapped->ApplyPropDiff(Diff);
 
@@ -148,9 +148,9 @@ void TestApplyPropDiffOnKeyDownNamesPenumbrasKeysTheWebsWay() {
 
 void TestApplyPropDiffKeyUpHoverEndCheckedAndToggleReachTheWidgets() {
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("overlay"));
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(MakeFrame("overlay"));
     std::vector<std::string>         Fired;
-    Umbra::ChaosPropDiff             Diff;
+    Equinox::ChaosPropDiff             Diff;
     Diff.OnKeyUp    = std::function<void(std::string)>([&Fired](std::string Key) { Fired.push_back("up:" + Key); });
     Diff.OnHoverEnd = std::function<void()>([&Fired]() { Fired.push_back("hoverEnd"); });
     Wrapped->ApplyPropDiff(Diff);
@@ -167,10 +167,10 @@ void TestApplyPropDiffKeyUpHoverEndCheckedAndToggleReachTheWidgets() {
 
     ChaosProps CheckboxProps;
     CheckboxProps["checked"] = ChaosPropValue{false};
-    std::unique_ptr<Umbra::IWidget> WrappedCheckbox =
+    std::unique_ptr<Equinox::IWidget> WrappedCheckbox =
         Mount(Component(ChaosElementTag::Checkbox, CheckboxProps, {}, nullptr));
     bool                 Toggled = false;
-    Umbra::ChaosPropDiff CheckboxDiff;
+    Equinox::ChaosPropDiff CheckboxDiff;
     CheckboxDiff.Checked  = true;
     CheckboxDiff.OnToggle = std::function<void(bool)>([&Toggled](bool Value) { Toggled = Value; });
     WrappedCheckbox->ApplyPropDiff(CheckboxDiff);
@@ -187,8 +187,8 @@ void TestApplyPropDiffTextReachesAnUnfocusedTextInput() {
     const chaos::MountFn Mount = MakeMountFn(BuildContext{});
     ChaosProps           Props;
     Props["text"] = ChaosPropValue{std::string("before")};
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Component(ChaosElementTag::Input, Props, {}, nullptr));
-    Umbra::ChaosPropDiff            Diff;
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Component(ChaosElementTag::Input, Props, {}, nullptr));
+    Equinox::ChaosPropDiff            Diff;
     Diff.Text = std::string("after");
     Wrapped->ApplyPropDiff(Diff);
     auto* AsInput =
@@ -203,7 +203,7 @@ void TestApplyPropDiffTextWaitsForAFocusedTextInputToLoseFocus() {
     const chaos::MountFn Mount = MakeMountFn(Context);
     ChaosProps           Props;
     Props["text"] = ChaosPropValue{std::string("before")};
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Component(ChaosElementTag::Input, Props, {}, nullptr));
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Component(ChaosElementTag::Input, Props, {}, nullptr));
     auto* AsInput = dynamic_cast<TextInput*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
     if (AsInput == nullptr) {
         Expect(false, "an <input> builds a TextInput");
@@ -212,7 +212,7 @@ void TestApplyPropDiffTextWaitsForAFocusedTextInputToLoseFocus() {
     const Penumbra::Platform::InputState NoInput{};
     Focus.Focused = AsInput;
     AsInput->UpdateInteractionState(NoInput);
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.Text = std::string("after");
     Wrapped->ApplyPropDiff(Diff);
     Expect(AsInput->Text == "before", "a text diff leaves a focused TextInput's text alone");
@@ -230,7 +230,7 @@ void TestReconcilerChangesAReusedIconsGlyph() {
     };
 
     const Component Old = MakeIcon("bolt");
-    std::unique_ptr<Umbra::IWidget> Widget = Mount(Old);
+    std::unique_ptr<Equinox::IWidget> Widget = Mount(Old);
     auto* AsIcon = dynamic_cast<IconWidget*>(dynamic_cast<PenumbraWidget*>(Widget.get())->RawWidget());
     const IconWidget* OriginalIconAddress = AsIcon;
     Expect(AsIcon != nullptr && AsIcon->IconName == "bolt", "a mounted <Icon> starts with its icon prop's name");
@@ -247,7 +247,7 @@ void TestReconcilerUpdatesRealWidgetTreeInPlace() {
     const chaos::MountFn Mount = MakeMountFn(BuildContext{});
 
     const Component Old = MakeFrame("a", {}, ChaosPropValue(1));
-    std::unique_ptr<Umbra::IWidget> Widget = Mount(Old);
+    std::unique_ptr<Equinox::IWidget> Widget = Mount(Old);
     auto*                            AsBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Widget.get())->RawWidget());
     const Box*                       OriginalBoxAddress = AsBox;
 
@@ -264,7 +264,7 @@ void TestReconcilerAddsRealChildToRealParentBox() {
     const chaos::MountFn Mount = MakeMountFn(BuildContext{});
 
     const Component Old = MakeFrame("parent");
-    std::unique_ptr<Umbra::IWidget> Widget = Mount(Old);
+    std::unique_ptr<Equinox::IWidget> Widget = Mount(Old);
 
     std::vector<Component> NewChildren;
     NewChildren.push_back(MakeFrame("child"));
@@ -306,10 +306,10 @@ void TestGetByRefFindsARefTaggedDescendant() {
     const Component Root = MakeFrame("parent", std::move(Inner));
 
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Root);
 
     auto*            AsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
-    Umbra::IWidget*   Found = AsPenumbra != nullptr ? AsPenumbra->GetByRef("target") : nullptr;
+    Equinox::IWidget*   Found = AsPenumbra != nullptr ? AsPenumbra->GetByRef("target") : nullptr;
     Expect(Found != nullptr, "GetByRef finds the ref-tagged descendant");
 
     auto* FoundAsPenumbra = dynamic_cast<PenumbraWidget*>(Found);
@@ -321,7 +321,7 @@ void TestGetByRefFindsARefTaggedDescendant() {
 
 void TestGetByRefOnAnUnknownNameReturnsNull() {
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("root"));
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(MakeFrame("root"));
 
     auto* AsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
     Expect(AsPenumbra != nullptr && AsPenumbra->GetByRef("does-not-exist") == nullptr,
@@ -336,9 +336,9 @@ void TestGetByRefIsCallableFromANonRootWrapper() {
     const Component Root = MakeFrame("parent", std::move(Inner));
 
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Root);
 
-    Umbra::IWidget* Child = Wrapped->GetChildAt(0);
+    Equinox::IWidget* Child = Wrapped->GetChildAt(0);
     auto*            ChildAsPenumbra = dynamic_cast<PenumbraWidget*>(Child);
     Expect(ChildAsPenumbra != nullptr && ChildAsPenumbra->GetByRef("target") == Child,
            "GetByRef works from a non-root wrapper too -- it walks up to the mount root's own registry");
@@ -358,14 +358,14 @@ void TestRemoveThenInsertOnASplitPanelParentSwapsTheFirstPaneWithoutTouchingBoxC
     const Component Root(ChaosElementTag::Split, ChaosProps{}, std::move(Panes), nullptr);
 
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Root);
 
     auto* AsSplit = dynamic_cast<SplitPanel*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
     Expect(AsSplit != nullptr, "the root wraps a real SplitPanel");
 
     WidgetBase* SecondRaw = AsSplit != nullptr ? AsSplit->GetChildAt(1) : nullptr;
 
-    std::unique_ptr<Umbra::IWidget> Removed = Wrapped->RemoveChildAt(0);
+    std::unique_ptr<Equinox::IWidget> Removed = Wrapped->RemoveChildAt(0);
     Expect(Wrapped->GetChildCount() == 1, "the wrapper now reports one child");
     Expect(AsSplit != nullptr && AsSplit->GetChildCount() == 1,
            "the real SplitPanel also now reports one child -- the first pane was really cleared");
@@ -393,7 +393,7 @@ void TestReplaceRawWidgetOnABoxParentHandsBackTheOldWidgetIntact() {
     const Component Root = MakeFrame("parent", std::move(Inner));
 
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Root);
 
     auto* ChildWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(0));
     Expect(ChildWrapper != nullptr, "the child position wraps a real PenumbraWidget");
@@ -424,7 +424,7 @@ void TestReplaceRawWidgetOnASplitPanelParentSwapsTheFirstPane() {
     const Component Root(ChaosElementTag::Split, ChaosProps{}, std::move(Panes), nullptr);
 
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Root);
 
     auto* RootAsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
     auto* AsSplit = dynamic_cast<SplitPanel*>(RootAsPenumbra->RawWidget());
@@ -452,7 +452,7 @@ void TestReplaceRawWidgetOnASplitPanelParentSwapsTheSecondPane() {
     const Component Root(ChaosElementTag::Split, ChaosProps{}, std::move(Panes), nullptr);
 
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(Root);
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(Root);
 
     auto* AsSplit = dynamic_cast<SplitPanel*>(dynamic_cast<PenumbraWidget*>(Wrapped.get())->RawWidget());
     auto* SecondWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(1));
@@ -469,7 +469,7 @@ void TestReplaceRawWidgetOnASplitPanelParentSwapsTheSecondPane() {
 // The mount-root path -- no real parent container exists to thread through at all.
 void TestReplaceRawWidgetOnTheMountRootSwapsItsOwnWidget() {
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("root-old", {MakeFrame("stale-child")}));
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(MakeFrame("root-old", {MakeFrame("stale-child")}));
 
     auto*       AsPenumbra = dynamic_cast<PenumbraWidget*>(Wrapped.get());
     WidgetBase* OldRaw = AsPenumbra->RawWidget();
@@ -491,7 +491,7 @@ void TestReplaceRawWidgetOnTheMountRootSwapsItsOwnWidget() {
 // initial WrapExistingTree wrap already guarantees.
 void TestReplaceRawWidgetSeedsTagsAndRefsForTheNewSubtree() {
     const chaos::MountFn             Mount = MakeMountFn(BuildContext{});
-    std::unique_ptr<Umbra::IWidget> Wrapped = Mount(MakeFrame("parent", {MakeFrame("native-slot-old")}));
+    std::unique_ptr<Equinox::IWidget> Wrapped = Mount(MakeFrame("parent", {MakeFrame("native-slot-old")}));
 
     auto* SlotWrapper = dynamic_cast<PenumbraWidget*>(Wrapped->GetChildAt(0));
     Expect(SlotWrapper != nullptr, "the swap position wraps a real PenumbraWidget");
@@ -511,7 +511,7 @@ void TestReplaceRawWidgetSeedsTagsAndRefsForTheNewSubtree() {
     Expect(SlotWrapper->GetPrimitiveTag() == "Frame", "the swapped node's own primitive tag was seeded from Tags");
     Expect(SlotWrapper->GetChildCount() == 1, "the swapped node's own children were rebuilt from the new subtree");
 
-    Umbra::IWidget* Found = Wrapped->GetChildAt(0) != nullptr ? SlotWrapper->GetByRef("swapped-in") : nullptr;
+    Equinox::IWidget* Found = Wrapped->GetChildAt(0) != nullptr ? SlotWrapper->GetByRef("swapped-in") : nullptr;
     Expect(Found != nullptr, "the new subtree's ref-tagged descendant is reachable via GetByRef from the mount root");
     auto* FoundAsBox =
         Found != nullptr ? dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Found)->RawWidget()) : nullptr;

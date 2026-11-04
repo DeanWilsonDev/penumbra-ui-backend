@@ -97,7 +97,7 @@ public:
 
     // A `<viewport renderer="Name">` built after this call shows Renderer's frames. The
     // host owns the renderer and keeps it alive while any viewport names it.
-    void RegisterViewportRenderer(const std::string& Name, Umbra::IViewportRenderer* Renderer);
+    void RegisterViewportRenderer(const std::string& Name, Equinox::IViewportRenderer* Renderer);
     const ViewportRendererMap& ViewportRenderers() const { return ViewportRenderers_; }
 
     // Native file dialogs, asynchronous: the dialog opens at once and the choice arrives

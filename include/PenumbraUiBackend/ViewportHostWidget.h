@@ -2,7 +2,7 @@
 
 #include "Penumbra/Widgets/Box.h"
 #include "Penumbra/Widgets/FocusState.h"
-#include "Umbra/IViewportRenderer.h"
+#include "Equinox/IViewportRenderer.h"
 
 #include <SDL3/SDL.h>
 
@@ -12,7 +12,7 @@
 namespace PenumbraUiBackend {
 
 // The widget a `<viewport renderer="Name">` builds: a Box whose content is whatever the
-// host's Umbra::IViewportRenderer hands back each frame. Each draw asks the renderer for a
+// host's Equinox::IViewportRenderer hands back each frame. Each draw asks the renderer for a
 // frame at the content's size in device pixels, uploads it into a streaming texture and
 // draws that. Pointer input over the content, and a drag that started there, reaches the
 // renderer in viewport pixels; keys reach it while the pointer is over the content or a
@@ -21,13 +21,13 @@ namespace PenumbraUiBackend {
 // registered it with the ChaosApplication and owns it.
 class ViewportHostWidget : public Penumbra::Widgets::Box {
 public:
-    explicit ViewportHostWidget(Umbra::IViewportRenderer* Renderer);
+    explicit ViewportHostWidget(Equinox::IViewportRenderer* Renderer);
     ~ViewportHostWidget() override;
 
     ViewportHostWidget(const ViewportHostWidget&)            = delete;
     ViewportHostWidget& operator=(const ViewportHostWidget&) = delete;
 
-    Umbra::IViewportRenderer* Renderer() const { return Renderer_; }
+    Equinox::IViewportRenderer* Renderer() const { return Renderer_; }
 
     Penumbra::Widgets::FocusState* Focus{nullptr};
 
@@ -44,9 +44,9 @@ private:
     void ForwardPointer(const Penumbra::Platform::InputState& Input, Penumbra::Rect ContentRect, bool PointerIsOver);
     void ForwardKeys(const Penumbra::Platform::InputState& Input);
     bool AnotherWidgetHasFocus() const;
-    bool UploadFrame(SDL_Renderer* SdlRenderer, const Umbra::ViewportFrame& Frame);
+    bool UploadFrame(SDL_Renderer* SdlRenderer, const Equinox::ViewportFrame& Frame);
 
-    Umbra::IViewportRenderer* Renderer_;
+    Equinox::IViewportRenderer* Renderer_;
     SDL_Texture*              Texture_{nullptr};
     std::uint32_t             TextureWidth_{0};
     std::uint32_t             TextureHeight_{0};

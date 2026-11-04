@@ -348,15 +348,15 @@ private:
 };
 
 // docs/next_steps.md's "reconciler-side wiring for a framework-owned component
-// lifecycle system" ask. `Umbra::IWidgetLifecycle` (`chaos::ComponentInstance::
+// lifecycle system" ask. `Equinox::IWidgetLifecycle` (`chaos::ComponentInstance::
 // Lifecycle`'s own type) and `Penumbra::IWidgetLifecycle` (what
 // `Penumbra::LifecycleRegistry::RegisterLifecycle` takes) are two distinct classes with
 // identical virtual signatures
 // -- deliberately mirrored, per `Penumbra::IWidgetLifecycle`'s own doc comment, rather
-// than one shared type, since Penumbra doesn't depend on umbra-interfaces. This repo is
+// than one shared type, since Penumbra doesn't depend on equinox-interfaces. This repo is
 // the one place that sees both sides of the mirror, so it's the one that has to bridge
 // them -- not a framework gap on either side.
-// `InnerWatch_` (umbra-interfaces' `Umbra::LivenessGuard::Watch`) guards exactly the
+// `InnerWatch_` (Equinox's `Equinox::LivenessGuard::Watch`) guards exactly the
 // dangling-pointer shape this repo has actually hit: `Inner_` outliving its own pointee
 // when whatever owns it (a Chaos `NyxDriverState`, transitively through
 // `Node.Instance`) is torn down before this bridge's own `OnUnmount()`/`OnTick()` is
@@ -364,30 +364,30 @@ private:
 // `Inner_->OnTick(...)`/`Inner_->OnUnmount()`, only diagnosable after the fact via
 // `lldb`. `AssertAlive` turns that into an immediate, attributable `abort()` at the
 // actual call site instead.
-class UmbraLifecycleBridge : public Penumbra::IWidgetLifecycle {
+class EquinoxLifecycleBridge : public Penumbra::IWidgetLifecycle {
 public:
-    UmbraLifecycleBridge(Umbra::IWidgetLifecycle* Inner, const RefMap* Refs)
+    EquinoxLifecycleBridge(Equinox::IWidgetLifecycle* Inner, const RefMap* Refs)
         : Inner_(Inner), InnerWatch_(Inner->Liveness()), Refs_(Refs) {}
 
     void OnMount() override {
-        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnMount)");
+        InnerWatch_.AssertAlive("EquinoxLifecycleBridge::Inner_ (OnMount)");
         RunningComponentScope Running(Refs_);
         Inner_->OnMount();
     }
     void OnUnmount() override {
-        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnUnmount)");
+        InnerWatch_.AssertAlive("EquinoxLifecycleBridge::Inner_ (OnUnmount)");
         RunningComponentScope Running(Refs_);
         Inner_->OnUnmount();
     }
     void OnTick(const Penumbra::TickInfo& Info) override {
-        InnerWatch_.AssertAlive("UmbraLifecycleBridge::Inner_ (OnTick)");
+        InnerWatch_.AssertAlive("EquinoxLifecycleBridge::Inner_ (OnTick)");
         RunningComponentScope Running(Refs_);
-        Inner_->OnTick(Umbra::TickInfo{Info.DeltaSeconds});
+        Inner_->OnTick(Equinox::TickInfo{Info.DeltaSeconds});
     }
 
 private:
-    Umbra::IWidgetLifecycle*    Inner_;
-    Umbra::LivenessGuard::Watch InnerWatch_;
+    Equinox::IWidgetLifecycle*    Inner_;
+    Equinox::LivenessGuard::Watch InnerWatch_;
     ComponentRefs               Refs_;
 };
 
@@ -421,7 +421,7 @@ void RegisterLifecycleIfPresent(const Component& Node, const BuildContext& Conte
     if (Context.LifecycleHost == nullptr || !Node.Instance || Node.Instance->Lifecycle == nullptr) {
         return;
     }
-    auto                         Bridge = std::make_shared<UmbraLifecycleBridge>(Node.Instance->Lifecycle, Refs);
+    auto                         Bridge = std::make_shared<EquinoxLifecycleBridge>(Node.Instance->Lifecycle, Refs);
     Penumbra::LifecycleRegistry* Host = Context.LifecycleHost;
     Host->RegisterLifecycle(Bridge.get());
     Built.OnDestroyed = [Host, Bridge]() { Host->UnregisterLifecycle(Bridge.get()); };
@@ -707,7 +707,7 @@ std::unique_ptr<WidgetBase> BuildTextArea(const Component& Node, const BuildCont
         std::function<void(std::string)> Callback = *OnTextChange;
         Built->OnTextChanged = [Callback](const std::string& NewText) { Callback(NewText); };
     }
-    const Umbra::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
+    const Equinox::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
     const auto Ranges = Props.NumberLists.find("spanRanges");
     const auto Classes = Props.StringLists.find("spanClasses");
     if (Ranges != Props.NumberLists.end() && Classes != Props.StringLists.end()) {
@@ -721,20 +721,20 @@ std::unique_ptr<WidgetBase> BuildTextArea(const Component& Node, const BuildCont
 }
 
 // <Native> (docs/native_split_backend_wiring_gap.md) -- an opaque escape hatch whose
-// `build` prop already returns a live Umbra::IWidget handle, not more Component IR to
+// `build` prop already returns a live Equinox::IWidget handle, not more Component IR to
 // walk (Component::NativeBuilder, `external/chaos/include/chaos/Component.h`). Every real
-// Umbra::IWidget in this stack is a PenumbraWidget -- this file and
+// Equinox::IWidget in this stack is a PenumbraWidget -- this file and
 // PenumbraWidgetAdapter.cpp are the only two places one is ever constructed -- so this
 // downcasts to reclaim the real WidgetBase ownership via DetachOwnership(), the same
 // owning -> attached transition InsertChildAt (PenumbraWidgetAdapter.cpp) already relies
 // on elsewhere, just invoked here instead of there. A `build` prop that hands back some
-// other Umbra::IWidget implementation has no real Penumbra widget to unwrap and builds to
+// other Equinox::IWidget implementation has no real Penumbra widget to unwrap and builds to
 // nullptr -- the same "no widget here" treatment None/Slot already get, not an error.
 std::unique_ptr<WidgetBase> BuildNative(const Component& Node) {
     if (!Node.NativeBuilder) {
         return nullptr;
     }
-    std::unique_ptr<Umbra::IWidget> Handle = Node.NativeBuilder->Build();
+    std::unique_ptr<Equinox::IWidget> Handle = Node.NativeBuilder->Build();
     if (auto* AsPenumbraWidget = dynamic_cast<PenumbraWidget*>(Handle.get())) {
         return AsPenumbraWidget->DetachOwnership();
     }
@@ -745,7 +745,7 @@ std::unique_ptr<WidgetBase> BuildNative(const Component& Node) {
 // Context.ViewportRenderers by name; with none registered the widget still builds and
 // draws nothing, the same tolerance BuildImage gives a missing backend.
 std::unique_ptr<WidgetBase> BuildViewport(const Component& Node, const BuildContext& Context) {
-    Umbra::IViewportRenderer* Renderer = nullptr;
+    Equinox::IViewportRenderer* Renderer = nullptr;
     if (Context.ViewportRenderers != nullptr) {
         if (const auto Name = GetStringProp(Node.Props, "renderer")) {
             const auto Found = Context.ViewportRenderers->find(*Name);
@@ -768,7 +768,7 @@ std::unique_ptr<WidgetBase> BuildSelect(const Component& Node, const BuildContex
     ApplySharedPropsToWidget(*Built, Node.Props);
     Built->FontBackend = Context.FontBackend;
     Built->Font        = Context.Font;
-    const Umbra::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
+    const Equinox::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
     ApplySelectProps(*Built, Props);
     return Built;
 }
@@ -782,7 +782,7 @@ std::unique_ptr<WidgetBase> BuildCheckbox(const Component& Node, const BuildCont
     if (const auto Checked = GetBoolProp(Node.Props, "checked")) {
         Built->Checked = *Checked;
     }
-    const Umbra::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
+    const Equinox::ChaosPropDiff Props = chaos::ComputePropDiff({}, Node.Props);
     if (Props.OnToggle) {
         Built->OnChanged = *Props.OnToggle;
     }
@@ -1021,7 +1021,7 @@ std::function<void(const Penumbra::Platform::KeyEvent&)> KeyEventHandler(std::fu
     };
 }
 
-void ApplySelectProps(Dropdown& Widget, const Umbra::ChaosPropDiff& Props) {
+void ApplySelectProps(Dropdown& Widget, const Equinox::ChaosPropDiff& Props) {
     if (const auto Options = Props.StringLists.find("options"); Options != Props.StringLists.end()) {
         // The selection follows its label through a change of options, since a diff that
         // changes only the options carries no `selected` to restore it.

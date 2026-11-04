@@ -202,7 +202,7 @@ std::vector<Penumbra::Widgets::TextAreaSpan> TextAreaSpansFromProps(const std::v
     return Spans;
 }
 
-void ApplyChartProps(WidgetBase& Widget, const Umbra::ChaosPropDiff& Diff) {
+void ApplyChartProps(WidgetBase& Widget, const Equinox::ChaosPropDiff& Diff) {
     const auto Find = [](const auto& Map, const char* Name) {
         const auto It = Map.find(Name);
         return It == Map.end() ? nullptr : &It->second;
@@ -287,7 +287,7 @@ struct PortalAnchorWidget::State : std::enable_shared_from_this<PortalAnchorWidg
 
         const std::function<void()> OnDismiss = Properties.OnDismiss;
         HostDismissInProgress = true;
-        if (Adapter != nullptr) Chaos::PreparePortalSubtreeForUnmount(dynamic_cast<Umbra::IWidget*>(Adapter));
+        if (Adapter != nullptr) Chaos::PreparePortalSubtreeForUnmount(dynamic_cast<Equinox::IWidget*>(Adapter));
         HostDismissInProgress = false;
         if (OnDismiss) OnDismiss();
     }
@@ -392,7 +392,7 @@ void PenumbraWidget::SetStyleContext(const ::Cosmos::StylesheetSet* Sheets, cons
     StyleApplier_ = StyleApplier;
 }
 
-Umbra::IWidget* PenumbraWidget::GetByRef(std::string_view Ref) const {
+Equinox::IWidget* PenumbraWidget::GetByRef(std::string_view Ref) const {
     const PenumbraWidget* Root = this;
     while (Root->Parent_ != nullptr) {
         Root = Root->Parent_;
@@ -413,7 +413,7 @@ PenumbraWidget* PenumbraWidget::FindDescendantByRef(std::string_view Ref) {
     return nullptr;
 }
 
-void PenumbraWidget::ApplyPropDiff(const Umbra::ChaosPropDiff& Diff) {
+void PenumbraWidget::ApplyPropDiff(const Equinox::ChaosPropDiff& Diff) {
     WidgetBase* Widget = RawWidget();
     if (Widget == nullptr) {
         return;
@@ -586,10 +586,10 @@ void PenumbraWidget::SeedSpanProps() {
 
 std::size_t PenumbraWidget::GetChildCount() const { return Children_.size(); }
 
-Umbra::IWidget* PenumbraWidget::GetChildAt(std::size_t Index) const { return Children_[Index].get(); }
+Equinox::IWidget* PenumbraWidget::GetChildAt(std::size_t Index) const { return Children_[Index].get(); }
 
-void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWidget> Child) {
-    // Safe: this backend is the only thing that ever constructs a Umbra::IWidget, so
+void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Equinox::IWidget> Child) {
+    // Safe: this backend is the only thing that ever constructs a Equinox::IWidget, so
     // any IWidget it's handed back is always really a PenumbraWidget.
     auto* ChildImpl = static_cast<PenumbraWidget*>(Child.get());
     ChildImpl->ImageBackend_ = ImageBackend_;
@@ -633,7 +633,7 @@ void PenumbraWidget::InsertChildAt(std::size_t Index, std::unique_ptr<Umbra::IWi
                       std::unique_ptr<PenumbraWidget>(static_cast<PenumbraWidget*>(Child.release())));
 }
 
-std::unique_ptr<Umbra::IWidget> PenumbraWidget::RemoveChildAt(std::size_t Index) {
+std::unique_ptr<Equinox::IWidget> PenumbraWidget::RemoveChildAt(std::size_t Index) {
     std::unique_ptr<PenumbraWidget> Removed = std::move(Children_[static_cast<std::size_t>(Index)]);
     Children_.erase(Children_.begin() + static_cast<long>(Index));
     Removed->Parent_ = nullptr; // detached -- no longer anyone's child until re-inserted
@@ -846,7 +846,7 @@ std::unique_ptr<PenumbraWidget> WrapExistingTree(std::unique_ptr<WidgetBase>    
 }
 
 chaos::MountFn MakeMountFn(BuildContext Context) {
-    return [Context](const Chaos::Component& Node) -> std::unique_ptr<Umbra::IWidget> {
+    return [Context](const Chaos::Component& Node) -> std::unique_ptr<Equinox::IWidget> {
         PrimitiveTagMap             Tags;
         RefMap                      Refs;
         NumberPropMap               Numbers;

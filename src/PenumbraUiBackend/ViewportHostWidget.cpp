@@ -9,8 +9,8 @@ namespace PenumbraUiBackend {
 
 namespace {
 
-Umbra::ViewportModifiers ToViewportModifiers(const Penumbra::Platform::Modifiers& Modifiers) {
-    Umbra::ViewportModifiers Result;
+Equinox::ViewportModifiers ToViewportModifiers(const Penumbra::Platform::Modifiers& Modifiers) {
+    Equinox::ViewportModifiers Result;
     Result.Shift    = Modifiers.Shift;
     Result.Control  = Modifiers.Ctrl;
     Result.Alt      = Modifiers.Alt;
@@ -20,7 +20,7 @@ Umbra::ViewportModifiers ToViewportModifiers(const Penumbra::Platform::Modifiers
 
 } // namespace
 
-ViewportHostWidget::ViewportHostWidget(Umbra::IViewportRenderer* Renderer) : Renderer_(Renderer) {
+ViewportHostWidget::ViewportHostWidget(Equinox::IViewportRenderer* Renderer) : Renderer_(Renderer) {
     Style.FlexGrow = 1.0f;
 }
 
@@ -84,9 +84,9 @@ void ViewportHostWidget::ForwardPointer(const Penumbra::Platform::InputState& In
     Renderer_->PointerMoved((Input.MousePosition.X - ContentRect.X) * DpiScaleFactor_,
                             (Input.MousePosition.Y - ContentRect.Y) * DpiScaleFactor_);
 
-    const Umbra::ViewportModifiers Modifiers = ToViewportModifiers(Input.ModifierState);
+    const Equinox::ViewportModifiers Modifiers = ToViewportModifiers(Input.ModifierState);
     for (int Button = 0; Button < PointerButtonCount; ++Button) {
-        const auto ViewportButton = static_cast<Umbra::ViewportPointerButton>(Button);
+        const auto ViewportButton = static_cast<Equinox::ViewportPointerButton>(Button);
         if (Input.MouseButtonPressedThisFrame[Button] && PointerIsOver && !ButtonHeldByViewport_[Button]) {
             Renderer_->PointerButton(ViewportButton, true, Modifiers);
             ButtonHeldByViewport_[Button] = true;
@@ -117,7 +117,7 @@ void ViewportHostWidget::ForwardKeys(const Penumbra::Platform::InputState& Input
     }
 }
 
-bool ViewportHostWidget::UploadFrame(SDL_Renderer* SdlRenderer, const Umbra::ViewportFrame& Frame) {
+bool ViewportHostWidget::UploadFrame(SDL_Renderer* SdlRenderer, const Equinox::ViewportFrame& Frame) {
     if (Frame.Pixels == nullptr || Frame.Width == 0 || Frame.Height == 0 || SdlRenderer == nullptr) {
         return false;
     }
@@ -147,7 +147,7 @@ void ViewportHostWidget::DrawContent(Penumbra::Render::Renderer& Renderer, Penum
     if (WidthPhysical == 0 || HeightPhysical == 0) {
         return;
     }
-    const std::optional<Umbra::ViewportFrame> Frame = Renderer_->Render(WidthPhysical, HeightPhysical);
+    const std::optional<Equinox::ViewportFrame> Frame = Renderer_->Render(WidthPhysical, HeightPhysical);
     if (!Frame || !UploadFrame(Renderer.GetSdlRenderer(), *Frame)) {
         return;
     }

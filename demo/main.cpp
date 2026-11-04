@@ -192,7 +192,7 @@ int main() {
         }
     }
 
-    Umbra::IWidget* BarWrapper = HealthBarWrapper->GetChildCount() == 1 ? HealthBarWrapper->GetChildAt(0) : nullptr;
+    Equinox::IWidget* BarWrapper = HealthBarWrapper->GetChildCount() == 1 ? HealthBarWrapper->GetChildAt(0) : nullptr;
     if (BarWrapper == nullptr) {
         std::fprintf(stderr, "Expected the health bar to have exactly one child.\n");
         return 1;
@@ -216,7 +216,7 @@ int main() {
 
     auto ToggleClass = [&]() {
         Critical = !Critical;
-        Umbra::ChaosPropDiff Diff;
+        Equinox::ChaosPropDiff Diff;
         Diff.ClassName = Critical ? "bar-critical" : "bar-normal";
         BarWrapper->ApplyPropDiff(Diff); // the exact reconcile-time re-styling path, real click or automated
     };

@@ -35,7 +35,7 @@ private:
     std::shared_ptr<State> State_;
 };
 
-// The Umbra adapter Chaos sees for a Portal. Ordinary child reconciliation continues
+// The Equinox adapter Chaos sees for a Portal. Ordinary child reconciliation continues
 // through PenumbraWidget; this second interface carries portal props and explicit
 // teardown ordering.
 class PenumbraPortalWidget final : public PenumbraWidget, public Chaos::IPortalTarget {

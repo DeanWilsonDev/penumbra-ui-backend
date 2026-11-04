@@ -67,10 +67,10 @@ Component MakeNode(ChaosElementTag Tag, ChaosProps Props = {}, std::vector<Compo
     return Component(Tag, std::move(Props), std::move(Children), nullptr);
 }
 
-class CountingViewportRenderer final : public Umbra::IViewportRenderer {
+class CountingViewportRenderer final : public Equinox::IViewportRenderer {
 public:
     int Renders{0};
-    std::optional<Umbra::ViewportFrame> Render(std::uint32_t, std::uint32_t) override {
+    std::optional<Equinox::ViewportFrame> Render(std::uint32_t, std::uint32_t) override {
         ++Renders;
         return std::nullopt;
     }
@@ -424,7 +424,7 @@ void TestTextAreaOnTextChangeDiffReachesTheLiveTextArea() {
     PenumbraWidget Wrapper(BuildWidgetTree(Node, BuildContext{}));
     std::string    LastValue;
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.OnTextChange = std::function<void(std::string)>([&LastValue](std::string NewText) { LastValue = NewText; });
     Wrapper.ApplyPropDiff(Diff);
 
@@ -492,7 +492,7 @@ void TestNativeUnwrapsAPenumbraWidgetToItsRealWidgetBase() {
 
     Component Node = MakeNode(ChaosElementTag::Native);
     Node.NativeBuilder = Chaos::MakeNativeBuilder(
-        [SharedWrapped]() -> std::unique_ptr<Umbra::IWidget> { return std::move(*SharedWrapped); });
+        [SharedWrapped]() -> std::unique_ptr<Equinox::IWidget> { return std::move(*SharedWrapped); });
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     Expect(Built.get() == InnerBoxRaw,
@@ -508,21 +508,21 @@ void TestNativeWithNoBuilderProducesNoWidget() {
 }
 
 void TestNativeBuildReturningNonPenumbraWidgetProducesNoWidget() {
-    struct FakeNonPenumbraWidget : Umbra::IWidget {
-        void                             ApplyPropDiff(const Umbra::ChaosPropDiff&) override {}
+    struct FakeNonPenumbraWidget : Equinox::IWidget {
+        void                             ApplyPropDiff(const Equinox::ChaosPropDiff&) override {}
         std::size_t                     GetChildCount() const override { return 0; }
-        Umbra::IWidget*                 GetChildAt(std::size_t) const override { return nullptr; }
-        void                             InsertChildAt(std::size_t, std::unique_ptr<Umbra::IWidget>) override {}
-        std::unique_ptr<Umbra::IWidget> RemoveChildAt(std::size_t) override { return nullptr; }
+        Equinox::IWidget*                 GetChildAt(std::size_t) const override { return nullptr; }
+        void                             InsertChildAt(std::size_t, std::unique_ptr<Equinox::IWidget>) override {}
+        std::unique_ptr<Equinox::IWidget> RemoveChildAt(std::size_t) override { return nullptr; }
     };
 
     Component Node = MakeNode(ChaosElementTag::Native);
     Node.NativeBuilder = Chaos::MakeNativeBuilder(
-        []() -> std::unique_ptr<Umbra::IWidget> { return std::make_unique<FakeNonPenumbraWidget>(); });
+        []() -> std::unique_ptr<Equinox::IWidget> { return std::make_unique<FakeNonPenumbraWidget>(); });
 
     const auto Built = BuildWidgetTree(Node, BuildContext{});
     Expect(Built == nullptr,
-           "a build prop returning a non-PenumbraWidget Umbra::IWidget has nothing to unwrap -- builds to nullptr "
+           "a build prop returning a non-PenumbraWidget Equinox::IWidget has nothing to unwrap -- builds to nullptr "
            "rather than crashing the dynamic_cast");
 }
 
@@ -579,19 +579,19 @@ void TestNoRefLeavesOutRefsEmpty() {
 // docs/next_steps.md's "reconciler-side wiring for a framework-owned component
 // lifecycle system" ask. FakeLifecycle counts each hook call rather than asserting
 // order/timing beyond what each test below checks explicitly.
-struct FakeLifecycle : Umbra::IWidgetLifecycle {
+struct FakeLifecycle : Equinox::IWidgetLifecycle {
     int MountCount = 0;
     int UnmountCount = 0;
     int TickCount = 0;
 
     void OnMount() override { ++MountCount; }
     void OnUnmount() override { ++UnmountCount; }
-    void OnTick(const Umbra::TickInfo&) override { ++TickCount; }
+    void OnTick(const Equinox::TickInfo&) override { ++TickCount; }
 };
 
 // A Component with a real ComponentInstance whose Lifecycle field points at Lifecycle,
 // built by hand here since these tests build a Component tree directly.
-Component MakeNodeWithLifecycle(ChaosElementTag Tag, Umbra::IWidgetLifecycle* Lifecycle) {
+Component MakeNodeWithLifecycle(ChaosElementTag Tag, Equinox::IWidgetLifecycle* Lifecycle) {
     Component Node = MakeNode(Tag);
     Node.Instance = std::make_shared<chaos::ComponentInstance>();
     Node.Instance->Lifecycle = Lifecycle;
@@ -635,7 +635,7 @@ void TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed() {
     Expect(Lifecycle.TickCount == 0, "once unregistered, the host LifecycleRegistry no longer dispatches OnTick to it");
 }
 
-// umbra-interfaces' Umbra::LivenessGuard (commit b59bf17) -- UmbraLifecycleBridge (this
+// Equinox's Equinox::LivenessGuard (commit b59bf17) -- EquinoxLifecycleBridge (this
 // file, private to the anonymous namespace) now wires its own Inner_ through a
 // LivenessGuard::Watch and calls AssertAlive() before every OnMount/OnUnmount/OnTick
 // dereference. This reproduces the exact ordering mistake pharos-proto hit in
@@ -645,11 +645,11 @@ void TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed() {
 // clear message instead. No existing death-test convention anywhere in this repo's test
 // suite (grepped tests/*.cpp for fork/abort/SIGABRT/death before writing this -- none),
 // so this uses a plain fork()/waitpid() subprocess check rather than inventing an
-// unproven pattern; UmbraLifecycleBridge itself has no test-reachable entry point of its
+// unproven pattern; EquinoxLifecycleBridge itself has no test-reachable entry point of its
 // own (anonymous-namespace, private to Walker.cpp), so this exercises it the only way
 // test code can -- indirectly, through BuildWidgetTree/Host.Tick(), same as the two
 // lifecycle tests directly above.
-void TestUmbraLifecycleBridgeAbortsWhenInnerLifecycleIsDestroyedFirst() {
+void TestEquinoxLifecycleBridgeAbortsWhenInnerLifecycleIsDestroyedFirst() {
     const pid_t Pid = fork();
     Expect(Pid >= 0, "fork() succeeded");
     if (Pid == 0) {
@@ -671,7 +671,7 @@ void TestUmbraLifecycleBridgeAbortsWhenInnerLifecycleIsDestroyedFirst() {
     int Status = 0;
     waitpid(Pid, &Status, 0);
     Expect(WIFSIGNALED(Status) && WTERMSIG(Status) == SIGABRT,
-           "UmbraLifecycleBridge::OnTick aborts via LivenessGuard::AssertAlive when its Inner_ pointee "
+           "EquinoxLifecycleBridge::OnTick aborts via LivenessGuard::AssertAlive when its Inner_ pointee "
            "was destroyed first, instead of dereferencing a dangling pointer");
 }
 
@@ -863,7 +863,7 @@ void TestGetRefFindsNothingOutsideARunningLifecycleHook() {
     const bool HasLifecycle = Root.Instance != nullptr && Root.Instance->Lifecycle != nullptr;
     Expect(HasLifecycle, "the OnTick local wires a real Instance->Lifecycle");
     if (HasLifecycle) {
-        Root.Instance->Lifecycle->OnTick(Umbra::TickInfo{0.5f});
+        Root.Instance->Lifecycle->OnTick(Equinox::TickInfo{0.5f});
     }
 
     Label* LabelWidget = RefdLabel(Refs);
@@ -939,7 +939,7 @@ void RunWalkerTests() {
     TestNoRefLeavesOutRefsEmpty();
     TestLifecycleRegistersOnBuildWhenLifecycleHostIsSet();
     TestLifecycleUnregistersWhenTheBuiltWidgetIsDestroyed();
-    TestUmbraLifecycleBridgeAbortsWhenInnerLifecycleIsDestroyedFirst();
+    TestEquinoxLifecycleBridgeAbortsWhenInnerLifecycleIsDestroyedFirst();
     TestNoLifecycleHostMeansNoRegistrationEvenWithALiveInstance();
     TestNoComponentInstanceMeansNoRegistrationEvenWithALifecycleHost();
     TestNestedNonSlotComponentInvocationAlsoRegistersItsOwnLifecycle();

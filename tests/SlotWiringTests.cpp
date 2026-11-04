@@ -74,7 +74,7 @@ void TestSlotWiresIntoRealStaticPenumbraTree() {
         MakeSlot(Chaos::MakeSlotCallable([]() -> Component { return MakeText("slot-content"); })),
         MakeText("after"),
     });
-    std::unique_ptr<Umbra::IWidget> Root = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(RootNode);
     auto*                            RootBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Root.get())->RawWidget());
     Expect(RootBox != nullptr && RootBox->Children.size() == 2,
            "the static build alone produces a real Penumbra Box with just the two static children");
@@ -100,7 +100,7 @@ void TestSignalUpdateReachesRealPenumbraTreeThroughFullStack() {
             [&]() -> Component { return Show.get() ? MakeText("shown") : Component(nullptr); })),
         MakeText("after"),
     });
-    std::unique_ptr<Umbra::IWidget> Root = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(RootNode);
     auto*                            RootBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Root.get())->RawWidget());
     auto                             Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
     Expect(RootBox->Children.size() == 2, "initially hidden — only the two static children in the real Box");
@@ -127,7 +127,7 @@ void TestPortalPresentsItsOrdinaryReconciledChildThroughOverlayHost() {
     Component Child = MakeText("menu");
     Child.Ref = ChaosPropValue{std::string("menu-label")};
     Component Node = MakePortal(std::move(Child), 12.0f, 24.0f, 180.0f, 96.0f);
-    std::unique_ptr<Umbra::IWidget> Root = Mount(Node);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(Node);
 
     Expect(Host.HasOverlays(), "a mounted Portal is presented by the configured OverlayHost");
     auto* PortalWrapper = dynamic_cast<PenumbraWidget*>(Root.get());
@@ -154,7 +154,7 @@ void TestPortalWithoutGeometryFillsTheOverlayHost() {
     ChaosProps Props;
     Props["dismissOnOutsideClick"] = ChaosPropValue{false};
     Component Node(ChaosElementTag::Portal, std::move(Props), {MakeText("dialog")}, nullptr);
-    std::unique_ptr<Umbra::IWidget> Root = Mount(Node);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(Node);
 
     Host.Arrange({0.0f, 0.0f, 640.0f, 480.0f});
     auto* LabelWidget = dynamic_cast<Label*>(Host.GetChildAt(0)->GetChildAt(0));
@@ -176,7 +176,7 @@ void TestMatchedPortalUpdatesPlacementAndChildInPlace() {
     const chaos::MountFn Mount = MakeMountFn(Context);
 
     Component Old = MakePortal(MakeText("old"), 1.0f, 2.0f, 30.0f, 40.0f);
-    std::unique_ptr<Umbra::IWidget> Root = Mount(Old);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(Old);
     auto* OriginalChild = Root->GetChildAt(0);
 
     Component New = MakePortal(MakeText("new"), 9.0f, 10.0f, 70.0f, 80.0f);
@@ -202,7 +202,7 @@ void TestPortalSurfaceTracksAKeyedChildRemount() {
     Component OldChild = MakeText("old");
     OldChild.Key = ChaosPropValue{std::string("old")};
     Component Old = MakePortal(std::move(OldChild), 2.0f, 3.0f, 40.0f, 50.0f);
-    std::unique_ptr<Umbra::IWidget> Root = Mount(Old);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(Old);
 
     Component NewChild = MakeText("new");
     NewChild.Key = ChaosPropValue{std::string("new")};
@@ -236,7 +236,7 @@ void TestOutsideDismissCanSynchronouslyReconcilePortalWithNestedSlots() {
         });
     }))});
 
-    std::unique_ptr<Umbra::IWidget> Root = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(RootNode);
     auto Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
     Expect(Host.HasOverlays(), "the conditional Portal and its nested Slot mount through the real stack");
 
@@ -284,7 +284,7 @@ void TestSlotUpdatesAnUnfocusedInputsTextInPlace() {
     chaos::Signal<InspectorRowState> Selected = InspectorRowState{"entity-1", "Alpha"};
     Component RootNode = MakeFrame({MakeSlot(Chaos::MakeSlotCallable(
         [&]() -> Component { return MakeFrame({MakeKeyedInput(Selected.get())}); }))});
-    std::unique_ptr<Umbra::IWidget> Root = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(RootNode);
     auto* RootBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Root.get())->RawWidget());
     auto  Slots   = chaos::ResolveSlots(*Root, RootNode, Mount);
 
@@ -307,7 +307,7 @@ void TestSlotRemountsAKeyedInputWhenItsKeyChanges() {
     chaos::Signal<InspectorRowState> Selected = InspectorRowState{"entity-1", "Alpha"};
     Component RootNode = MakeFrame({MakeSlot(Chaos::MakeSlotCallable(
         [&]() -> Component { return MakeFrame({MakeKeyedInput(Selected.get())}); }))});
-    std::unique_ptr<Umbra::IWidget> Root = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root = Mount(RootNode);
     auto* RootBox = dynamic_cast<Box*>(dynamic_cast<PenumbraWidget*>(Root.get())->RawWidget());
     auto  Slots   = chaos::ResolveSlots(*Root, RootNode, Mount);
 
