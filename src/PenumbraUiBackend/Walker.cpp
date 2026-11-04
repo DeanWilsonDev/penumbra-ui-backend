@@ -353,7 +353,7 @@ private:
 // `Penumbra::LifecycleRegistry::RegisterLifecycle` takes) are two distinct classes with
 // identical virtual signatures
 // -- deliberately mirrored, per `Penumbra::IWidgetLifecycle`'s own doc comment, rather
-// than one shared type, since Penumbra doesn't depend on equinox. This repo is
+// than one shared type, since Penumbra doesn't depend on equinox-interfaces. This repo is
 // the one place that sees both sides of the mirror, so it's the one that has to bridge
 // them -- not a framework gap on either side.
 // `InnerWatch_` (Equinox's `Equinox::LivenessGuard::Watch`) guards exactly the

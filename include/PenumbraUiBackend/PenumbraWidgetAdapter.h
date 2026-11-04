@@ -128,7 +128,7 @@ public:
     //
     // This is deliberately a plain method on the concrete class, not an override of any
     // `Equinox::IWidget` virtual -- `Equinox::IWidget` (vendored via `external/chaos/libs/
-    // equinox`, a different repo) has no such operation today, and adding one
+    // equinox-interfaces`, a different repo) has no such operation today, and adding one
     // there is exactly the cross-repo handoff-shape question this ask's own doc entry
     // flags as still open with Chaos's reconciler side. Calling this today means
     // going through a concrete `PenumbraWidget*` (e.g. one already obtained via
