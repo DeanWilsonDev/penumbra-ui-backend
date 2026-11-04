@@ -5,7 +5,7 @@
 #include "chaos/Component.h"
 #include "cosmos/Parser.h"
 #include "cosmos/Resolver.h"
-#include "Umbra/IWidget.h"
+#include "Equinox/IWidget.h"
 
 #include "Penumbra/Render/IFontBackend.h"
 #include "Penumbra/Widgets/TextArea.h"
@@ -164,7 +164,7 @@ void TestASpanDiffWithOnlyClassesKeepsTheLastSpanRanges() {
     }
     Build.Editor->SetSpans({TextAreaSpan{0, 3, "h1 marker"}, TextAreaSpan{3, 5, "h1"}});
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.StringLists["spanClasses"] = {"marker", "code"};
     Build.Wrapper->ApplyPropDiff(Diff);
 
@@ -182,7 +182,7 @@ void TestRestylingTheFieldRestylesItsSpansWhereTheyAre() {
     }
     Build.Editor->SetSpans({TextAreaSpan{0, 3, "h1 marker"}, TextAreaSpan{3, 5, "h1"}});
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.ClassName = "editor-quiet";
     Build.Wrapper->ApplyPropDiff(Diff);
 

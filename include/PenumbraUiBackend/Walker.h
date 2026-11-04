@@ -13,8 +13,8 @@
 #include "Penumbra/Widgets/FocusState.h"
 #include "Penumbra/Widgets/OverlayHost.h"
 #include "Penumbra/Widgets/WidgetBase.h"
-#include "Umbra/IViewportRenderer.h"
-#include "Umbra/IWidget.h"
+#include "Equinox/IViewportRenderer.h"
+#include "Equinox/IWidget.h"
 
 #include <SDL3/SDL.h>
 
@@ -60,7 +60,7 @@ using RefMap = std::unordered_map<std::string, Penumbra::Widgets::WidgetBase*>;
 using NumberPropMap = std::unordered_map<const Penumbra::Widgets::WidgetBase*, std::unordered_map<std::string, float>>;
 
 // The renderers a host registered, by the name a `<viewport renderer="Name">` gives.
-using ViewportRendererMap = std::unordered_map<std::string, Umbra::IViewportRenderer*>;
+using ViewportRendererMap = std::unordered_map<std::string, Equinox::IViewportRenderer*>;
 
 // Resources BuildWidgetTree needs beyond what an Component tree itself carries.
 // Penumbra's own primitives don't take these through their fluent Builder: `Label`'s
@@ -193,7 +193,7 @@ std::unique_ptr<Penumbra::Widgets::WidgetBase> BuildWidgetTree(const Chaos::Comp
 void RegisterComponentGetRef(nyx::host::NyxRuntime& Runtime);
 
 // The `WidgetBase::OnKeyPressed` for a Chaos `onKeyDown`: names each key Penumbra hands it
-// as `Umbra::ChaosPropDiff::OnKeyDown` says, the way the web's `KeyboardEvent.key` does
+// as `Equinox::ChaosPropDiff::OnKeyDown` says, the way the web's `KeyboardEvent.key` does
 // ("Escape", "Enter", "Tab", "ArrowLeft", "Home", "Backspace", a letter as its lowercase
 // character), and calls OnKeyDown with that name. A key with no name
 // (`Platform::Key::Unknown`) isn't passed on.
@@ -211,6 +211,6 @@ std::string QualifiedKeyName(const Penumbra::Platform::KeyEvent& Event);
 
 // Sets a <select>'s Dropdown from its props: `options` (StringLists), `selected` (Strings)
 // and OnSelect, at build and on every diff.
-void ApplySelectProps(Penumbra::Widgets::Dropdown& Widget, const Umbra::ChaosPropDiff& Props);
+void ApplySelectProps(Penumbra::Widgets::Dropdown& Widget, const Equinox::ChaosPropDiff& Props);
 
 } // namespace PenumbraUiBackend

@@ -265,7 +265,7 @@ void TestClassChangeReResolvesAndAppliesTheNewStyle() {
            "mount resolves .bar-normal's own green background");
     Expect(AsBoxBefore != nullptr && AsBoxBefore->Style.Padding.Left == 8.0F, "and .bar-normal's own padding");
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.ClassName = "bar-critical";
     Wrapper->ApplyPropDiff(Diff);
 
@@ -281,7 +281,7 @@ void TestClassChangeIsANoOpWithoutStyleContext() {
     auto Built = BuildWidgetTree(Node, BuildContext{});
     auto Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr); // no style context at all
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.ClassName = "bar-critical";
     Wrapper->ApplyPropDiff(Diff); // must not crash
 
@@ -315,13 +315,13 @@ void TestClassChangeOnANestedChildRespectsRealAncestryThroughTheWrapperTree() {
     auto Built = BuildWidgetTree(Node, Context);
     auto Wrapper = WrapExistingTree(std::move(Built), nullptr, nullptr, Context.Style, Context.StyleApplier);
 
-    Umbra::IWidget* ChildWrapper = Wrapper->GetChildCount() == 1 ? Wrapper->GetChildAt(0) : nullptr;
+    Equinox::IWidget* ChildWrapper = Wrapper->GetChildCount() == 1 ? Wrapper->GetChildAt(0) : nullptr;
     if (ChildWrapper == nullptr) {
         Expect(false, "the nested <Text> has a wrapper");
         return;
     }
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.ClassName = "card-title";
     ChildWrapper->ApplyPropDiff(Diff);
 
@@ -365,7 +365,7 @@ frame {
            "mount resolves the grid { } primitive selector (green, not frame's red)");
     Expect(Wrapper->GetPrimitiveTag() == "Grid", "the wrapper's own GetPrimitiveTag() reports the real tag");
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.ClassName = ""; // trigger re-resolution -- a primitive selector doesn't care what it is
     Wrapper->ApplyPropDiff(Diff);
 
@@ -392,7 +392,7 @@ void TestClassChangeFallsBackToFrameGuessWithoutAPrimitiveTagMap() {
 
     Expect(Wrapper->GetPrimitiveTag().empty(), "with no PrimitiveTagMap, GetPrimitiveTag() is empty, not guessed eagerly");
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.ClassName = "";
     Wrapper->ApplyPropDiff(Diff);
 
@@ -480,10 +480,10 @@ void TestAClassChangeEasesFlexGrowUnderACosmosTransition() {
     Frames.Step(Root, 0.1F);
     Expect(Bar->GetArrangedRect().W == 0.0F, "the g-0 bar starts with no width");
 
-    Umbra::ChaosPropDiff ToBar;
+    Equinox::ChaosPropDiff ToBar;
     ToBar.ClassName = "grow g-60";
     Wrapper->GetChildAt(0)->ApplyPropDiff(ToBar);
-    Umbra::ChaosPropDiff ToRest;
+    Equinox::ChaosPropDiff ToRest;
     ToRest.ClassName = "grow g-40";
     Wrapper->GetChildAt(1)->ApplyPropDiff(ToRest);
 
@@ -605,7 +605,7 @@ void TestAnAttrBindingFollowsItsPropThroughTheReconciler() {
                   Component(ChaosElementTag::Slot, {}, {}, Chaos::MakeSlotCallable([&]() -> Component {
                                 return MakeNode(ChaosElementTag::Frame, WithClassAndFill("share", 100.0F - Fill.get()));
                             }))});
-    std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root  = Mount(RootNode);
     auto                            Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
     auto* Track = dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
 
@@ -644,18 +644,18 @@ void TestAClassChangeKeepsAnAttrBoundValue() {
     Context.Style        = &Sheets;
     Context.StyleApplier = &Applier;
 
-    std::unique_ptr<Umbra::IWidget> Wrapper =
+    std::unique_ptr<Equinox::IWidget> Wrapper =
         PenumbraUiBackend::MakeMountFn(Context)(MakeNode(ChaosElementTag::Frame, WithClassAndFill("bar", 30.0F)));
     auto* AsBox = Wrapper ? dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Wrapper.get())->RawWidget()) : nullptr;
     Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 30.0F, "attr(fill) sets flex-grow from the prop at mount");
 
-    Umbra::ChaosPropDiff Diff;
+    Equinox::ChaosPropDiff Diff;
     Diff.ClassName = "bar bar-tall";
     Wrapper->ApplyPropDiff(Diff);
     Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 30.0F && AsBox->Style.Height.IsSet(),
            "a class change re-resolves the style and still fills attr(fill) from the prop the wrapper recorded");
 
-    Umbra::ChaosPropDiff NewFill;
+    Equinox::ChaosPropDiff NewFill;
     NewFill.Numbers["fill"] = 45.0F;
     Wrapper->ApplyPropDiff(NewFill);
     Expect(AsBox != nullptr && AsBox->Style.FlexGrow == 45.0F && AsBox->Style.Height.IsSet(),
@@ -789,7 +789,7 @@ void TestAnOffsetFromAttrFollowsASignalThroughTheReconciler() {
                                 Props["y"]       = ChaosPropValue{X.get() * 2.0F};
                                 return MakeNode(ChaosElementTag::Frame, std::move(Props));
                             }))});
-    std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root  = Mount(RootNode);
     auto                            Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
     auto* Board = dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
     if (Board == nullptr || Board->GetChildCount() != 1) {
@@ -851,7 +851,7 @@ void TestAColourAttrBindingFollowsItsPropsThroughTheReconciler() {
                                 Props["ta"]       = ChaosPropValue{255.0F};
                                 return MakeNode(ChaosElementTag::Frame, std::move(Props));
                             }))});
-    std::unique_ptr<Umbra::IWidget> Root  = Mount(RootNode);
+    std::unique_ptr<Equinox::IWidget> Root  = Mount(RootNode);
     auto                            Slots = chaos::ResolveSlots(*Root, RootNode, Mount);
     auto* Map  = dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Root.get())->RawWidget());
     auto* Leaf = Map != nullptr && Map->GetChildCount() == 1 ? dynamic_cast<Box*>(Map->GetChildAt(0)) : nullptr;
@@ -909,7 +909,7 @@ void TestColourAttrBindingsReachEveryColourField() {
     CaptionProps["r"]       = ChaosPropValue{1.0F};
     CaptionProps["g"]       = ChaosPropValue{2.0F};
     CaptionProps["b"]       = ChaosPropValue{3.0F};
-    std::unique_ptr<Umbra::IWidget> Wrapper = PenumbraUiBackend::MakeMountFn(Context)(
+    std::unique_ptr<Equinox::IWidget> Wrapper = PenumbraUiBackend::MakeMountFn(Context)(
         MakeNode(ChaosElementTag::Frame, Props, {MakeNode(ChaosElementTag::Text, CaptionProps)}));
     auto* Swatch = Wrapper ? dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Wrapper.get())->RawWidget()) : nullptr;
     auto* Caption = Swatch != nullptr && Swatch->GetChildCount() == 1 ? dynamic_cast<Label*>(Swatch->GetChildAt(0)) : nullptr;
@@ -928,7 +928,7 @@ void TestColourAttrBindingsReachEveryColourField() {
            "a :hover overlay binds its own colour, reaching the hovered background");
     Expect(Caption->ColorText == Color{1, 2, 3, 255}, "color takes rgb(attr()) channels on a Text");
 
-    Umbra::ChaosPropDiff NewGreen;
+    Equinox::ChaosPropDiff NewGreen;
     NewGreen.Numbers["g"] = 99.0F;
     Wrapper->ApplyPropDiff(NewGreen);
     Expect(Swatch->Style.ColorBackground == Color{255, 99, 40, 255} &&
@@ -958,7 +958,7 @@ void TestAColourAttrBindingWithAMissingPropLeavesThePropertyUnset() {
     ChaosProps Props = WithClass("half");
     Props["r"]       = ChaosPropValue{200.0F};
     Props["g"]       = ChaosPropValue{100.0F};
-    std::unique_ptr<Umbra::IWidget> Wrapper =
+    std::unique_ptr<Equinox::IWidget> Wrapper =
         PenumbraUiBackend::MakeMountFn(Context)(MakeNode(ChaosElementTag::Frame, std::move(Props)));
     auto* AsBox = Wrapper ? dynamic_cast<Box*>(static_cast<PenumbraWidget*>(Wrapper.get())->RawWidget()) : nullptr;
     if (AsBox == nullptr) {
@@ -972,7 +972,7 @@ void TestAColourAttrBindingWithAMissingPropLeavesThePropertyUnset() {
            "a gradient whose end stop's prop is missing leaves the whole gradient unset, not one stop");
     Expect(AsBox->Style.ColorBorder == Color{16, 32, 48, 255}, "and the frame's plain colours still apply");
 
-    Umbra::ChaosPropDiff Arrived;
+    Equinox::ChaosPropDiff Arrived;
     Arrived.Numbers["missing"] = 50.0F;
     Arrived.Numbers["nope"]    = 7.0F;
     Wrapper->ApplyPropDiff(Arrived);

@@ -76,7 +76,7 @@ that C++ host path: `.chaos` components are Nyx-hosted and mount through `ChaosN
 suite (`ChaosElementTag::None` skipping, event-prop wiring, the `<Grid>` stub, nested recursion,
 etc.).
 
-**Stage 3's `Umbra::IWidget` adapter is also implemented**: `PenumbraWidget`
+**Stage 3's `Equinox::IWidget` adapter is also implemented**: `PenumbraWidget`
 (`include/PenumbraUiBackend/PenumbraWidgetAdapter.h`) wraps a real `Penumbra::Widgets::
 WidgetBase` to satisfy Chaos's backend-agnostic reconciler contract, so `chaos::ReconcileWidget`/
 `ReconcileChildren` (in the `chaos` repo) can update a real Penumbra widget tree in place —
@@ -104,7 +104,7 @@ exact position and performs its initial mount. A `SlotSiblingGroup` shared by ev
 sibling under the same static parent recomputes each slot's absolute position fresh on every
 reconcile, so a list-returning `<Slot>`'s own growth/shrinkage (and a sibling toggling to/from
 `None`) correctly shifts whatever comes after it. Every subsequent `chaos::Tick()`-triggered
-reconcile updates the real position(s) in place — pure `Umbra::IWidget`, so this logic is
+reconcile updates the real position(s) in place — pure `Equinox::IWidget`, so this logic is
 entirely backend-agnostic and lives in `chaos`'s own runtime; the only change needed here was
 `BuildWidgetTree`'s own `Slot` case. Verified against real `Box`/`Label` objects, not a mock: a
 live `chaos::Signal` update reaching a real `Box::Children` vector end to end, including under

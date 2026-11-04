@@ -138,12 +138,12 @@ void TestTypedTextAndEditingKeysApplyInTheOrderTheyArrived() {
     Expect(Field.Text == "ac", "a Backspace typed before a character deletes before inserting (got \"" + Field.Text + "\")");
 }
 
-class KeyRecordingViewportRenderer final : public Umbra::IViewportRenderer {
+class KeyRecordingViewportRenderer final : public Equinox::IViewportRenderer {
 public:
     std::vector<std::string> KeysDown;
     std::vector<std::string> KeysUp;
-    std::optional<Umbra::ViewportFrame> Render(std::uint32_t, std::uint32_t) override { return std::nullopt; }
-    bool Key(std::string_view KeyName, bool Down, const Umbra::ViewportModifiers&) override {
+    std::optional<Equinox::ViewportFrame> Render(std::uint32_t, std::uint32_t) override { return std::nullopt; }
+    bool Key(std::string_view KeyName, bool Down, const Equinox::ViewportModifiers&) override {
         (Down ? KeysDown : KeysUp).emplace_back(KeyName);
         return true;
     }
